@@ -1,0 +1,445 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── AUTH ────────────────────────────────────────────
+
+model User {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String    @unique
+  password  String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("users")
+}
+
+// ─── MASTER DATA ─────────────────────────────────────
+
+model Employee {
+  id         Int      @id @default(autoincrement())
+  empID      String   @unique
+  name       String
+  ssn        String?
+  tel        String?
+  gender     String?
+  birthdate  String?
+  department String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("employees")
+}
+
+model Customer {
+  id        Int       @id @default(autoincrement())
+  name      String
+  tax       String?
+  address   String?
+  tel       String?
+  email     String?
+  type      String?
+  coor      String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@map("customers")
+}
+
+model Supplier {
+  id        Int       @id @default(autoincrement())
+  name      String
+  tax       String?
+  address   String?
+  tel       String?
+  email     String?
+  type      String?
+  coor      String?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  packages  Package[]
+  materials Material[]
+
+  @@map("suppliers")
+}
+
+model Stuff {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("stuffs")
+}
+
+// ─── PURCHASE ORDERS ─────────────────────────────────
+
+model AstPurchaseOrder {
+  id              Int       @id @default(autoincrement())
+  /// SO series type: 'SO' | 'SOX' | 'SOB'
+  vat             String
+  /// Formatted SO number e.g. "SO6804/12" — used as logical FK across tables
+  purchaseOrder   String    @unique
+  po              String?
+  emp             String?
+  customerName    String?
+  fabricId        String?
+  fabricPattern   String?
+  fabricStructure String?
+  orderSumYard    Float?
+  /// Denormalized copy of status — kept in sync with fabricAstStructure.yarnWRatio2
+  status          String?
+  deadline        String?
+  payment         String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  fabricAst          FabricAst?
+  fabricAstStructure FabricAstStructure?
+  orderDeadlines     OrderDeadline[]
+  production         Production?
+  fabricOuts         FabricOut[]
+  inventories        Inventory[]
+  orderShipped       OrderShipped?
+
+  @@index([vat])
+  @@index([customerName])
+  @@index([fabricPattern])
+  @@map("ast_purchaseorders")
+}
+
+model OrderDeadline {
+  id            Int       @id @default(autoincrement())
+  /// References ast_purchaseorders.purchaseOrder string
+  purchaseOrder String
+  dt            DateTime?
+  label         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
+
+  @@index([purchaseOrder])
+  @@map("orderdeadlines")
+}
+
+model OrderShipped {
+  id            Int       @id @default(autoincrement())
+  purchaseOrder String    @unique
+  emp           String?
+  shippedDate   DateTime?
+  note          String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
+
+  @@map("ordershippeds")
+}
+
+// ─── FABRIC SPECS ─────────────────────────────────────
+
+model FabricAst {
+  id            Int      @id @default(autoincrement())
+  purchaseOrder String   @unique
+  vat           String?
+  yarnHCount    String?  @map("yarn_h_count")
+  fabricW       String?  @map("fabric_w")
+  phewNumber    String?
+  phewW         String?
+  payment       String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
+
+  @@index([purchaseOrder])
+  @@map("fabric_asts")
+}
+
+model FabricAstStructure {
+  id            Int      @id @default(autoincrement())
+  purchaseOrder String   @unique
+  yarnHType     String?
+  yarnWType     String?
+  /// ⚠ REPURPOSED AS ORDER STATUS FIELD
+  /// Values: 'no data' | 'อนุมัติให้ผลิต' |
+  yarnWRatio2   String?
+  yarnHRatio1   String?
+  yarnHRatio2   String?
+  yarnWRatio1   String?
+  yarnHCount1   String?
+  yarnHCount2   String?
+  yarnWCount1   String?
+  yarnWCount2   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
+
+  @@index([purchaseOrder])
+  @@index([yarnWRatio2])
+  @@map("fabric_aststructures")
+}
+
+// ─── FABRIC OPERATIONS ───────────────────────────────
+
+model FabricOut {
+  id            Int       @id @default(autoincrement())
+  /// Random base64 session token — groups all rolls in one delivery
+  refId         String
+  /// SO number string e.g. "SO5807/28" — direct match to ast_purchaseorders.purchaseOrder
+  purchaseOrder String?
+  /// Global serial number across all fabricout records
+  no            String?
+  /// Invoice series: 'A' | 'B' | 'C'
+  vatType       String
+  /// Running invoice number per series, starting at 1001
+  vatNo         Int
+  /// Sequential roll number within this delivery (1, 2, 3…)
+  fold          Int
+  /// Yards in this specific roll
+  sumYard       Float
+  fabricStruct  String?
+  fabricPattern String?
+  fabricW       String?
+  customerName  String?
+  receiveName   String?
+  orderId       Int?
+  createDate    DateTime  @default(now())
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+  isDeposit        Boolean   @default(false)
+  altFabricStruct  String?
+  altPurchaseOrder String?
+
+  order AstPurchaseOrder? @relation(fields: [orderId], references: [id])
+
+  @@index([refId])
+  @@index([vatType, vatNo])
+  @@index([orderId])
+  @@index([customerName])
+  @@map("fabricouts")
+}
+
+model StockFabric {
+  id            Int       @id @default(autoincrement())
+  refId         String
+  emp           String?
+  fabricStruct  String?
+  fabricPattern String?
+  fabricW       String?
+  fabricCode    String?
+  fold          Int?
+  sumYard       Float?
+  customer      String?
+  createDate    DateTime  @default(now())
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  @@index([refId])
+  @@index([fabricPattern])
+  @@map("stockfabrics")
+}
+
+model FabricImport {
+  id        Int      @id @default(autoincrement())
+  refId     String
+  emp       String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([refId])
+  @@map("fabricimports")
+}
+
+model FabricDeposit {
+  id        Int      @id @default(autoincrement())
+  refId     String
+  emp       String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([refId])
+  @@map("fabricdeposits")
+}
+
+model FabricOutDeposit {
+  id           Int      @id @default(autoincrement())
+  refId        String
+  emp          String?
+  customerName String?
+  fabricStruct String?
+  fabricW      String?
+  fold         Int?
+  sumYard      Float?
+  /// 'normal' | 'replacement'
+  receiveType  String?
+  vatType      String?
+  createDate   DateTime @default(now())
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([refId])
+  @@map("fabricoutdeposits")
+}
+
+// ─── INVENTORY ───────────────────────────────────────
+
+model Inventory {
+  id            Int      @id @default(autoincrement())
+  refId         String
+  emp           String?
+  inventoryName String?
+  orderId       Int?
+  fabricStruct  String?
+  fold          Int?
+  sumYard       Float?
+  sumM          Float?
+  fabricW       String?
+  createDate    DateTime @default(now())
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder? @relation(fields: [orderId], references: [id])
+
+  @@index([refId])
+  @@index([orderId])
+  @@map("inventories")
+}
+
+model Production {
+  id            Int      @id @default(autoincrement())
+  purchaseOrder String   @unique
+  machineNumber String?
+  no            String?
+  fabricStruct  String?
+  fabricPattern String?
+  fabricW       String?
+  yarnHType     String?
+  yarnWType     String?
+  pricing       Float?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
+
+  @@index([purchaseOrder])
+  @@map("productions")
+}
+
+// ─── MATERIALS ───────────────────────────────────────
+
+model Material {
+  id           Int      @id @default(autoincrement())
+  supplierId   Int?
+  supplierName String?
+  emp          String?
+  yarnType     String?
+  lot          String?
+  pallet       Int?
+  box          Int?
+  spool        Int?
+  weightTotal  Float?
+  weightNet    Float?
+  importStatus String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId])
+  @@map("materials")
+}
+
+model MaterialStock {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("materialstocks")
+}
+
+model MaterialStore {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("materialstores")
+}
+
+model MaterialOutside {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("material_outsides")
+}
+
+// ─── PACKAGES ────────────────────────────────────────
+
+model Package {
+  id            Int      @id @default(autoincrement())
+  supplierId    Int?
+  supplierName  String?
+  emp           String?
+  spool         Int?
+  sack          Int?
+  box           Int?
+  pallet        Int?
+  packageStatus String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId])
+  @@map("packages")
+}
+
+/// Historical package records before the Package system was introduced
+model HtrPackage {
+  id           Int      @id @default(autoincrement())
+  supplierName String?
+  emp          String?
+  spool        Int?
+  sack         Int?
+  box          Int?
+  pallet       Int?
+  createDate   DateTime @default(now())
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("htrpackages")
+}
+
+model PackageAst {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("packageasts")
+}
+
+// ─── LEGACY (DO NOT USE FOR NEW FEATURES) ────────────
+
+/// @deprecated — superseded by AstPurchaseOrder (ast_purchaseorders)
+model LegacyPurchaseOrder {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("purchaseorders")
+}

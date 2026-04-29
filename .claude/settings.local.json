@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(netstat *)",
+      "PowerShell(Get-ChildItem *)",
+      "Bash(docker-compose up *)",
+      "Bash(npx prisma *)",
+      "Bash(node -e 'require\\('\\\\''dotenv'\\\\''\\).config\\(\\); const { PrismaPg } = require\\('\\\\''@prisma/adapter-pg'\\\\''\\); const { PrismaClient } = require\\('\\\\''./src/generated/prisma/client'\\\\''\\); const a = new PrismaPg\\({ connectionString: process.env.DATABASE_URL }\\); const p = new PrismaClient\\({ adapter: a }\\); p.user.count\\(\\).then\\(n => { console.log\\('\\\\''DB connected! users count:'\\\\'', n\\); p.$disconnect\\(\\); }\\)')",
+      "Bash(node -e \"const p = require\\('./node_modules/next-auth/package.json'\\); console.log\\(p.version\\)\")",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(node -e ' *)",
+      "Bash(npm run *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code} %{redirect_url}\" http://localhost:3000/)",
+      "Bash(curl *)",
+      "PowerShell(taskkill *)",
+      "Read(//tmp/**)",
+      "Bash(xargs grep *)",
+      "Bash(node *)",
+      "Bash(echo \"Dev server started in background \\(PID: $!\\)\")",
+      "Bash(echo \"Dev server PID: $!\")",
+      "Bash(npx tsx *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(echo \"---EXIT:$?---\")",
+      "Bash(xargs cat *)"
+    ]
+  }
+}
