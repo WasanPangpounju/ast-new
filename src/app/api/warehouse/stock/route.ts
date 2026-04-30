@@ -13,7 +13,11 @@ export async function GET(request: NextRequest) {
   const q = searchParams.get('q') ?? ''
   const customer = searchParams.get('customer') ?? ''
 
+  const stockType = searchParams.get('stockType') ?? 'all'
+
   const conditions: string[] = ['s.deleted_at IS NULL']
+  if (stockType === 'produced') conditions.push('s.is_purchased = false')
+  if (stockType === 'purchased') conditions.push('s.is_purchased = true')
   if (q) conditions.push(`(s."fabricStruct" ILIKE '%${q.replace(/'/g, "''")}%' OR s."fabricPattern" ILIKE '%${q.replace(/'/g, "''")}%')`)
   if (customer) conditions.push(`COALESCE(s."customer", 'AST') ILIKE '%${customer.replace(/'/g, "''")}%'`)
   const whereClause = conditions.join(' AND ')

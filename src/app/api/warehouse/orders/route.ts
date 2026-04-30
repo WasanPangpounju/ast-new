@@ -14,8 +14,9 @@ export async function GET(request: NextRequest) {
   const fabricId = searchParams.get('fabricId') ?? ''
   const dateFrom = searchParams.get('dateFrom') ?? ''
   const dateTo = searchParams.get('dateTo') ?? ''
+  const statusFilter = searchParams.get('status') ?? 'อนุมัติให้ผลิต'
 
-  const where: any = { AND: [] }
+  const where: any = { AND: [], status: statusFilter }
   if (search) {
     where.AND.push({
       OR: [

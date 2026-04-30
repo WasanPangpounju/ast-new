@@ -49,10 +49,25 @@ export default function BillCreatePage() {
   const [altFabricStruct, setAltFabricStruct] = useState('')
   const [altPurchaseOrder, setAltPurchaseOrder] = useState('')
 
+  // Pre-fill from order navigation
+  const [purchaseOrderParam, setPurchaseOrderParam] = useState('')
+
   // Yards grid
   const [yards, setYards] = useState<string[]>(Array(TOTAL_SLOTS).fill(''))
   const inputRefs = useRef<(HTMLInputElement | null)[]>(Array(TOTAL_SLOTS).fill(null))
   const [saving, setSaving] = useState(false)
+
+  // Pre-fill from order query params
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('customerName')) {
+      setOrderer(p.get('customerName')!)
+      setReceiver(p.get('customerName')!)
+    }
+    if (p.get('fabricStruct')) setFabricStruct(p.get('fabricStruct')!)
+    if (p.get('fabricPattern')) setFabricPattern(p.get('fabricPattern')!)
+    if (p.get('purchaseOrder')) setPurchaseOrderParam(p.get('purchaseOrder')!)
+  }, [])
 
   // Auto-fill billNo when type changes
   useEffect(() => {
@@ -130,6 +145,7 @@ export default function BillCreatePage() {
           isDeposit,
           altFabricStruct,
           altPurchaseOrder,
+          purchaseOrder: purchaseOrderParam || undefined,
         }),
       })
       const data = await res.json()

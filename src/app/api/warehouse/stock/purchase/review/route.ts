@@ -14,8 +14,11 @@ export async function GET(request: NextRequest) {
   const dateFrom = searchParams.get('dateFrom') ?? ''
   const dateTo = searchParams.get('dateTo') ?? ''
 
-  const conditions: string[] = ['s.deleted_at IS NULL', 's.is_purchased = false']
-  if (q) conditions.push(`(s."emp" ILIKE '%${q.replace(/'/g, "''")}%' OR s."fabricStruct" ILIKE '%${q.replace(/'/g, "''")}%' OR COALESCE(s."customer",'AST') ILIKE '%${q.replace(/'/g, "''")}%')`)
+  const conditions: string[] = ['s.deleted_at IS NULL', 's.is_purchased = true']
+  if (q) {
+    const safe = q.replace(/'/g, "''")
+    conditions.push(`(s."fabricStruct" ILIKE '%${safe}%' OR COALESCE(s."customer",'') ILIKE '%${safe}%' OR COALESCE(s."supplier",'') ILIKE '%${safe}%' OR COALESCE(s.bill_ref,'') ILIKE '%${safe}%')`)
+  }
   if (dateFrom) conditions.push(`s."createDate" >= '${dateFrom}'::date`)
   if (dateTo) conditions.push(`s."createDate" < ('${dateTo}'::date + interval '1 day')`)
   const where = conditions.join(' AND ')
@@ -25,11 +28,15 @@ export async function GET(request: NextRequest) {
       SELECT
         s."refId",
         s."emp",
-        COALESCE(s."customer", 'AST') as customer,
+        COALESCE(s."customer", '') as customer,
         s."fabricStruct",
         s."fabricPattern",
         s."fabricW",
         MAX(s."fabricCode") as "fabricCode",
+        MAX(s."supplier") as supplier,
+        MAX(s.bill_ref) as "billRef",
+        MAX(s.price_per_yard) as "pricePerYard",
+        MAX(s.dye_lot) as "dyeLot",
         COUNT(*)::int as fold_count,
         SUM(s."sumYard") as total_yard,
         MAX(s."createDate") as create_date
@@ -55,17 +62,21 @@ export async function PATCH(request: NextRequest) {
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { refId, customer, fabricStruct, fabricPattern, fabricW, fabricCode } = body
+  const { refId, customer, fabricStruct, fabricPattern, fabricW, fabricCode, supplier, billRef, pricePerYard, dyeLot } = body
   if (!refId) return Response.json({ error: 'refId required' }, { status: 400 })
 
   await prisma.stockFabric.updateMany({
-    where: { refId, deletedAt: null },
+    where: { refId, deletedAt: null, isPurchased: true },
     data: {
       customer: customer ?? undefined,
       fabricStruct: fabricStruct ?? undefined,
       fabricPattern: fabricPattern ?? undefined,
       fabricW: fabricW ?? undefined,
       fabricCode: fabricCode ?? undefined,
+      supplier: supplier ?? undefined,
+      billRef: billRef ?? undefined,
+      pricePerYard: pricePerYard !== undefined ? (pricePerYard !== '' ? Number(pricePerYard) : null) : undefined,
+      dyeLot: dyeLot ?? undefined,
     },
   })
 
@@ -81,7 +92,7 @@ export async function DELETE(request: NextRequest) {
   if (!refId) return Response.json({ error: 'refId required' }, { status: 400 })
 
   await prisma.stockFabric.updateMany({
-    where: { refId, deletedAt: null },
+    where: { refId, deletedAt: null, isPurchased: true },
     data: { deletedAt: new Date() },
   })
 

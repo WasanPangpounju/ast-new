@@ -17,6 +17,8 @@ const navItems: NavItem[] = [
     children: [
       { href: '/warehouse/stock/create', label: 'คีย์ผ้าเข้าสต็อก' },
       { href: '/warehouse/fabric-in/review', label: 'ตรวจสอบคีย์ผ้า' },
+      { href: '/warehouse/stock/purchase', label: 'คีย์ผ้าซื้อเข้า' },
+      { href: '/warehouse/stock/purchase/review', label: 'ตรวจสอบผ้าซื้อเข้า' },
       { href: '/warehouse/bill/create', label: 'เปิดบิลผ้า' },
       { href: '/warehouse/bill', label: 'พิมพ์บิลส่งของ' },
       { href: '/warehouse/orders', label: 'ออร์เดอร์ลูกค้า' },

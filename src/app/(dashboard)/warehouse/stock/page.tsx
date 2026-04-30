@@ -22,23 +22,25 @@ export default function StockPage() {
   const [customer, setCustomer] = useState('')
   const [appliedQ, setAppliedQ] = useState('')
   const [appliedCustomer, setAppliedCustomer] = useState('')
+  const [stockType, setStockType] = useState<'all' | 'produced' | 'purchased'>('all')
 
   const fetchStocks = useCallback(() => {
     setLoading(true)
     const p = new URLSearchParams({ page: String(page) })
     if (appliedQ) p.set('q', appliedQ)
     if (appliedCustomer) p.set('customer', appliedCustomer)
+    if (stockType !== 'all') p.set('stockType', stockType)
     fetch(`/api/warehouse/stock?${p}`)
       .then(r => r.json())
       .then(d => { setStocks(d.stocks ?? []); setTotal(d.total ?? 0) })
       .finally(() => setLoading(false))
-  }, [page, appliedQ, appliedCustomer])
+  }, [page, appliedQ, appliedCustomer, stockType])
 
   useEffect(() => { fetchStocks() }, [fetchStocks])
 
   const totalPages = Math.ceil(total / 20)
   const handleSearch = () => { setPage(1); setAppliedQ(q); setAppliedCustomer(customer) }
-  const handleClear = () => { setQ(''); setCustomer(''); setAppliedQ(''); setAppliedCustomer(''); setPage(1) }
+  const handleClear = () => { setQ(''); setCustomer(''); setAppliedQ(''); setAppliedCustomer(''); setStockType('all'); setPage(1) }
 
   const fmt = (n: number | null) => n == null ? '-' : Number(n).toLocaleString()
 
@@ -71,6 +73,15 @@ export default function StockPage() {
             <button onClick={handleClear}
               className="px-4 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600">เคลียร์</button>
           </div>
+        </div>
+        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-gray-100">
+          <span className="text-xs text-gray-500 mr-1">ประเภท:</span>
+          {(['all', 'produced', 'purchased'] as const).map(t => (
+            <button key={t} onClick={() => { setStockType(t); setPage(1) }}
+              className={`px-3 py-1 text-xs rounded-full border transition-colors ${stockType === t ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+              {t === 'all' ? 'ทั้งหมด' : t === 'produced' ? 'ผ้าผลิต' : 'ผ้าซื้อเข้า'}
+            </button>
+          ))}
         </div>
       </div>
 

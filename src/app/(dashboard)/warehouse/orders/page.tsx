@@ -36,6 +36,10 @@ export default function WarehouseOrdersPage() {
   const [dateTo, setDateTo] = useState('')
   const [applied, setApplied] = useState({ search: '', customer: '', fabricId: '', dateFrom: '', dateTo: '' })
 
+  const [detailOrder, setDetailOrder] = useState<Order | null>(null)
+  const [orderBills, setOrderBills] = useState<any[]>([])
+  const [billsLoading, setBillsLoading] = useState(false)
+
   const fetchOrders = useCallback(() => {
     setLoading(true)
     const p = new URLSearchParams({
@@ -54,6 +58,30 @@ export default function WarehouseOrdersPage() {
   const handleClear = () => {
     setSearch(''); setCustomer(''); setFabricId(''); setDateFrom(''); setDateTo('')
     setPage(1); setApplied({ search: '', customer: '', fabricId: '', dateFrom: '', dateTo: '' })
+  }
+
+  async function openDetail(order: Order) {
+    setDetailOrder(order)
+    setOrderBills([])
+    setBillsLoading(true)
+    try {
+      const res = await fetch(`/api/warehouse/orders/${order.id}/bills`)
+      const data = await res.json()
+      setOrderBills(data.bills ?? [])
+    } catch {}
+    setBillsLoading(false)
+  }
+
+  function handleSend(order: Order) {
+    const params = new URLSearchParams({
+      orderId: String(order.id),
+      purchaseOrder: order.purchaseOrder ?? '',
+      customerName: order.customerName ?? '',
+      fabricStruct: order.fabricStructure ?? '',
+      fabricPattern: order.fabricPattern ?? '',
+      fabricCode: order.fabricId ?? '',
+    })
+    window.location.href = `/warehouse/bill/create?${params}`
   }
 
   const totalPages = Math.ceil(total / 20)
@@ -134,7 +162,7 @@ export default function WarehouseOrdersPage() {
                 <th rowSpan={2} className="text-right px-3 py-2.5 font-medium text-gray-600 w-28 align-middle">จำนวน Order (หลา)</th>
                 <th colSpan={2} className="text-center px-3 py-2 font-medium text-gray-600 border-b border-gray-200">จัดส่งแล้ว</th>
                 <th rowSpan={2} className="text-right px-3 py-2.5 font-medium text-gray-600 w-24 align-middle">คงค้าง (หลา)</th>
-                <th rowSpan={2} className="text-center px-3 py-2.5 font-medium text-gray-600 w-24 align-middle">รายละเอียด</th>
+                <th rowSpan={2} className="text-center px-3 py-2.5 font-medium text-gray-600 w-36 align-middle">การดำเนินการ</th>
               </tr>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs">
                 <th className="text-right px-3 py-2 font-medium text-gray-500 w-20">หลา</th>
@@ -188,9 +216,16 @@ export default function WarehouseOrdersPage() {
                         : <span className="text-gray-300">-</span>}
                     </td>
                     <td className="px-3 py-2.5 text-center">
-                      <button className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors">
-                        รายละเอียด
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => openDetail(order)}
+                          className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors">
+                          รายละเอียด
+                        </button>
+                        <button onClick={() => handleSend(order)}
+                          className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                          ส่ง
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -216,6 +251,80 @@ export default function WarehouseOrdersPage() {
           </div>
         )}
       </div>
+
+      {/* Detail Modal */}
+      {detailOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setDetailOrder(null)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl mx-4 overflow-hidden max-h-[80vh] flex flex-col">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900 text-sm">บิลส่งของ — {detailOrder.purchaseOrder}</h2>
+                <p className="text-xs text-gray-500 mt-0.5">{detailOrder.customerName}</p>
+              </div>
+              <button onClick={() => setDetailOrder(null)} className="text-gray-400 hover:text-gray-600 text-lg">×</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4">
+              {billsLoading ? (
+                <div className="flex items-center justify-center py-8 text-gray-400">
+                  <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-2"/>
+                  กำลังโหลด...
+                </div>
+              ) : orderBills.length === 0 ? (
+                <p className="text-center text-gray-400 py-8 text-sm">ยังไม่มีบิลส่งของสำหรับออร์เดอร์นี้</p>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-200">
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">วันที่</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">บิล</th>
+                      <th className="text-left px-3 py-2 font-medium text-gray-600">โครงสร้างผ้า</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600">พับ</th>
+                      <th className="text-right px-3 py-2 font-medium text-gray-600">หลา</th>
+                      <th className="text-center px-3 py-2 font-medium text-gray-600">พิมพ์</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {orderBills.map((b, i) => (
+                      <tr key={i} className="hover:bg-blue-50/30">
+                        <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                          {b.createDate ? new Date(b.createDate).toLocaleDateString('th-TH', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-gray-800">{b.vatType}{b.vatNo}</td>
+                        <td className="px-3 py-2 text-gray-700 max-w-[200px] truncate">{b.fabricStruct ?? '-'}</td>
+                        <td className="px-3 py-2 text-right text-gray-800">{b.foldCount?.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right font-medium text-gray-900">{Math.round(Number(b.totalYard)).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-center">
+                          <a href={`/warehouse/bill/print/${b.vatType}${b.vatNo}`} target="_blank"
+                            className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
+                            🖨
+                          </a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-yellow-50 font-semibold border-t-2 border-gray-200">
+                      <td colSpan={3} className="px-3 py-2 text-xs text-gray-600">รวมทั้งหมด</td>
+                      <td className="px-3 py-2 text-right text-xs text-gray-800">
+                        {orderBills.reduce((s, b) => s + (b.foldCount ?? 0), 0).toLocaleString()} พับ
+                      </td>
+                      <td className="px-3 py-2 text-right text-xs font-bold text-gray-900">
+                        {Math.round(orderBills.reduce((s, b) => s + Number(b.totalYard ?? 0), 0)).toLocaleString()} หลา
+                      </td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                </table>
+              )}
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end">
+              <button onClick={() => setDetailOrder(null)}
+                className="px-4 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600">ปิด</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

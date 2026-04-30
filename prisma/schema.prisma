@@ -248,9 +248,15 @@ model StockFabric {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
+  isPurchased   Boolean   @default(false) @map("is_purchased")
+  supplier      String?
+  billRef       String?   @map("bill_ref")
+  pricePerYard  Float?    @map("price_per_yard")
+  dyeLot        String?   @map("dye_lot")
 
   @@index([refId])
   @@index([fabricPattern])
+  @@index([isPurchased])
   @@map("stockfabrics")
 }
 
