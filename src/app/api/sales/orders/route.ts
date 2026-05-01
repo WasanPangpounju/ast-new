@@ -72,9 +72,19 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json()
   const {
-    vat, customerName, fabricId, fabricStructure, fabricPattern, fabricW,
-    priceYard, priceM, discountP, discountYard, commission, orderSumM,
-    deadlineDate, comment,
+    vat, customerName, coordinator, fabricId, fabricStructure, fabricPattern,
+    fabricW, yarnHCount, phewNumber, phewW, stackType,
+    warpYarn1, warpComp1, warpCount1, warpRatio1,
+    warpYarn2, warpComp2, warpCount2, warpRatio2,
+    weftYarn1, weftComp1, weftCount1, weftRatio1,
+    weftYarn2, weftComp2, weftCount2, weftRatio2,
+    weftYarn3, weftComp3, weftCount3, weftRatio3,
+    weftYarn4, weftComp4, weftCount4, weftRatio4,
+    orderSumYard, fabricSPY,
+    priceYard, priceM, discountP, discountYard,
+    machineNumber, surcharge, commission, po,
+    note, productionNote, payment,
+    deadlines,
   } = body
 
   if (!vat || !['SO', 'SOX', 'SOB'].includes(vat))
@@ -94,16 +104,23 @@ export async function POST(request: NextRequest) {
         vat,
         purchaseOrder,
         customerName: customerName.trim(),
+        emp: coordinator?.trim() ?? null,
         fabricId: fabricId?.trim() ?? null,
         fabricStructure: fabricStructure?.trim() ?? null,
         fabricPattern: fabricPattern?.trim() ?? null,
-        orderSumM: orderSumM ? parseFloat(orderSumM) : null,
+        orderSumYard: orderSumYard ? parseFloat(orderSumYard) : null,
+        fabricSPY: fabricSPY ? parseFloat(fabricSPY) : null,
         priceYard: priceYard ? parseFloat(priceYard) : null,
         priceM: priceM ? parseFloat(priceM) : null,
         discountP: discountP ? parseFloat(discountP) : null,
         discountYard: discountYard ? parseFloat(discountYard) : null,
         commission: commission ? parseFloat(commission) : null,
-        deadline: deadlineDate ?? null,
+        machineNumber: machineNumber?.trim() ?? null,
+        surcharge: surcharge?.trim() ?? null,
+        po: po?.trim() ?? null,
+        note: note?.trim() ?? null,
+        productionNote: productionNote?.trim() ?? null,
+        payment: payment?.trim() ?? null,
         status: 'รอดำเนินการ',
         createDate: new Date(),
       },
@@ -112,8 +129,12 @@ export async function POST(request: NextRequest) {
     await tx.fabricAst.create({
       data: {
         purchaseOrder,
-        fabricW: fabricW?.trim() ?? null,
         vat,
+        fabricW: fabricW?.trim() ?? null,
+        yarnHCount: yarnHCount?.trim() ?? null,
+        phewNumber: phewNumber?.trim() ?? null,
+        phewW: phewW?.trim() ?? null,
+        stackType: stackType?.trim() ?? null,
       },
     })
 
@@ -121,24 +142,48 @@ export async function POST(request: NextRequest) {
       data: {
         purchaseOrder,
         yarnWRatio2: 'รอดำเนินการ',
+        yarnHType: warpYarn1?.trim() ?? null,
+        yarnHType2: warpYarn2?.trim() ?? null,
+        subNameH1: warpComp1?.trim() ?? null,
+        subNameH2: warpComp2?.trim() ?? null,
+        yarnHCount1: warpCount1?.trim() ?? null,
+        yarnHCount2: warpCount2?.trim() ?? null,
+        yarnHRatio1: warpRatio1?.trim() ?? null,
+        yarnHRatio2: warpRatio2?.trim() ?? null,
+        yarnWType: weftYarn1?.trim() ?? null,
+        yarnWType2: weftYarn2?.trim() ?? null,
+        yarnWType3: weftYarn3?.trim() ?? null,
+        yarnWType4: weftYarn4?.trim() ?? null,
+        subNameW1: weftComp1?.trim() ?? null,
+        subNameW2: weftComp2?.trim() ?? null,
+        subNameW3: weftComp3?.trim() ?? null,
+        subNameW4: weftComp4?.trim() ?? null,
+        yarnWCount1: weftCount1?.trim() ?? null,
+        yarnWCount2: weftCount2?.trim() ?? null,
+        yarnWCount3: weftCount3?.trim() ?? null,
+        yarnWCount4: weftCount4?.trim() ?? null,
+        yarnWRatio1: weftRatio1?.trim() ?? null,
+        weftRatio2: weftRatio2?.trim() ?? null,
+        yarnWRatio3: weftRatio3?.trim() ?? null,
+        yarnWRatio4: weftRatio4?.trim() ?? null,
       },
     })
 
-    if (deadlineDate) {
-      await tx.orderDeadline.create({
-        data: {
-          purchaseOrder,
-          dt: new Date(deadlineDate),
-          label: 'กำหนดส่ง',
-        },
-      })
-    }
-
-    if (comment?.trim()) {
-      await tx.astPurchaseOrder.update({
-        where: { purchaseOrder },
-        data: { deadline: comment.trim() },
-      })
+    if (Array.isArray(deadlines) && deadlines.length > 0) {
+      for (const dl of deadlines) {
+        if (dl.dt) {
+          await tx.orderDeadline.create({
+            data: {
+              purchaseOrder,
+              dt: new Date(dl.dt),
+              label: dl.label ?? 'กำหนดส่ง',
+              qty: dl.qty ? parseFloat(dl.qty) : null,
+              unit: dl.unit ?? 'หลา',
+              pct: dl.pct ? parseFloat(dl.pct) : null,
+            },
+          })
+        }
+      }
     }
 
     return order

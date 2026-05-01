@@ -115,6 +115,10 @@ model AstPurchaseOrder {
   discountP       Float?    @map("discount_p")
   discountYard    Float?    @map("discount_yard")
   commission      Float?
+  machineNumber   String?   @map("machine_number")
+  surcharge       String?
+  note            String?
+  productionNote  String?   @map("production_note")
   createDate      DateTime  @default(now()) @map("create_date")
   /// Denormalized copy of status — kept in sync with fabricAstStructure.yarnWRatio2
   status          String?
@@ -144,6 +148,9 @@ model OrderDeadline {
   purchaseOrder String
   dt            DateTime?
   label         String?
+  qty           Float?
+  unit          String?
+  pct           Float?
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
@@ -177,6 +184,7 @@ model FabricAst {
   fabricW       String?  @map("fabric_w")
   phewNumber    String?
   phewW         String?
+  stackType     String?  @map("stack_type")
   payment       String?
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
@@ -191,17 +199,32 @@ model FabricAstStructure {
   id            Int      @id @default(autoincrement())
   purchaseOrder String   @unique
   yarnHType     String?
+  yarnHType2    String?  @map("yarn_h_type2")
+  subNameH1     String?  @map("sub_name_h1")
+  subNameH2     String?  @map("sub_name_h2")
   yarnWType     String?
+  yarnWType2    String?  @map("yarn_w_type2")
+  yarnWType3    String?  @map("yarn_w_type3")
+  yarnWType4    String?  @map("yarn_w_type4")
+  subNameW1     String?  @map("sub_name_w1")
+  subNameW2     String?  @map("sub_name_w2")
+  subNameW3     String?  @map("sub_name_w3")
+  subNameW4     String?  @map("sub_name_w4")
   /// ⚠ REPURPOSED AS ORDER STATUS FIELD
   /// Values: 'no data' | 'อนุมัติให้ผลิต' |
   yarnWRatio2   String?
   yarnHRatio1   String?
   yarnHRatio2   String?
   yarnWRatio1   String?
+  weftRatio2    String?  @map("weft_ratio2")
+  yarnWRatio3   String?  @map("yarn_w_ratio3")
+  yarnWRatio4   String?  @map("yarn_w_ratio4")
   yarnHCount1   String?
   yarnHCount2   String?
   yarnWCount1   String?
   yarnWCount2   String?
+  yarnWCount3   String?  @map("yarn_w_count3")
+  yarnWCount4   String?  @map("yarn_w_count4")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
