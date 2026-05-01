@@ -132,21 +132,26 @@ async function main() {
   for (let i = 0; i < stocks.length; i += BATCH) {
     const batch = stocks.slice(i, i + BATCH)
     await prisma.$transaction(
-      batch.map((f: any) => prisma.stockFabric.upsert({
-        where: { id: f.id },
-        update: {},
-        create: {
-          id: f.id,
-          refId: f.refId ?? '',
-          emp: f.emp ?? null,
-          fabricStruct: f.fabricStruct ?? null,
-          fabricPattern: f.fabricPattern ?? null,
-          fabricW: f.fabricW ?? null,
-          fold: f.fold ? parseInt(f.fold) : null,
-          sumYard: f.sumYard ? parseFloat(f.sumYard) : null,
-          customer: f.customer ?? null,
-        }
-      }))
+      batch.map((f: any) => {
+        const cd = f.createDate ?? f.create_date ?? null
+        const createDate = cd ? new Date(cd) : new Date()
+        return prisma.stockFabric.upsert({
+          where: { id: f.id },
+          update: { createDate },
+          create: {
+            id: f.id,
+            refId: f.refId ?? '',
+            emp: f.emp ?? null,
+            fabricStruct: f.fabricStruct ?? null,
+            fabricPattern: f.fabricPattern ?? null,
+            fabricW: f.fabricW ?? null,
+            fold: f.fold ? parseInt(f.fold) : null,
+            sumYard: f.sumYard ? parseFloat(f.sumYard) : null,
+            customer: f.customer ?? null,
+            createDate,
+          }
+        })
+      })
     )
     stOk += batch.length
     process.stdout.write(`\r  ${stOk}/${stocks.length}...`)
@@ -160,26 +165,31 @@ async function main() {
   for (let i = 0; i < fouts.length; i += BATCH) {
     const batch = fouts.slice(i, i + BATCH)
     await prisma.$transaction(
-      batch.map((f: any) => prisma.fabricOut.upsert({
-        where: { id: f.id },
-        update: {},
-        create: {
-          id: f.id,
-          refId: f.refId ?? '',
-          no: f.no ? String(f.no) : null,
-          vatType: f.vatType ?? 'A',
-          vatNo: f.vatNo ? parseInt(f.vatNo) : 1001,
-          fold: f.fold ? parseInt(f.fold) : 1,
-          sumYard: f.sumYard ? parseFloat(f.sumYard) : 0,
-          fabricStruct: f.fabricStruct ?? null,
-          fabricPattern: f.fabricPattern ?? null,
-          fabricW: f.fabricW ?? null,
-          customerName: f.customerName ?? null,
-          receiveName: f.receiveName ?? null,
-          purchaseOrder: f.purchase_order ?? f.purchaseOrder ?? null,
-          orderId: f.order_id ? Number(f.order_id) : null,
-        }
-      }))
+      batch.map((f: any) => {
+        const cd = f.createDate ?? f.create_date ?? null
+        const createDate = cd ? new Date(cd) : new Date()
+        return prisma.fabricOut.upsert({
+          where: { id: f.id },
+          update: { createDate },
+          create: {
+            id: f.id,
+            refId: f.refId ?? '',
+            no: f.no ? String(f.no) : null,
+            vatType: f.vatType ?? 'A',
+            vatNo: f.vatNo ? parseInt(f.vatNo) : 1001,
+            fold: f.fold ? parseInt(f.fold) : 1,
+            sumYard: f.sumYard ? parseFloat(f.sumYard) : 0,
+            fabricStruct: f.fabricStruct ?? null,
+            fabricPattern: f.fabricPattern ?? null,
+            fabricW: f.fabricW ?? null,
+            customerName: f.customerName ?? null,
+            receiveName: f.receiveName ?? null,
+            purchaseOrder: f.purchase_order ?? f.purchaseOrder ?? null,
+            orderId: f.order_id ? Number(f.order_id) : null,
+            createDate,
+          }
+        })
+      })
     )
     fOk += batch.length
     process.stdout.write(`\r  ${fOk}/${fouts.length}...`)
