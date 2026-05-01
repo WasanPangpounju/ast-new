@@ -120,12 +120,6 @@ function YarnRow({
 
 const TODAY = new Date().toISOString().slice(0, 10)
 
-// Matches the old Laravel subyarntype(): first two space-separated words, trailing space if only one.
-function subyarntype(yarn: string): string {
-  const parts = yarn.trim().split(/\s+/)
-  return parts[0] + ' ' + (parts[1] ?? '')
-}
-
 function buildFabricStruct(
   warpYarn1: string, warpCount1: string,
   warpYarn2: string,
@@ -136,27 +130,15 @@ function buildFabricStruct(
 ): string {
   if (!warpYarn1 || !weftYarn1) return ''
 
-  let warpStr: string
-  if (warpYarn2) {
-    warpStr = '(' + subyarntype(warpYarn1) + '* ' + subyarntype(warpYarn2) + ')'
-  } else {
-    warpStr = subyarntype(warpYarn1)
-  }
+  const warpParts = [warpYarn1.trim(), warpYarn2.trim()].filter(Boolean)
+  const warpStr = warpParts.join(' + ')
 
-  let weftStr: string
-  if (weftYarn2 || weftYarn3 || weftYarn4) {
-    let w = '(' + subyarntype(weftYarn1)
-    if (weftYarn2) w += '* ' + subyarntype(weftYarn2)
-    if (weftYarn3) w += '* ' + subyarntype(weftYarn3)
-    if (weftYarn4) w += '* ' + subyarntype(weftYarn4)
-    weftStr = w + ')'
-  } else {
-    weftStr = subyarntype(weftYarn1)
-  }
+  const weftParts = [weftYarn1.trim(), weftYarn2.trim(), weftYarn3.trim(), weftYarn4.trim()].filter(Boolean)
+  const weftStr = weftParts.join(' + ')
 
-  const typeStr = warpStr + ' * ' + weftStr
   const countStr = (warpCount1 || '') + ' * ' + (weftCount1 || '')
-  return typeStr + ' / ' + countStr
+
+  return warpStr + ' * ' + weftStr + ' / ' + countStr
 }
 
 export default function CreateOrderPage() {
