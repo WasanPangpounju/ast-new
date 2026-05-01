@@ -243,6 +243,13 @@ export default function CreateOrderPage() {
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
+  useEffect(() => {
+    setFabricStructure(buildFabricStruct(
+      warpYarn1, warpCount1, warpYarn2,
+      weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4,
+    ))
+  }, [warpYarn1, warpCount1, warpYarn2, weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4])
+
   function handleGenerateStruct() {
     setFabricStructure(buildFabricStruct(
       warpYarn1, warpCount1, warpYarn2,
