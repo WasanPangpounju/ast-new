@@ -81,6 +81,17 @@ model Stuff {
   @@map("stuffs")
 }
 
+model Coordinator {
+  id       Int     @id @default(autoincrement())
+  tax      String
+  name     String
+  jobTitle String? @map("job_title")
+  tel      String?
+
+  @@index([tax])
+  @@map("coordinators")
+}
+
 // ─── PURCHASE ORDERS ─────────────────────────────────
 
 model AstPurchaseOrder {
@@ -96,6 +107,15 @@ model AstPurchaseOrder {
   fabricPattern   String?
   fabricStructure String?
   orderSumYard    Float?
+  orderSumM       Float?    @map("order_sum_m")
+  fabricSPY       Float?    @map("fabric_spy")
+  fabricSpP       Float?    @map("fabric_sp_p")
+  priceYard       Float?    @map("price_yard")
+  priceM          Float?    @map("price_m")
+  discountP       Float?    @map("discount_p")
+  discountYard    Float?    @map("discount_yard")
+  commission      Float?
+  createDate      DateTime  @default(now()) @map("create_date")
   /// Denormalized copy of status — kept in sync with fabricAstStructure.yarnWRatio2
   status          String?
   deadline        String?

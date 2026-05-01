@@ -31,6 +31,20 @@ async function main() {
   }
   console.log(`  ✓ ${customers.length} customers`)
 
+  // 1b. Coordinators
+  console.log('[1b] Migrating coordinators...')
+  const [coordRows]: any = await db.query('SELECT * FROM coordinators')
+  let coOk = 0
+  for (const c of coordRows as any[]) {
+    await prisma.coordinator.upsert({
+      where: { id: c.id },
+      update: { tax: c.tax ?? '', name: c.name ?? '', jobTitle: c.jobTitle ?? null, tel: c.tel ?? null },
+      create: { id: c.id, tax: c.tax ?? '', name: c.name ?? '', jobTitle: c.jobTitle ?? null, tel: c.tel ?? null }
+    })
+    coOk++
+  }
+  console.log(`  ✓ ${coOk} coordinators`)
+
   // 2. Suppliers
   console.log('[2/7] Migrating suppliers...')
   const [suppliers]: any = await db.query('SELECT * FROM suppliers')
@@ -60,7 +74,17 @@ async function main() {
     try {
       await prisma.astPurchaseOrder.upsert({
         where: { purchaseOrder: String(o.purchaseOrder) },
-        update: {},
+        update: {
+          priceYard: o.priceYard ? parseFloat(o.priceYard) : null,
+          priceM: o.priceM ? parseFloat(o.priceM) : null,
+          discountP: o.discountP ? parseFloat(o.discountP) : null,
+          discountYard: o.discountYard ? parseFloat(o.discountYard) : null,
+          commission: o.commission ? parseFloat(o.commission) : null,
+          fabricSPY: o.fabricSPY ? parseFloat(o.fabricSPY) : null,
+          fabricSpP: o.fabricSpP ? parseFloat(o.fabricSpP) : null,
+          orderSumM: o.orderSumM ? parseFloat(o.orderSumM) : null,
+          createDate: o.createDate ? new Date(o.createDate) : new Date(),
+        },
         create: {
           id: o.id,
           vat: o.vat ?? 'SO',
@@ -72,6 +96,15 @@ async function main() {
           fabricPattern: o.fabricPattern ?? null,
           fabricStructure: o.fabricStructure ?? null,
           orderSumYard: o.orderSumYard ? parseFloat(o.orderSumYard) : null,
+          orderSumM: o.orderSumM ? parseFloat(o.orderSumM) : null,
+          fabricSPY: o.fabricSPY ? parseFloat(o.fabricSPY) : null,
+          fabricSpP: o.fabricSpP ? parseFloat(o.fabricSpP) : null,
+          priceYard: o.priceYard ? parseFloat(o.priceYard) : null,
+          priceM: o.priceM ? parseFloat(o.priceM) : null,
+          discountP: o.discountP ? parseFloat(o.discountP) : null,
+          discountYard: o.discountYard ? parseFloat(o.discountYard) : null,
+          commission: o.commission ? parseFloat(o.commission) : null,
+          createDate: o.createDate ? new Date(o.createDate) : new Date(),
           status: o.status ?? null,
           deadline: o.deadline ?? null,
           payment: o.payment ?? null,
@@ -236,9 +269,10 @@ async function main() {
 
   // 7. Final counts
   console.log('\n[7/7] Final counts in PostgreSQL:')
-  const [c, s, o, fs, sf, fo] = await Promise.all([
+  const [c, s, co, o, fs, sf, fo] = await Promise.all([
     prisma.customer.count(),
     prisma.supplier.count(),
+    prisma.coordinator.count(),
     prisma.astPurchaseOrder.count(),
     prisma.fabricAstStructure.count(),
     prisma.stockFabric.count(),
@@ -247,6 +281,7 @@ async function main() {
   console.log(`
   Customers:       ${c}
   Suppliers:       ${s}
+  Coordinators:    ${co}
   Purchase Orders: ${o}
   Fab Structures:  ${fs}
   Stock Fabrics:   ${sf}

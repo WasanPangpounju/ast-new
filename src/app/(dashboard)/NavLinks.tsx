@@ -13,6 +13,15 @@ type NavItem = {
 const navItems: NavItem[] = [
   { href: '/', label: 'หน้าหลัก', icon: '🏠' },
   {
+    label: 'ระบบซื้อขาย', icon: '💼',
+    children: [
+      { href: '/sales/customers', label: 'ข้อมูลลูกค้า' },
+      { href: '/sales/suppliers', label: 'ข้อมูลซัพพลายเออร์' },
+      { href: '/sales/orders', label: 'ใบสั่งขาย' },
+      { href: '/sales/orders/review', label: 'ตรวจสอบใบสั่งขาย' },
+    ]
+  },
+  {
     label: 'ระบบคลังสินค้า', icon: '🏭',
     children: [
       { href: '/warehouse/stock/create', label: 'คีย์ผ้าเข้าสต็อก' },
@@ -24,6 +33,7 @@ const navItems: NavItem[] = [
       { href: '/warehouse/orders', label: 'ออร์เดอร์ลูกค้า' },
       { href: '/warehouse/stock', label: 'สต็อกผ้า' },
       { href: '/warehouse/stock-deposit', label: 'สต็อกผ้าฝากจัดเก็บ' },
+      { href: '/warehouse/reports', label: '📊 รายงาน' },
     ]
   },
 ]

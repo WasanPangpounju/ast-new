@@ -22,7 +22,13 @@
       "Bash(npx tsx *)",
       "Bash(echo \"EXIT: $?\")",
       "Bash(echo \"---EXIT:$?---\")",
-      "Bash(xargs cat *)"
+      "Bash(xargs cat *)",
+      "Bash(npm list *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(Remove-Item __check_mysql.ts, __mysql_counts.ts -Force)",
+      "Bash(xargs ls *)"
     ]
   }
 }
