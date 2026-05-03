@@ -28,7 +28,9 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(Remove-Item __check_mysql.ts, __mysql_counts.ts -Force)",
-      "Bash(xargs ls *)"
+      "Bash(xargs ls *)",
+      "Bash(Remove-Item *)",
+      "Bash(git commit *)"
     ]
   }
 }
