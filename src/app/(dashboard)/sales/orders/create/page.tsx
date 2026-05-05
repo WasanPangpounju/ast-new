@@ -7,21 +7,42 @@ import { useRouter } from 'next/navigation'
 interface CustomerSug { id: number; name: string; tax: string | null; tel: string | null }
 interface DeadlineRow { dt: string; qty: string; unit: string; pct: string }
 
-// ─── Small reusable components ────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function toThaiDate(iso: string): string {
+  const [y, m, d] = iso.split('-')
+  return `${d}/${m}/${parseInt(y) + 543}`
+}
+
+const TODAY = new Date().toISOString().slice(0, 10)
+
+function buildFabricStruct(
+  warpYarn1: string, warpCount1: string, warpYarn2: string,
+  weftYarn1: string, weftCount1: string,
+  weftYarn2: string, weftYarn3: string, weftYarn4: string,
+): string {
+  if (!warpYarn1 || !weftYarn1) return ''
+  const warpParts = [warpYarn1.trim(), warpYarn2.trim()].filter(Boolean)
+  const weftParts = [weftYarn1.trim(), weftYarn2.trim(), weftYarn3.trim(), weftYarn4.trim()].filter(Boolean)
+  return `${warpParts.join(' + ')} * ${weftParts.join(' + ')} / ${warpCount1 || ''} * ${weftCount1 || ''}`
+}
+
+// ─── Base components ──────────────────────────────────────────────────────────
 
 function Label({ text, required }: { text: string; required?: boolean }) {
   return (
-    <label className="block text-xs text-gray-600 mb-0.5">
+    <label className="block text-sm font-medium text-gray-700 mb-1">
       {text}{required && <span className="text-red-500 ml-0.5">*</span>}
     </label>
   )
 }
 
 function Input({
-  value, onChange, placeholder = '', type = 'text', readOnly = false, className = '',
+  value, onChange, placeholder = '', type = 'text',
+  readOnly = false, gray = false, className = '',
 }: {
   value: string; onChange?: (v: string) => void; placeholder?: string
-  type?: string; readOnly?: boolean; className?: string
+  type?: string; readOnly?: boolean; gray?: boolean; className?: string
 }) {
   return (
     <input
@@ -30,125 +51,116 @@ function Input({
       readOnly={readOnly}
       placeholder={placeholder}
       onChange={e => onChange?.(e.target.value)}
-      className={`w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 ${readOnly ? 'bg-gray-50 text-gray-500' : ''} ${className}`}
+      className={`w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500
+        ${readOnly || gray ? 'bg-gray-100 text-gray-500' : 'bg-white'} ${className}`}
     />
   )
 }
 
-// ─── Yarn row ─────────────────────────────────────────────────────────────────
+// ─── Yarn name autocomplete ───────────────────────────────────────────────────
 
-function YarnRow({
-  label, yarn, company, count, ratio, side,
-  onYarnChange, onCompanyChange, onCountChange, onRatioChange,
-}: {
-  label: string; yarn: string; company: string; count: string; ratio: string; side: 'warp' | 'weft'
-  onYarnChange: (v: string) => void; onCompanyChange: (v: string) => void
-  onCountChange: (v: string) => void; onRatioChange: (v: string) => void
+function YarnAC({ value, onChange, side, placeholder }: {
+  value: string; onChange: (v: string) => void; side: 'warp' | 'weft'; placeholder: string
 }) {
-  const [yarnSugs, setYarnSugs] = useState<string[]>([])
-  const [yarnOpen, setYarnOpen] = useState(false)
-  const [compSugs, setCompSugs] = useState<string[]>([])
-  const [compOpen, setCompOpen] = useState(false)
-  const yarnRef = useRef<HTMLDivElement>(null)
-  const compRef = useRef<HTMLDivElement>(null)
+  const [sugs, setSugs] = useState<string[]>([])
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!yarn) { setYarnSugs([]); return }
+    if (!value) { setSugs([]); return }
     const t = setTimeout(() => {
-      fetch(`/api/sales/autocomplete/yarns?q=${encodeURIComponent(yarn)}&type=${side}`)
-        .then(r => r.json()).then(d => setYarnSugs(d.yarns ?? []))
+      fetch(`/api/sales/autocomplete/yarns?q=${encodeURIComponent(value)}&type=${side}`)
+        .then(r => r.json()).then(d => setSugs(d.yarns ?? []))
     }, 200)
     return () => clearTimeout(t)
-  }, [yarn, side])
-
-  useEffect(() => {
-    if (!yarn) { setCompSugs([]); return }
-    fetch(`/api/sales/autocomplete/yarn-companies?yarn=${encodeURIComponent(yarn)}&side=${side}`)
-      .then(r => r.json()).then(d => setCompSugs(d.companies ?? []))
-  }, [yarn, side])
+  }, [value, side])
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
-      if (yarnRef.current && !yarnRef.current.contains(e.target as Node)) setYarnOpen(false)
-      if (compRef.current && !compRef.current.contains(e.target as Node)) setCompOpen(false)
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
   return (
-    <div className="grid grid-cols-4 gap-2">
-      {/* Yarn autocomplete */}
-      <div ref={yarnRef} className="relative col-span-1">
-        <Input
-          value={yarn}
-          onChange={v => { onYarnChange(v); setYarnOpen(true) }}
-          placeholder={label}
-        />
-        {yarnOpen && yarnSugs.length > 0 && (
-          <div className="absolute z-20 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto">
-            {yarnSugs.map(s => (
-              <button key={s} type="button" onClick={() => { onYarnChange(s); setYarnOpen(false) }}
-                className="w-full text-left px-2 py-1 text-xs hover:bg-blue-50 truncate">{s}</button>
-            ))}
-          </div>
-        )}
-      </div>
-      {/* Company autocomplete */}
-      <div ref={compRef} className="relative col-span-1">
-        <Input
-          value={company}
-          onChange={v => { onCompanyChange(v); setCompOpen(true) }}
-          placeholder="บริษัท"
-        />
-        {compOpen && compSugs.length > 0 && (
-          <div className="absolute z-20 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto">
-            {compSugs.map(s => (
-              <button key={s} type="button" onClick={() => { onCompanyChange(s); setCompOpen(false) }}
-                className="w-full text-left px-2 py-1 text-xs hover:bg-blue-50 truncate">{s}</button>
-            ))}
-          </div>
-        )}
-      </div>
-      <Input value={count} onChange={onCountChange} placeholder="จำนวน (เส้น)" type="number" />
-      <Input value={ratio} onChange={onRatioChange} placeholder="อัตราส่วน" />
+    <div ref={ref} className="relative">
+      <input value={value} onChange={e => { onChange(e.target.value); setOpen(true) }} placeholder={placeholder}
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      {open && sugs.length > 0 && (
+        <div className="absolute z-30 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto">
+          {sugs.map(s => (
+            <button key={s} type="button" onClick={() => { onChange(s); setOpen(false) }}
+              className="w-full text-left px-2 py-1 text-xs hover:bg-blue-50 truncate">{s}</button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Company autocomplete ─────────────────────────────────────────────────────
 
-const TODAY = new Date().toISOString().slice(0, 10)
+function CompAC({ value, onChange, yarn, side }: {
+  value: string; onChange: (v: string) => void; yarn: string; side: 'warp' | 'weft'
+}) {
+  const [sugs, setSugs] = useState<string[]>([])
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
 
-function buildFabricStruct(
-  warpYarn1: string, warpCount1: string,
-  warpYarn2: string,
-  weftYarn1: string, weftCount1: string,
-  weftYarn2: string,
-  weftYarn3: string,
-  weftYarn4: string,
-): string {
-  if (!warpYarn1 || !weftYarn1) return ''
+  useEffect(() => {
+    if (!yarn) { setSugs([]); return }
+    fetch(`/api/sales/autocomplete/yarn-companies?yarn=${encodeURIComponent(yarn)}&side=${side}`)
+      .then(r => r.json()).then(d => setSugs(d.companies ?? []))
+  }, [yarn, side])
 
-  const warpParts = [warpYarn1.trim(), warpYarn2.trim()].filter(Boolean)
-  const warpStr = warpParts.join(' + ')
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [])
 
-  const weftParts = [weftYarn1.trim(), weftYarn2.trim(), weftYarn3.trim(), weftYarn4.trim()].filter(Boolean)
-  const weftStr = weftParts.join(' + ')
-
-  const countStr = (warpCount1 || '') + ' * ' + (weftCount1 || '')
-
-  return warpStr + ' * ' + weftStr + ' / ' + countStr
+  return (
+    <div ref={ref} className="relative">
+      <input value={value} onChange={e => { onChange(e.target.value); setOpen(true) }} placeholder="บริษัท"
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      {open && sugs.length > 0 && (
+        <div className="absolute z-30 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto">
+          {sugs.map(s => (
+            <button key={s} type="button" onClick={() => { onChange(s); setOpen(false) }}
+              className="w-full text-left px-2 py-1 text-xs hover:bg-blue-50 truncate">{s}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
+
+// ─── Tab types ────────────────────────────────────────────────────────────────
+
+type TabId = 'customer' | 'order' | 'supplier' | 'verify'
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'customer', label: 'ข้อมูลลูกค้า' },
+  { id: 'order',    label: 'ใบคำสั่งขาย' },
+  { id: 'supplier', label: 'ข้อมูลซัพพลายเออร์' },
+  { id: 'verify',   label: 'ตรวจสอบใบสั่งขาย' },
+]
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function CreateOrderPage() {
   const router = useRouter()
+  const [activeTab, setActiveTab] = useState<TabId>('order')
+  const [secOpen, setSecOpen] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [nextOrderNo, setNextOrderNo] = useState<number | null>(null)
 
   // Header
-  const [vat, setVat] = useState('SO')
   const [createDate, setCreateDate] = useState(TODAY)
+  const [vat, setVat] = useState('SO')
 
   // Customer
   const [customerName, setCustomerName] = useState('')
@@ -158,7 +170,7 @@ export default function CreateOrderPage() {
   const customerRef = useRef<HTMLDivElement>(null)
   const [coordinator, setCoordinator] = useState('')
 
-  // Fabric basic
+  // Fabric
   const [fabricId, setFabricId] = useState('')
   const [fabricPattern, setFabricPattern] = useState('')
   const [fabricStructure, setFabricStructure] = useState('')
@@ -193,14 +205,16 @@ export default function CreateOrderPage() {
   const [weftCount4, setWeftCount4] = useState('')
   const [weftRatio4, setWeftRatio4] = useState('')
 
-  // Fabric spec
+  // Spec
   const [phewNumber, setPhewNumber] = useState('')
   const [phewW, setPhewW] = useState('')
   const [stackType, setStackType] = useState('ม้วนเส้น')
 
-  // Order quantity
+  // Quantity
   const [orderSumYard, setOrderSumYard] = useState('')
+  const [orderSumMeter, setOrderSumMeter] = useState('')
   const [fabricSPY, setFabricSPY] = useState('')
+  const [fabricSPYPct, setFabricSPYPct] = useState('')
 
   // Price
   const [priceYard, setPriceYard] = useState('')
@@ -222,7 +236,15 @@ export default function CreateOrderPage() {
   // Notes
   const [note, setNote] = useState('')
   const [productionNote, setProductionNote] = useState('')
-  const [payment, setPayment] = useState('ชำระภายใน 15 วันหลังได้รับใบแจ้งหนี้')
+  const [payment, setPayment] = useState('ชำระเงินภายใน 15 วันหลังได้รับสินค้า')
+
+  // Next order number preview
+  useEffect(() => {
+    fetch('/api/sales/orders?limit=1')
+      .then(r => r.json())
+      .then(d => setNextOrderNo((d.total ?? 0) + 1))
+      .catch(() => {})
+  }, [])
 
   // Customer autocomplete
   useEffect(() => {
@@ -243,19 +265,27 @@ export default function CreateOrderPage() {
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
+  // Auto-calc priceM from priceYard (1 หลา = 0.9144 เมตร → 1 เมตร = 1.0936 หลา)
   useEffect(() => {
-    setFabricStructure(buildFabricStruct(
-      warpYarn1, warpCount1, warpYarn2,
-      weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4,
-    ))
-  }, [warpYarn1, warpCount1, warpYarn2, weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4])
+    if (priceYard && !isNaN(parseFloat(priceYard))) {
+      setPriceM((parseFloat(priceYard) / 1.0936).toFixed(2))
+    }
+  }, [priceYard])
 
-  function handleGenerateStruct() {
-    setFabricStructure(buildFabricStruct(
-      warpYarn1, warpCount1, warpYarn2,
-      weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4,
-    ))
-  }
+  // Auto-calc orderSumMeter from orderSumYard
+  useEffect(() => {
+    if (orderSumYard && !isNaN(parseFloat(orderSumYard))) {
+      setOrderSumMeter((parseFloat(orderSumYard) * 0.9144).toFixed(2))
+    }
+  }, [orderSumYard])
+
+  // Auto-build fabric structure (disabled — use สร้าง button instead)
+  // useEffect(() => {
+  //   setFabricStructure(buildFabricStruct(
+  //     warpYarn1, warpCount1, warpYarn2,
+  //     weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4,
+  //   ))
+  // }, [warpYarn1, warpCount1, warpYarn2, weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4])
 
   function updateDeadline(i: number, field: keyof DeadlineRow, value: string) {
     setDeadlines(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
@@ -293,317 +323,418 @@ export default function CreateOrderPage() {
     }
   }
 
-  // ─── Section header ──────────────────────────────────────────────────────────
-  const SectionHead = ({ title }: { title: string }) => (
-    <div className="col-span-full border-b border-gray-200 pb-1 mb-1">
-      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{title}</span>
-    </div>
-  )
+  const thaiDate = toThaiDate(createDate)
+
+  // ─── Yarn row helper ──────────────────────────────────────────────────────
+
+  function YarnRow({
+    label, required, yarn, comp, count, ratio,
+    onYarn, onComp, onCount, onRatio, side, grayRatio = false,
+  }: {
+    label: string; required?: boolean
+    yarn: string; comp: string; count: string; ratio: string
+    onYarn: (v: string) => void; onComp: (v: string) => void
+    onCount: (v: string) => void; onRatio: (v: string) => void
+    side: 'warp' | 'weft'; grayRatio?: boolean
+  }) {
+    return (
+      <tr>
+        <td className="pr-2 py-1 text-xs text-gray-500 whitespace-nowrap align-top pt-2 w-28">
+          {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+        </td>
+        <td className="pr-2 py-1"><YarnAC value={yarn} onChange={onYarn} side={side} placeholder={label} /></td>
+        <td className="pr-2 py-1"><CompAC value={comp} onChange={onComp} yarn={yarn} side={side} /></td>
+        <td className="pr-2 py-1">
+          <input type="number" value={count} onChange={e => onCount(e.target.value)} placeholder="เส้น"
+            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </td>
+        <td className="py-1">
+          <input type="text" value={ratio} onChange={e => onRatio(e.target.value)} placeholder="อัตราส่วน"
+            className={`w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500
+              ${grayRatio ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''}`} />
+        </td>
+      </tr>
+    )
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-4 max-w-5xl mx-auto">
-      <div className="mb-4 flex items-center gap-3">
-        <button onClick={() => router.back()} className="text-xs text-gray-500 hover:text-gray-700">← กลับ</button>
-        <h1 className="text-base font-semibold text-gray-900">สร้างใบสั่งขายใหม่</h1>
+    <div className="min-h-screen bg-gray-50">
+      {/* ── Tab bar ──────────────────────────────────────────────────────────── */}
+      <div className="bg-[#ece9d8] border-b-2 border-gray-400 px-2 pt-1 flex items-end justify-between select-none">
+        <div className="flex items-end gap-0.5">
+          {TABS.map(tab => (
+            <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)}
+              className={`px-5 py-1.5 text-sm border border-b-0 border-gray-400 font-medium transition-colors
+                ${activeTab === tab.id
+                  ? 'bg-white text-gray-900 relative -mb-px z-10'
+                  : 'bg-[#d4d0c8] text-gray-600 hover:bg-[#e0ddd4]'}`}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <div className="pb-1.5 pr-1 text-sm text-gray-600">
+          วันที่ {thaiDate}&nbsp;&nbsp;NO.<span className="font-semibold text-blue-700">{nextOrderNo ?? '...'}</span>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
-        {error && <div className="text-xs text-red-600 bg-red-50 rounded px-3 py-2">{error}</div>}
+      {/* ── Content ──────────────────────────────────────────────────────────── */}
+      <div className="p-3 max-w-4xl">
+        <form onSubmit={handleSubmit}>
+          {error && (
+            <div className="text-xs text-red-600 bg-red-50 border border-red-300 rounded px-3 py-2 mb-3">{error}</div>
+          )}
 
-        {/* ── Header: SO number + date + VAT type ─────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3 items-end">
-          <div>
-            <Label text="เลขที่ใบสั่งขาย" />
-            <Input value={`${vat}YYMM/##`} readOnly placeholder="สร้างอัตโนมัติ" />
-          </div>
-          <div>
-            <Label text="วันที่" />
-            <Input type="date" value={createDate} onChange={setCreateDate} />
-          </div>
-          <div>
-            <Label text="ประเภท VAT" required />
-            <div className="flex gap-2">
-              {['SO', 'SOB', 'SOX'].map(v => (
-                <label key={v} className={`flex-1 text-center py-1.5 rounded border text-sm font-medium cursor-pointer transition-colors ${
-                  vat === v ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
-                  <input type="radio" name="vat" value={v} checked={vat === v} onChange={() => setVat(v)} className="hidden" />
-                  {v}
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
+          {/* ── ใบคำสั่งขาย tab ───────────────────────────────────────────── */}
+          {activeTab === 'order' && (
+            <div className="border border-gray-300 bg-white shadow-sm rounded">
+              {/* ► Section header */}
+              <button type="button" onClick={() => setSecOpen(p => !p)}
+                className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 border-b border-gray-300 text-sm font-semibold text-gray-800 hover:bg-gray-200 text-left rounded-t">
+                <span className="text-[10px]">{secOpen ? '▼' : '►'}</span>
+                เพิ่มคำสั่งซื้อ
+              </button>
 
-        {/* ── ข้อมูลลูกค้า ──────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3">
-          <SectionHead title="ข้อมูลลูกค้า" />
+              {secOpen && (
+                <div className="p-5 space-y-4">
+                  {/* Header: date + NO right-aligned */}
+                  <div className="flex justify-end text-sm text-gray-600">
+                    วันที่ {thaiDate}&nbsp;&nbsp;NO.<span className="font-medium text-gray-900">{nextOrderNo ?? '...'}</span>
+                  </div>
 
-          <div ref={customerRef} className="relative">
-            <Label text="ชื่อลูกค้า" required />
-            <input
-              value={customerSearch}
-              onChange={e => { setCustomerSearch(e.target.value); setCustomerName(e.target.value); setCustomerOpen(true) }}
-              onFocus={() => customerSearch.length >= 1 && setCustomerOpen(true)}
-              placeholder="พิมพ์ชื่อลูกค้า..."
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            {customerOpen && customerSugs.length > 0 && (
-              <div className="absolute z-20 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-48 overflow-y-auto">
-                {customerSugs.map(c => (
-                  <button key={c.id} type="button"
-                    onClick={() => { setCustomerName(c.name); setCustomerSearch(c.name); setCustomerOpen(false) }}
-                    className="w-full text-left px-3 py-1.5 hover:bg-blue-50 text-sm">
-                    <div className="font-medium text-gray-900">{c.name}</div>
-                    <div className="text-xs text-gray-400">{[c.tax, c.tel].filter(Boolean).join(' · ')}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+                  {/* Row 1: No. | วันที่ */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label text="No." />
+                      <Input value="ใหม่" readOnly />
+                    </div>
+                    <div>
+                      <Label text="วันที่" />
+                      <Input type="date" value={createDate} onChange={setCreateDate} />
+                    </div>
+                  </div>
 
-          <div>
-            <Label text="ผู้ประสานงาน" />
-            <Input value={coordinator} onChange={setCoordinator} placeholder="ชื่อผู้ประสาน" />
-          </div>
-        </div>
+                  {/* Row 2: ชื่อลูกค้า | ผู้ประสานงาน */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label text="ชื่อลูกค้า" required />
+                      <div ref={customerRef} className="relative">
+                        <input
+                          value={customerSearch}
+                          onChange={e => { setCustomerSearch(e.target.value); setCustomerName(e.target.value); setCustomerOpen(true) }}
+                          onFocus={() => customerSearch.length >= 1 && setCustomerOpen(true)}
+                          placeholder="พิมพ์ชื่อลูกค้า..."
+                          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        {customerOpen && customerSugs.length > 0 && (
+                          <div className="absolute z-20 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-48 overflow-y-auto">
+                            {customerSugs.map(c => (
+                              <button key={c.id} type="button"
+                                onClick={() => { setCustomerName(c.name); setCustomerSearch(c.name); setCustomerOpen(false) }}
+                                className="w-full text-left px-3 py-1.5 hover:bg-blue-50 text-sm">
+                                <div className="font-medium text-gray-900">{c.name}</div>
+                                <div className="text-xs text-gray-400">{[c.tax, c.tel].filter(Boolean).join(' · ')}</div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <Label text="ผู้ประสานงาน" required />
+                      <Input value={coordinator} onChange={setCoordinator} placeholder="ชื่อผู้ประสาน" />
+                    </div>
+                  </div>
 
-        {/* ── ใบคำสั่งซื้อ ───────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3">
-          <SectionHead title="ใบคำสั่งซื้อ" />
+                  {/* Row 3: รหัสผ้า | ลายผ้า */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label text="รหัสผ้า" required />
+                      <Input value={fabricId} onChange={setFabricId} placeholder="รหัสผ้า" />
+                    </div>
+                    <div>
+                      <Label text="ลายผ้า" required />
+                      <Input value={fabricPattern} onChange={setFabricPattern} placeholder="ลายผ้า" />
+                    </div>
+                  </div>
 
-          <div>
-            <Label text="รหัสผ้า" />
-            <Input value={fabricId} onChange={setFabricId} placeholder="รหัสผ้า" />
-          </div>
-          <div>
-            <Label text="ลายผ้า" />
-            <Input value={fabricPattern} onChange={setFabricPattern} placeholder="ลายผ้า" />
-          </div>
+                  {/* Row 4: โครงสร้างผ้า full width + สร้าง button */}
+                  <div>
+                    <Label text="โครงสร้างผ้า" required />
+                    <div className="flex gap-2">
+                      <input
+                        value={fabricStructure}
+                        onChange={e => setFabricStructure(e.target.value)}
+                        placeholder="สร้างอัตโนมัติหรือพิมพ์เอง"
+                        className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <button type="button"
+                        onClick={() => setFabricStructure(buildFabricStruct(warpYarn1, warpCount1, warpYarn2, weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4))}
+                        className="px-4 py-1.5 bg-teal-600 text-white text-sm rounded font-medium hover:bg-teal-700 whitespace-nowrap">
+                        สร้าง
+                      </button>
+                    </div>
+                  </div>
 
-          {/* Fabric structure auto-gen */}
-          <div className="col-span-full flex gap-2 items-end">
-            <div className="flex-1">
-              <Label text="โครงสร้างผ้า" />
-              <Input value={fabricStructure} onChange={setFabricStructure} placeholder="สร้างอัตโนมัติหรือพิมพ์เอง" />
-            </div>
-            <button type="button" onClick={handleGenerateStruct}
-              className="px-3 py-1.5 text-sm bg-gray-100 border border-gray-300 rounded hover:bg-gray-200 whitespace-nowrap">
-              🔨 สร้าง
-            </button>
-          </div>
+                  {/* Row 5: จำนวนด้ายยืน | หน้าผ้า */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label text="จำนวนด้ายยืน (เส้น)" />
+                      <Input value={yarnHCount} onChange={setYarnHCount} placeholder="เส้น" type="number" />
+                    </div>
+                    <div>
+                      <Label text="หน้าผ้า (นิ้ว)" required />
+                      <Input value={fabricW} onChange={setFabricW} placeholder="นิ้ว" type="number" />
+                    </div>
+                  </div>
 
-          <div>
-            <Label text="จำนวนด้ายยืน (เส้น)" />
-            <Input value={yarnHCount} onChange={setYarnHCount} placeholder="เส้น" type="number" />
-          </div>
-          <div>
-            <Label text="หน้ากว้าง (นิ้ว)" required />
-            <Input value={fabricW} onChange={setFabricW} placeholder="นิ้ว" type="number" />
-          </div>
-        </div>
+                  {/* ── Yarn table ──────────────────────────────────────────── */}
+                  <div>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr>
+                          <th className="text-left text-xs font-medium text-gray-600 pb-1 w-28"></th>
+                          <th className="text-left text-xs font-medium text-gray-600 pb-1 pr-2">ชนิด</th>
+                          <th className="text-left text-xs font-medium text-gray-600 pb-1 pr-2">บริษัท</th>
+                          <th className="text-left text-xs font-medium text-gray-600 pb-1 pr-2">จำนวน (เส้น)</th>
+                          <th className="text-left text-xs font-medium text-gray-600 pb-1">อัตราส่วน</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <YarnRow label="ชนิดด้ายยืน 1" required side="warp"
+                          yarn={warpYarn1} comp={warpComp1} count={warpCount1} ratio={warpRatio1}
+                          onYarn={setWarpYarn1} onComp={setWarpComp1} onCount={setWarpCount1} onRatio={setWarpRatio1} />
+                        <YarnRow label="ชนิดด้ายยืน 2" side="warp" grayRatio
+                          yarn={warpYarn2} comp={warpComp2} count={warpCount2} ratio={warpRatio2}
+                          onYarn={setWarpYarn2} onComp={setWarpComp2} onCount={setWarpCount2} onRatio={setWarpRatio2} />
+                        <tr><td colSpan={5} className="py-1" /></tr>
+                        <YarnRow label="ชนิดด้ายพุ่ง 1" required side="weft"
+                          yarn={weftYarn1} comp={weftComp1} count={weftCount1} ratio={weftRatio1}
+                          onYarn={setWeftYarn1} onComp={setWeftComp1} onCount={setWeftCount1} onRatio={setWeftRatio1} />
+                        <YarnRow label="ชนิดด้ายพุ่ง 2" side="weft" grayRatio
+                          yarn={weftYarn2} comp={weftComp2} count={weftCount2} ratio={weftRatio2}
+                          onYarn={setWeftYarn2} onComp={setWeftComp2} onCount={setWeftCount2} onRatio={setWeftRatio2} />
+                        <YarnRow label="ชนิดด้ายพุ่ง 3" side="weft" grayRatio
+                          yarn={weftYarn3} comp={weftComp3} count={weftCount3} ratio={weftRatio3}
+                          onYarn={setWeftYarn3} onComp={setWeftComp3} onCount={setWeftCount3} onRatio={setWeftRatio3} />
+                        <YarnRow label="ชนิดด้ายพุ่ง 4" side="weft" grayRatio
+                          yarn={weftYarn4} comp={weftComp4} count={weftCount4} ratio={weftRatio4}
+                          onYarn={setWeftYarn4} onComp={setWeftComp4} onCount={setWeftCount4} onRatio={setWeftRatio4} />
+                      </tbody>
+                    </table>
+                  </div>
 
-        {/* Warp yarn headers */}
-        <div>
-          <div className="grid grid-cols-4 gap-2 mb-1">
-            <span className="text-xs text-gray-500 font-medium">ชนิดด้ายยืน</span>
-            <span className="text-xs text-gray-500 font-medium">บริษัท</span>
-            <span className="text-xs text-gray-500 font-medium">จำนวน (เส้น)</span>
-            <span className="text-xs text-gray-500 font-medium">อัตราส่วน</span>
-          </div>
-          <div className="space-y-1.5">
-            <YarnRow label="ด้ายยืน 1" yarn={warpYarn1} company={warpComp1} count={warpCount1} ratio={warpRatio1} side="warp"
-              onYarnChange={setWarpYarn1} onCompanyChange={setWarpComp1} onCountChange={setWarpCount1} onRatioChange={setWarpRatio1} />
-            <YarnRow label="ด้ายยืน 2" yarn={warpYarn2} company={warpComp2} count={warpCount2} ratio={warpRatio2} side="warp"
-              onYarnChange={setWarpYarn2} onCompanyChange={setWarpComp2} onCountChange={setWarpCount2} onRatioChange={setWarpRatio2} />
-          </div>
-        </div>
-
-        {/* Weft yarn headers */}
-        <div>
-          <div className="grid grid-cols-4 gap-2 mb-1">
-            <span className="text-xs text-gray-500 font-medium">ชนิดด้ายพุ่ง</span>
-            <span className="text-xs text-gray-500 font-medium">บริษัท</span>
-            <span className="text-xs text-gray-500 font-medium">จำนวน (เส้น)</span>
-            <span className="text-xs text-gray-500 font-medium">อัตราส่วน</span>
-          </div>
-          <div className="space-y-1.5">
-            <YarnRow label="ด้ายพุ่ง 1" yarn={weftYarn1} company={weftComp1} count={weftCount1} ratio={weftRatio1} side="weft"
-              onYarnChange={setWeftYarn1} onCompanyChange={setWeftComp1} onCountChange={setWeftCount1} onRatioChange={setWeftRatio1} />
-            <YarnRow label="ด้ายพุ่ง 2" yarn={weftYarn2} company={weftComp2} count={weftCount2} ratio={weftRatio2} side="weft"
-              onYarnChange={setWeftYarn2} onCompanyChange={setWeftComp2} onCountChange={setWeftCount2} onRatioChange={setWeftRatio2} />
-            <YarnRow label="ด้ายพุ่ง 3" yarn={weftYarn3} company={weftComp3} count={weftCount3} ratio={weftRatio3} side="weft"
-              onYarnChange={setWeftYarn3} onCompanyChange={setWeftComp3} onCountChange={setWeftCount3} onRatioChange={setWeftRatio3} />
-            <YarnRow label="ด้ายพุ่ง 4" yarn={weftYarn4} company={weftComp4} count={weftCount4} ratio={weftRatio4} side="weft"
-              onYarnChange={setWeftYarn4} onCompanyChange={setWeftComp4} onCountChange={setWeftCount4} onRatioChange={setWeftRatio4} />
-          </div>
-        </div>
-
-        {/* Fabric spec */}
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <Label text="เบอร์หรี" />
-            <Input value={phewNumber} onChange={setPhewNumber} placeholder="เบอร์" />
-          </div>
-          <div>
-            <Label text="หน้าหรี (นิ้ว)" />
-            <Input value={phewW} onChange={setPhewW} placeholder="นิ้ว" type="number" />
-          </div>
-          <div>
-            <Label text="การกองผ้า" />
-            <select value={stackType} onChange={e => setStackType(e.target.value)}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
-              <option>ม้วนเส้น</option>
-              <option>อื่นๆ</option>
-            </select>
-          </div>
-        </div>
-
-        {/* ── ราคา ─────────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-4">
-          <SectionHead title="ราคา" />
-
-          <div>
-            <Label text="จำนวนออร์เดอร์ (หลา)" required />
-            <Input value={orderSumYard} onChange={setOrderSumYard} placeholder="หลา" type="number" />
-          </div>
-          <div>
-            <Label text="การสีน" required />
-            <Input value={fabricSPY} onChange={setFabricSPY} placeholder="ไม่มีให้เลข 0" type="number" />
-          </div>
-
-          <div>
-            <Label text="ราคาต่อหน่วย (บาท/หลา)" required />
-            <Input value={priceYard} onChange={setPriceYard} placeholder="บาท/หลา" type="number" />
-          </div>
-          <div>
-            <Label text="ราคาต่อหน่วย (บาท/เมตร)" />
-            <Input value={priceM} onChange={setPriceM} placeholder="บาท/เมตร" type="number" />
-          </div>
-
-          <div>
-            <Label text="ส่วนลด (%)" />
-            <Input value={discountP} onChange={setDiscountP} placeholder="%" type="number" />
-          </div>
-          <div>
-            <Label text="ส่วนลด (หลา)" />
-            <Input value={discountYard} onChange={setDiscountYard} placeholder="หลา" type="number" />
-          </div>
-
-          <div>
-            <Label text="เบอร์เครื่อง" />
-            <Input value={machineNumber} onChange={setMachineNumber} placeholder="เบอร์เครื่อง" />
-          </div>
-          <div>
-            <Label text="SURCHARGE" />
-            <Input value={surcharge} onChange={setSurcharge} placeholder="Surcharge" />
-          </div>
-
-          <div>
-            <Label text="คอมมิชชั่น" />
-            <Input value={commission} onChange={setCommission} placeholder="คอมมิชชั่น" type="number" />
-          </div>
-          <div>
-            <Label text="PO ลูกค้า" />
-            <Input value={po} onChange={setPo} placeholder="เลขที่ PO" />
-          </div>
-        </div>
-
-        {/* ── กำหนดส่ง ─────────────────────────────────────────────────────── */}
-        <div className="border-t border-gray-100 pt-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">กำหนดส่ง</span>
-            <button type="button"
-              onClick={() => setDeadlines(prev => [...prev, { dt: '', qty: '', unit: 'หลา', pct: '' }])}
-              className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1">
-              ➕ เพิ่มครั้ง
-            </button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-gray-50">
-                  <th className="text-xs text-left px-2 py-1.5 border border-gray-200 w-8">ครั้ง</th>
-                  <th className="text-xs text-left px-2 py-1.5 border border-gray-200">วันที่</th>
-                  <th className="text-xs text-left px-2 py-1.5 border border-gray-200">จำนวน</th>
-                  <th className="text-xs text-left px-2 py-1.5 border border-gray-200 w-20">หน่วย</th>
-                  <th className="text-xs text-left px-2 py-1.5 border border-gray-200 w-16">%</th>
-                  <th className="border border-gray-200 w-8"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {deadlines.map((row, i) => (
-                  <tr key={i}>
-                    <td className="px-2 py-1 border border-gray-200 text-center text-xs text-gray-500">{i + 1}</td>
-                    <td className="px-1 py-1 border border-gray-200">
-                      <input type="date" value={row.dt} onChange={e => updateDeadline(i, 'dt', e.target.value)}
-                        className="w-full border-0 text-sm focus:outline-none" />
-                    </td>
-                    <td className="px-1 py-1 border border-gray-200">
-                      <input type="number" value={row.qty} onChange={e => updateDeadline(i, 'qty', e.target.value)}
-                        placeholder="จำนวน"
-                        className="w-full border-0 text-sm focus:outline-none" />
-                    </td>
-                    <td className="px-1 py-1 border border-gray-200">
-                      <select value={row.unit} onChange={e => updateDeadline(i, 'unit', e.target.value)}
-                        className="w-full border-0 text-sm focus:outline-none bg-transparent">
-                        <option>หลา</option>
-                        <option>เมตร</option>
+                  {/* เบอร์หวี | หน้าหวี | การลงผ้า */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <Label text="เบอร์หวี" />
+                      <Input value={phewNumber} onChange={setPhewNumber} placeholder="เบอร์" />
+                    </div>
+                    <div>
+                      <Label text="หน้าหวี (นิ้ว)" />
+                      <Input value={phewW} onChange={setPhewW} placeholder="นิ้ว" type="number" />
+                    </div>
+                    <div>
+                      <Label text="การลงผ้า" />
+                      <select value={stackType} onChange={e => setStackType(e.target.value)}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option>ม้วนเส้น</option>
+                        <option>อื่นๆ</option>
                       </select>
-                    </td>
-                    <td className="px-1 py-1 border border-gray-200">
-                      <input type="number" value={row.pct} onChange={e => updateDeadline(i, 'pct', e.target.value)}
-                        placeholder="%"
-                        className="w-full border-0 text-sm focus:outline-none" />
-                    </td>
-                    <td className="px-1 py-1 border border-gray-200 text-center">
-                      {deadlines.length > 1 && (
-                        <button type="button" onClick={() => setDeadlines(prev => prev.filter((_, idx) => idx !== i))}
-                          className="text-red-400 hover:text-red-600 text-xs">✕</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                    </div>
+                  </div>
 
-        {/* ── Notes / payment ──────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 gap-3 border-t border-gray-100 pt-4">
-          <div>
-            <Label text="หมายเหตุ" />
-            <textarea value={note} onChange={e => setNote(e.target.value)} rows={3} placeholder="หมายเหตุ"
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
-          </div>
-          <div>
-            <Label text="หมายเหตุการผลิต" />
-            <textarea value={productionNote} onChange={e => setProductionNote(e.target.value)} rows={3} placeholder="หมายเหตุการผลิต"
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
-          </div>
-          <div className="col-span-full">
-            <Label text="เงื่อนไขการชำระเงิน" />
-            <textarea value={payment} onChange={e => setPayment(e.target.value)} rows={2}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
-          </div>
-        </div>
+                  {/* ── Order quantity ────────────────────────────────────── */}
+                  <div className="space-y-3">
+                    {/* จำนวนออเดอร์ */}
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <Label text="จำนวนออเดอร์ (หลา)" required />
+                        <Input value={orderSumYard} onChange={setOrderSumYard} placeholder="หลา" type="number" />
+                      </div>
+                      <span className="text-sm text-gray-400 pb-2 shrink-0">หรือ</span>
+                      <div className="flex-1">
+                        <Label text="เมตร" />
+                        <Input value={orderSumMeter} onChange={setOrderSumMeter} placeholder="เมตร" type="number" />
+                      </div>
+                    </div>
+                    {/* การสีน */}
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <Label text="การสีน" required />
+                        <Input value={fabricSPY} onChange={setFabricSPY} placeholder="ไม่มีให้เลข 0" type="number" />
+                      </div>
+                      <span className="text-sm text-gray-400 pb-2 shrink-0">หรือ</span>
+                      <div className="flex-1">
+                        <Label text="%" />
+                        <Input value={fabricSPYPct} onChange={setFabricSPYPct} placeholder="%" type="number" />
+                      </div>
+                    </div>
+                  </div>
 
-        {/* ── Buttons ───────────────────────────────────────────────────────── */}
-        <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
-          <button type="button" onClick={() => router.back()}
-            className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
-            ยกเลิก
-          </button>
-          <button type="button"
-            onClick={() => { if (window.confirm('บันทึกและไปหน้าใบโครงสร้าง?')) handleSubmit({ preventDefault: () => {} } as React.FormEvent) }}
-            className="px-4 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 text-gray-700">
-            🏭 ใบโครงสร้าง
-          </button>
-          <button type="submit" disabled={saving}
-            className="px-6 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60 font-medium">
-            {saving ? 'กำลังสร้าง...' : '💾 ใบสั่งขาย'}
-          </button>
-        </div>
-      </form>
+                  {/* ── Price ──────────────────────────────────────────────── */}
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Label text="ราคาต่อหน่วย (บาท)" required />
+                      <Input value={priceYard} onChange={setPriceYard} placeholder="บาท/หลา" type="number" />
+                    </div>
+                    <span className="text-sm text-gray-400 pb-2 shrink-0">หรือ</span>
+                    <div className="flex-1">
+                      <Label text="เมตร" />
+                      <Input value={priceM} onChange={setPriceM} placeholder="บาท/เมตร" type="number" />
+                    </div>
+                    <div className="flex-1">
+                      <Label text="ส่วนลด (%)" />
+                      <Input value={discountP} onChange={setDiscountP} placeholder="%" type="number" />
+                    </div>
+                    <span className="text-sm text-gray-400 pb-2 shrink-0">หรือ</span>
+                    <div className="flex-1">
+                      <Label text="หลา" />
+                      <Input value={discountYard} onChange={setDiscountYard} placeholder="หลา" type="number" />
+                    </div>
+                  </div>
+
+                  {/* ── Other fields (2 col) ───────────────────────────────── */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label text="เบอร์เครื่อง" />
+                      <Input value={machineNumber} onChange={setMachineNumber} placeholder="เบอร์เครื่อง" />
+                    </div>
+                    <div />
+                    <div>
+                      <Label text="SURCHARGE" />
+                      <Input value={surcharge} onChange={setSurcharge} placeholder="Surcharge" />
+                    </div>
+                    <div />
+                    <div>
+                      <Label text="คอมมิชชั่น" />
+                      <Input value={commission} onChange={setCommission} placeholder="คอมมิชชั่น" type="number" />
+                    </div>
+                    <div>
+                      <Label text="VAT" />
+                      <select value={vat} onChange={e => setVat(e.target.value)}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="SO">SO (including vat)</option>
+                        <option value="SOB">SOB</option>
+                        <option value="SOX">SOX</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label text="เลขที่ใบสั่งซื้อ" />
+                      <Input value="รอสร้าง" readOnly />
+                    </div>
+                    <div>
+                      <Label text="PO ลูกค้า" />
+                      <Input value={po} onChange={setPo} placeholder="เลขที่ PO" />
+                    </div>
+                  </div>
+
+                  {/* ── กำหนดส่ง ────────────────────────────────────────────── */}
+                  <div>
+                    <div className="text-sm font-medium text-gray-700 mb-2">กำหนดส่ง</div>
+                    <table className="w-full text-sm border-collapse border border-gray-200">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600 w-14">ครั้งที่</th>
+                          <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600">วันที่</th>
+                          <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600">จำนวน (หลา หรือเมตร)</th>
+                          <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600 w-20">%</th>
+                          <th className="border border-gray-200 px-2 py-1.5 text-xs text-center font-medium text-gray-600 w-16">เพิ่ม/ลบ</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deadlines.map((row, i) => (
+                          <tr key={i} className="even:bg-gray-50">
+                            <td className="border border-gray-200 px-2 py-1 text-center text-xs text-gray-500">{i + 1}</td>
+                            <td className="border border-gray-200 px-1 py-0.5">
+                              <input type="date" value={row.dt} onChange={e => updateDeadline(i, 'dt', e.target.value)}
+                                className="w-full border-0 text-sm focus:outline-none bg-transparent" />
+                            </td>
+                            <td className="border border-gray-200 px-1 py-0.5">
+                              <div className="flex items-center gap-1">
+                                <input type="number" value={row.qty} onChange={e => updateDeadline(i, 'qty', e.target.value)}
+                                  placeholder="จำนวน" className="flex-1 min-w-0 border-0 text-sm focus:outline-none bg-transparent" />
+                                <select value={row.unit} onChange={e => updateDeadline(i, 'unit', e.target.value)}
+                                  className="border-0 text-xs focus:outline-none bg-transparent text-gray-500 shrink-0">
+                                  <option>หลา</option>
+                                  <option>เมตร</option>
+                                </select>
+                              </div>
+                            </td>
+                            <td className="border border-gray-200 px-1 py-0.5">
+                              <input type="number" value={row.pct} onChange={e => updateDeadline(i, 'pct', e.target.value)}
+                                placeholder="%" className="w-full border-0 text-sm focus:outline-none bg-transparent" />
+                            </td>
+                            <td className="border border-gray-200 px-1 py-0.5 text-center">
+                              <div className="flex justify-center items-center gap-1">
+                                <button type="button"
+                                  onClick={() => setDeadlines(prev => [...prev, { dt: '', qty: '', unit: 'หลา', pct: '' }])}
+                                  className="w-5 h-5 flex items-center justify-center rounded bg-blue-100 text-blue-600 hover:bg-blue-200 text-sm font-bold leading-none">+</button>
+                                {deadlines.length > 1 && (
+                                  <button type="button" onClick={() => setDeadlines(prev => prev.filter((_, idx) => idx !== i))}
+                                    className="w-5 h-5 flex items-center justify-center rounded bg-red-100 text-red-500 hover:bg-red-200 text-sm font-bold leading-none">−</button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* ── Notes ───────────────────────────────────────────────── */}
+                  <div>
+                    <Label text="หมายเหตุ" />
+                    <textarea value={note} onChange={e => setNote(e.target.value)} rows={3} placeholder="หมายเหตุ"
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
+                  </div>
+                  <div>
+                    <Label text="หมายเหตุการผลิต" />
+                    <textarea value={productionNote} onChange={e => setProductionNote(e.target.value)} rows={3} placeholder="หมายเหตุการผลิต"
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
+                  </div>
+                  <div>
+                    <Label text="เงื่อนไขการชำระเงิน" />
+                    <textarea value={payment} onChange={e => setPayment(e.target.value)} rows={2}
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none" />
+                  </div>
+
+                  {/* ── Buttons (centered) ───────────────────────────────────── */}
+                  <div className="flex justify-center gap-3 pt-4 border-t border-gray-100">
+                    <button type="submit" disabled={saving}
+                      className="px-7 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700 disabled:opacity-60">
+                      {saving ? 'กำลังสร้าง...' : '💾 ใบสั่งขาย'}
+                    </button>
+                    <button type="button"
+                      onClick={() => { if (window.confirm('บันทึกและไปหน้าใบโครงสร้าง?')) handleSubmit({ preventDefault: () => {} } as React.FormEvent) }}
+                      className="px-7 py-2 bg-teal-700 text-white text-sm rounded font-medium hover:bg-teal-800">
+                      🏭 ใบโครงสร้าง
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Other tabs (placeholder) ───────────────────────────────────── */}
+          {activeTab === 'customer' && (
+            <div className="border border-gray-300 bg-white p-4 shadow-sm rounded text-sm text-gray-500">
+              ข้อมูลลูกค้าจะแสดงหลังจากสร้างใบสั่งขาย
+            </div>
+          )}
+          {activeTab === 'supplier' && (
+            <div className="border border-gray-300 bg-white p-4 shadow-sm rounded text-sm text-gray-500">
+              ยังไม่มีข้อมูลซัพพลายเออร์สำหรับใบสั่งขายนี้
+            </div>
+          )}
+          {activeTab === 'verify' && (
+            <div className="border border-gray-300 bg-white p-4 shadow-sm rounded text-sm text-gray-500">
+              กรุณาบันทึกใบสั่งขายก่อนตรวจสอบ
+            </div>
+          )}
+        </form>
+      </div>
     </div>
   )
 }
