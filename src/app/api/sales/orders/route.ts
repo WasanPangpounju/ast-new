@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json()
   const {
-    vat, customerName, coordinator, fabricId, fabricStructure, fabricPattern,
+    vat, purchaseOrder: providedPO, customerName, coordinator, fabricId, fabricStructure, fabricPattern,
     fabricW, yarnHCount, phewNumber, phewW, stackType,
     warpYarn1, warpComp1, warpCount1, warpRatio1,
     warpYarn2, warpComp2, warpCount2, warpRatio2,
@@ -92,11 +92,18 @@ export async function POST(request: NextRequest) {
   if (!customerName?.trim())
     return Response.json({ error: 'กรุณาระบุลูกค้า' }, { status: 400 })
 
-  const existing = await prisma.astPurchaseOrder.findMany({
-    where: { vat, deletedAt: null },
-    select: { purchaseOrder: true },
-  })
-  const purchaseOrder = nextPurchaseOrder(vat, existing.map(o => o.purchaseOrder))
+  let purchaseOrder: string
+  if (providedPO?.trim()) {
+    purchaseOrder = providedPO.trim()
+    const exists = await prisma.astPurchaseOrder.findUnique({ where: { purchaseOrder } })
+    if (exists) return Response.json({ error: `เลขที่ ${purchaseOrder} มีอยู่แล้ว` }, { status: 400 })
+  } else {
+    const existing = await prisma.astPurchaseOrder.findMany({
+      where: { vat, deletedAt: null },
+      select: { purchaseOrder: true },
+    })
+    purchaseOrder = nextPurchaseOrder(vat, existing.map(o => o.purchaseOrder))
+  }
 
   const result = await prisma.$transaction(async tx => {
     const order = await tx.astPurchaseOrder.create({

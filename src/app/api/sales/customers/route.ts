@@ -11,6 +11,8 @@ export async function GET(request: NextRequest) {
   const page = Math.max(1, Number(searchParams.get('page') ?? 1))
   const limit = 20
 
+  const type = searchParams.get('type') ?? ''
+
   const where = {
     deletedAt: null,
     ...(q ? {
@@ -19,6 +21,7 @@ export async function GET(request: NextRequest) {
         { tax: { contains: q, mode: 'insensitive' as const } },
       ],
     } : {}),
+    ...(type ? { type } : {}),
   }
 
   const [customers, total] = await Promise.all([

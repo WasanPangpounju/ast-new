@@ -99,20 +99,23 @@ function YarnAC({ value, onChange, side, placeholder }: {
   )
 }
 
-// ─── Company autocomplete ─────────────────────────────────────────────────────
+// ─── Company autocomplete (pulls from customers + suppliers) ──────────────────
 
-function CompAC({ value, onChange, yarn, side }: {
-  value: string; onChange: (v: string) => void; yarn: string; side: 'warp' | 'weft'
+function CompAC({ value, onChange }: {
+  value: string; onChange: (v: string) => void
 }) {
   const [sugs, setSugs] = useState<string[]>([])
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!yarn) { setSugs([]); return }
-    fetch(`/api/sales/autocomplete/yarn-companies?yarn=${encodeURIComponent(yarn)}&side=${side}`)
-      .then(r => r.json()).then(d => setSugs(d.companies ?? []))
-  }, [yarn, side])
+    if (!value) { setSugs([]); return }
+    const t = setTimeout(() => {
+      fetch(`/api/sales/autocomplete/yarn-companies?q=${encodeURIComponent(value)}`)
+        .then(r => r.json()).then(d => setSugs(d.companies ?? []))
+    }, 200)
+    return () => clearTimeout(t)
+  }, [value])
 
   useEffect(() => {
     function onDown(e: MouseEvent) {
@@ -156,7 +159,9 @@ export default function CreateOrderPage() {
   const [secOpen, setSecOpen] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [nextOrderNo, setNextOrderNo] = useState<number | null>(null)
+  const [orderNo, setOrderNo] = useState('')
+  const [orderNoEdited, setOrderNoEdited] = useState(false)
+  const [orderNoLoading, setOrderNoLoading] = useState(false)
 
   // Header
   const [createDate, setCreateDate] = useState(TODAY)
@@ -238,13 +243,16 @@ export default function CreateOrderPage() {
   const [productionNote, setProductionNote] = useState('')
   const [payment, setPayment] = useState('ชำระเงินภายใน 15 วันหลังได้รับสินค้า')
 
-  // Next order number preview
+  // Fetch next order number when vat changes (unless user has manually edited)
   useEffect(() => {
-    fetch('/api/sales/orders?limit=1')
+    if (orderNoEdited) return
+    setOrderNoLoading(true)
+    fetch(`/api/sales/orders/next-no?vat=${vat}`)
       .then(r => r.json())
-      .then(d => setNextOrderNo((d.total ?? 0) + 1))
+      .then(d => { if (d.purchaseOrder) setOrderNo(d.purchaseOrder) })
       .catch(() => {})
-  }, [])
+      .finally(() => setOrderNoLoading(false))
+  }, [vat, orderNoEdited])
 
   // Customer autocomplete
   useEffect(() => {
@@ -286,7 +294,7 @@ export default function CreateOrderPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          vat, createDate, customerName, coordinator,
+          vat, purchaseOrder: orderNo || undefined, createDate, customerName, coordinator,
           fabricId, fabricPattern, fabricStructure,
           fabricW, yarnHCount, phewNumber, phewW, stackType,
           warpYarn1, warpComp1, warpCount1, warpRatio1,
@@ -330,7 +338,7 @@ export default function CreateOrderPage() {
           {label}{required && <span className="text-red-500 ml-0.5">*</span>}
         </td>
         <td className="pr-2 py-1"><YarnAC value={yarn} onChange={onYarn} side={side} placeholder={label} /></td>
-        <td className="pr-2 py-1"><CompAC value={comp} onChange={onComp} yarn={yarn} side={side} /></td>
+        <td className="pr-2 py-1"><CompAC value={comp} onChange={onComp} /></td>
         <td className="pr-2 py-1">
           <input type="number" value={count} onChange={e => onCount(e.target.value)} placeholder="เส้น"
             className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
@@ -362,7 +370,7 @@ export default function CreateOrderPage() {
           ))}
         </div>
         <div className="pb-1.5 pr-1 text-sm text-gray-600">
-          วันที่ {thaiDate}&nbsp;&nbsp;NO.<span className="font-semibold text-blue-700">{nextOrderNo ?? '...'}</span>
+          วันที่ {thaiDate}&nbsp;&nbsp;NO.<span className="font-semibold text-blue-700">{orderNo || '...'}</span>
         </div>
       </div>
 
@@ -387,14 +395,22 @@ export default function CreateOrderPage() {
                 <div className="p-5 space-y-4">
                   {/* Header: date + NO right-aligned */}
                   <div className="flex justify-end text-sm text-gray-600">
-                    วันที่ {thaiDate}&nbsp;&nbsp;NO.<span className="font-medium text-gray-900">{nextOrderNo ?? '...'}</span>
+                    วันที่ {thaiDate}&nbsp;&nbsp;NO.<span className="font-medium text-gray-900">{orderNo || '...'}</span>
                   </div>
 
                   {/* Row 1: No. | วันที่ */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label text="No." />
-                      <Input value="ใหม่" readOnly />
+                      <Input
+                        value={orderNo}
+                        onChange={v => {
+                          setOrderNo(v)
+                          if (v === '') setOrderNoEdited(false)
+                          else setOrderNoEdited(true)
+                        }}
+                        placeholder={orderNoLoading ? 'กำลังโหลด...' : 'เลขที่ใบสั่งขาย'}
+                      />
                     </div>
                     <div>
                       <Label text="วันที่" />
