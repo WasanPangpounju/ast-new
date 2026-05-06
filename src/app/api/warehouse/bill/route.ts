@@ -136,3 +136,44 @@ export async function POST(request: NextRequest) {
 
   return Response.json({ success: true, count: rows.length, vatNo: Number(vatNo) })
 }
+
+export async function PATCH(request: NextRequest) {
+  const session = await auth()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const body = await request.json()
+  const { vatType, vatNo, customerName, receiveName, fabricStruct, fabricPattern, fabricW, altFabricStruct, altPurchaseOrder } = body
+  if (!vatType || vatNo == null) return Response.json({ error: 'vatType and vatNo required' }, { status: 400 })
+
+  await prisma.fabricOut.updateMany({
+    where: { vatType, vatNo: Number(vatNo), deletedAt: null },
+    data: {
+      customerName: customerName ?? undefined,
+      receiveName: receiveName ?? undefined,
+      fabricStruct: fabricStruct ?? undefined,
+      fabricPattern: fabricPattern ?? undefined,
+      fabricW: fabricW ?? undefined,
+      altFabricStruct: altFabricStruct !== undefined ? (altFabricStruct || null) : undefined,
+      altPurchaseOrder: altPurchaseOrder !== undefined ? (altPurchaseOrder || null) : undefined,
+    },
+  })
+
+  return Response.json({ ok: true })
+}
+
+export async function DELETE(request: NextRequest) {
+  const session = await auth()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = request.nextUrl
+  const vatType = searchParams.get('vatType')
+  const vatNo = searchParams.get('vatNo')
+  if (!vatType || vatNo == null) return Response.json({ error: 'vatType and vatNo required' }, { status: 400 })
+
+  await prisma.fabricOut.updateMany({
+    where: { vatType, vatNo: Number(vatNo), deletedAt: null },
+    data: { deletedAt: new Date() },
+  })
+
+  return Response.json({ ok: true })
+}

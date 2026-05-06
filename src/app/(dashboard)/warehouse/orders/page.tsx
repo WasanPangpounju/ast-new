@@ -153,20 +153,20 @@ export default function WarehouseOrdersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs">
-                <th rowSpan={2} className="text-left px-3 py-2.5 font-medium text-gray-600 w-24 align-middle">วันที่</th>
+                <th rowSpan={2} className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-24 align-middle">วันที่</th>
                 <th rowSpan={2} className="text-left px-3 py-2.5 font-medium text-gray-600 align-middle">SO / ลูกค้า</th>
-                <th rowSpan={2} className="text-left px-3 py-2.5 font-medium text-gray-600 align-middle">รหัสผ้า</th>
-                <th rowSpan={2} className="text-left px-3 py-2.5 font-medium text-gray-600 align-middle">โครงสร้างผ้า</th>
-                <th rowSpan={2} className="text-left px-3 py-2.5 font-medium text-gray-600 align-middle">ลายผ้า</th>
-                <th rowSpan={2} className="text-right px-3 py-2.5 font-medium text-gray-600 w-20 align-middle">หน้ากว้าง</th>
-                <th rowSpan={2} className="text-right px-3 py-2.5 font-medium text-gray-600 w-28 align-middle">จำนวน Order (หลา)</th>
-                <th colSpan={2} className="text-center px-3 py-2 font-medium text-gray-600 border-b border-gray-200">จัดส่งแล้ว</th>
-                <th rowSpan={2} className="text-right px-3 py-2.5 font-medium text-gray-600 w-24 align-middle">คงค้าง (หลา)</th>
+                <th rowSpan={2} className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600 align-middle">รหัสผ้า</th>
+                <th rowSpan={2} className="hidden md:table-cell text-left px-3 py-2.5 font-medium text-gray-600 align-middle">โครงสร้างผ้า</th>
+                <th rowSpan={2} className="hidden lg:table-cell text-left px-3 py-2.5 font-medium text-gray-600 align-middle">ลายผ้า</th>
+                <th rowSpan={2} className="hidden lg:table-cell text-right px-3 py-2.5 font-medium text-gray-600 w-20 align-middle">หน้ากว้าง</th>
+                <th rowSpan={2} className="text-right px-3 py-2.5 font-medium text-gray-600 w-28 align-middle">Order (หลา)</th>
+                <th colSpan={2} className="hidden md:table-cell text-center px-3 py-2 font-medium text-gray-600 border-b border-gray-200">จัดส่งแล้ว</th>
+                <th rowSpan={2} className="text-right px-3 py-2.5 font-medium text-gray-600 w-24 align-middle">คงค้าง</th>
                 <th rowSpan={2} className="text-center px-3 py-2.5 font-medium text-gray-600 w-36 align-middle">การดำเนินการ</th>
               </tr>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs">
-                <th className="text-right px-3 py-2 font-medium text-gray-500 w-20">หลา</th>
-                <th className="text-right px-3 py-2 font-medium text-gray-500 w-20">พับ</th>
+                <th className="hidden md:table-cell text-right px-3 py-2 font-medium text-gray-500 w-20">หลา</th>
+                <th className="hidden md:table-cell text-right px-3 py-2 font-medium text-gray-500 w-20">พับ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -184,26 +184,26 @@ export default function WarehouseOrdersPage() {
                 const isComplete = order.remainingYard <= 0
                 return (
                   <tr key={order.id} className="hover:bg-blue-50/30 transition-colors">
-                    <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{fmtDate(order.createdAt)}</td>
+                    <td className="hidden sm:table-cell px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{fmtDate(order.createdAt)}</td>
                     <td className="px-3 py-2.5">
                       <div className="font-mono text-blue-600 font-medium text-xs">{order.purchaseOrder}</div>
                       <div className="text-xs text-gray-500 mt-0.5 max-w-[220px] truncate">{order.customerName ?? '-'}</div>
                     </td>
-                    <td className="px-3 py-2.5 text-xs font-medium text-gray-800">{order.fabricId ?? '-'}</td>
-                    <td className="px-3 py-2.5 text-xs text-gray-600">{order.fabricStructure ?? '-'}</td>
-                    <td className="px-3 py-2.5 text-xs text-gray-600">{order.fabricPattern ?? '-'}</td>
-                    <td className="px-3 py-2 text-center text-gray-700 border-r border-gray-100">
+                    <td className="hidden sm:table-cell px-3 py-2.5 text-xs font-medium text-gray-800">{order.fabricId ?? '-'}</td>
+                    <td className="hidden md:table-cell px-3 py-2.5 text-xs text-gray-600">{order.fabricStructure ?? '-'}</td>
+                    <td className="hidden lg:table-cell px-3 py-2.5 text-xs text-gray-600">{order.fabricPattern ?? '-'}</td>
+                    <td className="hidden lg:table-cell px-3 py-2 text-center text-gray-700 border-r border-gray-100">
                       {order.fabricAst?.fabricW ?? order.fabricAst?.phewW ?? '-'}
                     </td>
                     <td className="px-3 py-2.5 text-right text-xs font-medium text-gray-900">
                       {order.orderSumYard ? Number(order.orderSumYard).toLocaleString() : '-'}
                     </td>
-                    <td className="px-3 py-2.5 text-right text-xs">
+                    <td className="hidden md:table-cell px-3 py-2.5 text-right text-xs">
                       {hasDelivered
                         ? <span className="text-green-700 font-medium">{order.deliveredYard.toLocaleString()}</span>
                         : <span className="text-gray-300">-</span>}
                     </td>
-                    <td className="px-3 py-2.5 text-right text-xs">
+                    <td className="hidden md:table-cell px-3 py-2.5 text-right text-xs">
                       {order.deliveredFold > 0
                         ? <span className="text-green-700 font-medium">{order.deliveredFold.toLocaleString()}</span>
                         : <span className="text-gray-300">-</span>}

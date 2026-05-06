@@ -140,7 +140,7 @@ export default function BillCreatePage() {
           fabricStruct,
           fabricPattern,
           fabricW,
-          createDate: billDate,
+          createDate: new Date(billDate).toISOString(),
           yards,
           isDeposit,
           altFabricStruct,
@@ -160,21 +160,21 @@ export default function BillCreatePage() {
   }
 
   return (
-    <div className="p-4 max-w-full">
+    <div className="p-4 w-full">
       <div className="mb-4">
         <h1 className="text-lg font-semibold text-gray-900">เปิดบิลผ้า</h1>
         <p className="text-xs text-gray-500">สร้างบิลส่งผ้าใหม่</p>
       </div>
 
       {/* Header form */}
-      <div className="bg-white border border-gray-200 shadow-sm p-4 mb-4">
+      <div className="bg-white border border-gray-200 shadow-sm p-4 mb-4 w-full">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
           {/* Bill type */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">ประเภทบิล</label>
             <select value={billType} onChange={e => setBillType(e.target.value)}
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm h-8.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="A">A</option>
               <option value="B">B</option>
               <option value="C">C</option>
