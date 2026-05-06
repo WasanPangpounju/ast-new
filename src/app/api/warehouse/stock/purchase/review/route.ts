@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
+  try {
   const session = await auth()
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -35,10 +36,10 @@ export async function GET(request: NextRequest) {
         MAX(s."fabricCode") as "fabricCode",
         MAX(s."supplier") as supplier,
         MAX(s.bill_ref) as "billRef",
-        MAX(s.price_per_yard) as "pricePerYard",
+        MAX(s.price_per_yard)::float as "pricePerYard",
         MAX(s.dye_lot) as "dyeLot",
         COUNT(*)::int as fold_count,
-        SUM(s."sumYard") as total_yard,
+        SUM(s."sumYard")::float as total_yard,
         MAX(s."createDate") as create_date
       FROM stockfabrics s
       WHERE ${where}
@@ -54,7 +55,18 @@ export async function GET(request: NextRequest) {
     `) as Promise<any[]>,
   ])
 
-  return Response.json({ groups, total: (totalRaw as any[])[0]?.cnt ?? 0, page, limit })
+  const mappedGroups = (groups as any[]).map(g => ({
+    ...g,
+    fold_count: Number(g.fold_count),
+    total_yard: Number(g.total_yard),
+    pricePerYard: g.pricePerYard != null ? Number(g.pricePerYard) : null,
+  }))
+
+  return Response.json({ groups: mappedGroups, total: Number((totalRaw as any[])[0]?.cnt ?? 0), page, limit })
+  } catch (e) {
+    console.error('[purchase/review GET]', e)
+    return Response.json({ error: String(e) }, { status: 500 })
+  }
 }
 
 export async function PATCH(request: NextRequest) {

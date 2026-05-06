@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
   if (dateTo) where.AND.push({ createdAt: { lte: new Date(dateTo + 'T23:59:59') } })
   if (where.AND.length === 0) delete where.AND
 
+  try {
   const [orders, total] = await Promise.all([
     prisma.astPurchaseOrder.findMany({
       where,
@@ -82,4 +83,8 @@ export async function GET(request: NextRequest) {
   })
 
   return Response.json({ orders: ordersWithStats, total, page, limit })
+  } catch (e) {
+    console.error('[orders GET]', e)
+    return Response.json({ error: String(e) }, { status: 500 })
+  }
 }

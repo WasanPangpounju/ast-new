@@ -167,14 +167,14 @@ export default function BillCreatePage() {
       </div>
 
       {/* Header form */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-4">
+      <div className="bg-white border border-gray-200 shadow-sm p-4 mb-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
           {/* Bill type */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">ประเภทบิล</label>
             <select value={billType} onChange={e => setBillType(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="A">A</option>
               <option value="B">B</option>
               <option value="C">C</option>
@@ -185,7 +185,7 @@ export default function BillCreatePage() {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">เลขที่บิล</label>
             <input value={billNo} onChange={e => setBillNo(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="เลขที่บิล" />
           </div>
 
@@ -193,7 +193,7 @@ export default function BillCreatePage() {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">วันที่</label>
             <input type="date" value={billDate} onChange={e => setBillDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
           {/* Stock search - full width */}
@@ -205,10 +205,10 @@ export default function BillCreatePage() {
               onFocus={() => { if (stockSearch) setStockDropdown(true) }}
               onBlur={() => setTimeout(() => setStockDropdown(false), 200)}
               placeholder="พิมพ์โครงสร้างผ้า, ลาย, หรือหน้ากว้าง..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {stockDropdown && stockResults.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-64 overflow-y-auto">
                 {stockResults.map((s, i) => (
                   <button key={i} type="button"
                     onMouseDown={() => {
@@ -235,19 +235,19 @@ export default function BillCreatePage() {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">โครงสร้างผ้า</label>
             <input value={fabricStruct} onChange={e => setFabricStruct(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="โครงสร้างผ้า" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">ลายผ้า</label>
             <input value={fabricPattern} onChange={e => setFabricPattern(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="ลายผ้า" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">หน้ากว้าง (นิ้ว)</label>
             <input value={fabricW} onChange={e => setFabricW(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="หน้ากว้าง" />
           </div>
 
@@ -264,10 +264,10 @@ export default function BillCreatePage() {
               onFocus={() => { if (orderer) setOrdererDropdown(true) }}
               onBlur={() => setTimeout(() => setOrdererDropdown(false), 200)}
               placeholder="พิมพ์ชื่อลูกค้า..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
             {ordererDropdown && ordererResults.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
                 {ordererResults.map(c => (
                   <button key={c.id} type="button"
                     onMouseDown={() => {
@@ -290,7 +290,7 @@ export default function BillCreatePage() {
               value={receiver}
               onChange={e => setReceiver(e.target.value)}
               placeholder="ชื่อผู้รับ (ถ้าต่างจากผู้สั่ง แก้ได้)"
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
@@ -298,7 +298,7 @@ export default function BillCreatePage() {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">หมายเหตุ</label>
             <input value={remark} onChange={e => setRemark(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
 
@@ -314,13 +314,13 @@ export default function BillCreatePage() {
             <label className="block text-xs font-medium text-gray-700 mb-1">แทนโครงสร้างผ้า (ถ้ามี)</label>
             <input value={altFabricStruct} onChange={e => setAltFabricStruct(e.target.value)}
               placeholder="ใช้แทนโครงสร้างผ้าจริงในพิมพ์บิล..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">แทนผู้สั่งซื้อ (ถ้ามี)</label>
             <input value={altPurchaseOrder} onChange={e => setAltPurchaseOrder(e.target.value)}
               placeholder="ใช้แทนผู้สั่งซื้อจริงในพิมพ์บิล..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
 
@@ -335,13 +335,13 @@ export default function BillCreatePage() {
       </div>
 
       {/* Yards grid */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+      <div className="bg-white border border-gray-200 shadow-sm overflow-hidden mb-4">
         <div className="overflow-x-auto">
-          <table className="text-xs border-collapse">
+          <table className="w-full text-xs border-collapse">
             <thead>
               <tr>
                 {Array.from({ length: GROUPS }, (_, g) => (
-                  <th key={g} colSpan={2} className="border border-gray-400 px-2 py-1 text-center bg-gray-100 font-medium text-gray-600 min-w-[90px]">
+                  <th key={g} colSpan={2} className="border border-gray-400 px-2 py-1 text-center bg-gray-100 font-medium text-gray-600">
                     ลำดับ&nbsp;&nbsp;หลา
                   </th>
                 ))}
@@ -371,7 +371,7 @@ export default function BillCreatePage() {
                                 if (next) next.focus()
                               }
                             }}
-                            className="w-16 text-right text-xs border-0 outline-none py-1 px-1 focus:bg-yellow-50"
+                            className="w-full text-right text-xs border-0 outline-none py-1 px-1 focus:bg-yellow-50"
                           />
                         </div>
                       </td>
@@ -401,15 +401,15 @@ export default function BillCreatePage() {
       {/* Action buttons */}
       <div className="flex items-center justify-end gap-3">
         <button type="button" onClick={resetForm}
-          className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600">
+          className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600">
           ล้างฟอร์ม
         </button>
         <button onClick={handleSave} disabled={saving}
-          className="px-6 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium disabled:opacity-50">
+          className="px-6 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium disabled:opacity-50">
           {saving ? 'กำลังบันทึก...' : 'บันทึกรายการถัดไป'}
         </button>
         <button onClick={handleSave} disabled={saving}
-          className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50">
+          className="px-6 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium disabled:opacity-50">
           {saving ? 'กำลังบันทึก...' : 'บันทึกเสร็จสิ้น'}
         </button>
       </div>

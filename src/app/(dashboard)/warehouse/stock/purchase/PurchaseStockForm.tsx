@@ -149,26 +149,26 @@ export default function PurchaseStockForm({ emp }: Props) {
   }
 
   return (
-    <div className="p-4 max-w-full">
+    <div className="p-4 w-full">
       <div className="mb-4">
         <h1 className="text-lg font-semibold text-gray-900">คีย์ผ้าซื้อเข้า</h1>
         <p className="text-xs text-gray-500">บันทึกผ้าที่ซื้อจากผู้ขาย / โรงงานภายนอก</p>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-4">
+      <div className="bg-white border border-gray-200 shadow-sm p-4 mb-4 w-full">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
           {/* Date */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">วันที่</label>
             <input type="date" value={createDate} onChange={e => setCreateDate(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
           {/* Employee */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">พนักงาน</label>
-            <div className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm bg-gray-50 text-gray-700">
+            <div className="w-full border border-gray-200 px-3 py-1.5 text-sm bg-gray-50 text-gray-700">
               {emp || '-'}
             </div>
           </div>
@@ -181,9 +181,9 @@ export default function PurchaseStockForm({ emp }: Props) {
               onFocus={() => { if (stockSearch) setStockDropdown(true) }}
               onBlur={() => setTimeout(() => setStockDropdown(false), 200)}
               placeholder="พิมพ์โครงสร้างผ้า, ลาย..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             {stockDropdown && stockResults.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-64 overflow-y-auto">
                 {stockResults.map((s, i) => (
                   <button key={i} type="button"
                     onMouseDown={() => {
@@ -214,7 +214,7 @@ export default function PurchaseStockForm({ emp }: Props) {
               ชื่อผู้ขาย / โรงงาน <span className="text-red-500">*</span>
             </label>
             <input value={supplier} onChange={e => setSupplier(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="ชื่อผู้ขาย หรือโรงงาน" />
           </div>
 
@@ -224,7 +224,7 @@ export default function PurchaseStockForm({ emp }: Props) {
               เลขที่บิล / ใบส่งของ <span className="text-red-500">*</span>
             </label>
             <input value={billRef} onChange={e => setBillRef(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="เช่น INV-2024-001" />
           </div>
 
@@ -236,9 +236,9 @@ export default function PurchaseStockForm({ emp }: Props) {
               onFocus={() => { if (customer) setCustomerDropdown(true) }}
               onBlur={() => setTimeout(() => setCustomerDropdown(false), 200)}
               placeholder="ระบุหากซื้อให้ลูกค้า..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             {customerDropdown && customerResults.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
                 {customerResults.map(c => (
                   <button key={c.id} type="button"
                     onMouseDown={() => { setCustomer(c.name); setCustomerDropdown(false) }}
@@ -254,19 +254,19 @@ export default function PurchaseStockForm({ emp }: Props) {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">โครงสร้างผ้า</label>
             <input value={fabricStruct} onChange={e => setFabricStruct(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="โครงสร้างผ้า" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">ลายผ้า</label>
             <input value={fabricPattern} onChange={e => setFabricPattern(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="ลายผ้า" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">หน้ากว้าง (นิ้ว)</label>
             <input value={fabricW} onChange={e => setFabricW(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="หน้ากว้าง" />
           </div>
 
@@ -276,10 +276,10 @@ export default function PurchaseStockForm({ emp }: Props) {
               onChange={e => { setFabricCode(e.target.value); setFabricCodeDropdown(true) }}
               onFocus={() => { if (fabricCode) setFabricCodeDropdown(true) }}
               onBlur={() => setTimeout(() => setFabricCodeDropdown(false), 200)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="เช่น TC34/13065" />
             {fabricCodeDropdown && fabricCodeResults.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
                 {fabricCodeResults.map((r, i) => (
                   <button key={i} type="button"
                     onMouseDown={() => { setFabricCode(r.fabricCode); setFabricCodeDropdown(false) }}
@@ -296,7 +296,7 @@ export default function PurchaseStockForm({ emp }: Props) {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">ราคาซื้อต่อหลา (บาท)</label>
             <input type="number" min="0" step="0.01" value={pricePerYard} onChange={e => setPricePerYard(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="ราคาต่อหลา" />
           </div>
 
@@ -304,7 +304,7 @@ export default function PurchaseStockForm({ emp }: Props) {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">ล็อต / การผลิต (Dye Lot)</label>
             <input value={dyeLot} onChange={e => setDyeLot(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="เลขล็อตการผลิต" />
           </div>
         </div>
@@ -319,13 +319,13 @@ export default function PurchaseStockForm({ emp }: Props) {
       </div>
 
       {/* Yards grid */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-4">
+      <div className="bg-white border border-gray-200 shadow-sm overflow-hidden mb-4">
         <div className="overflow-x-auto">
-          <table className="text-xs border-collapse">
+          <table className="w-full text-xs border-collapse">
             <thead>
               <tr>
                 {Array.from({ length: GROUPS }, (_, g) => (
-                  <th key={g} colSpan={2} className="border border-gray-400 px-2 py-1 text-center bg-gray-100 font-medium text-gray-600 min-w-[90px]">
+                  <th key={g} colSpan={2} className="border border-gray-400 px-2 py-1 text-center bg-gray-100 font-medium text-gray-600">
                     ลำดับ&nbsp;&nbsp;หลา
                   </th>
                 ))}
@@ -355,7 +355,7 @@ export default function PurchaseStockForm({ emp }: Props) {
                                 if (next) next.focus()
                               }
                             }}
-                            className="w-16 text-right text-xs border-0 outline-none py-1 px-1 focus:bg-yellow-50"
+                            className="w-full text-right text-xs border-0 outline-none py-1 px-1 focus:bg-yellow-50"
                           />
                         </div>
                       </td>
@@ -385,11 +385,11 @@ export default function PurchaseStockForm({ emp }: Props) {
       {/* Buttons */}
       <div className="flex items-center justify-end gap-3">
         <button type="button" onClick={resetForm}
-          className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600">
+          className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600">
           ยกเลิก
         </button>
         <button onClick={handleSave} disabled={saving}
-          className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium disabled:opacity-50">
+          className="px-6 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium disabled:opacity-50">
           {saving ? 'กำลังบันทึก...' : 'บันทึก'}
         </button>
       </div>

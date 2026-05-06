@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
+  try {
   const session = await auth()
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -31,9 +32,9 @@ export async function GET(request: NextRequest) {
         s."fabricW",
         COUNT(s.id)::int as lot_count,
         SUM(s."fold")::int as produced_fold,
-        SUM(s."sumYard") as produced_yard,
+        SUM(s."sumYard")::float as produced_yard,
         COALESCE(MAX(f."outFold"), 0)::int as used_fold,
-        COALESCE(MAX(f."outYard"), 0) as used_yard
+        COALESCE(MAX(f."outYard"), 0)::float as used_yard
       FROM stockfabrics s
       LEFT JOIN (
         SELECT REGEXP_REPLACE(REGEXP_REPLACE(TRIM("fabricStruct"), '\s+', ' ', 'g'), ' x ', ' * ', 'g') as fs,
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
                COALESCE(SPLIT_PART(TRIM("fabricW"), '/', 1), '') as fw,
                "customerName",
                SUM("fold")::int as "outFold",
-               SUM("sumYard") as "outYard"
+               SUM("sumYard")::float as "outYard"
         FROM fabricouts
         WHERE deleted_at IS NULL
         GROUP BY REGEXP_REPLACE(REGEXP_REPLACE(TRIM("fabricStruct"), '\s+', ' ', 'g'), ' x ', ' * ', 'g'),
@@ -66,5 +67,18 @@ export async function GET(request: NextRequest) {
     `) as Promise<any[]>,
   ])
 
-  return Response.json({ stocks, total: (totalRaw as any[])[0]?.cnt ?? 0, page, limit })
+  const mappedStocks = (stocks as any[]).map(s => ({
+    ...s,
+    lot_count: Number(s.lot_count),
+    produced_fold: Number(s.produced_fold),
+    produced_yard: Number(s.produced_yard),
+    used_fold: Number(s.used_fold),
+    used_yard: Number(s.used_yard),
+  }))
+
+  return Response.json({ stocks: mappedStocks, total: Number((totalRaw as any[])[0]?.cnt ?? 0), page, limit })
+  } catch (e) {
+    console.error('[stock GET]', e)
+    return Response.json({ error: String(e) }, { status: 500 })
+  }
 }

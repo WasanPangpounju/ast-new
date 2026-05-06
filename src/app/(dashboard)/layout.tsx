@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import NavLinks from './NavLinks'
+import { LogOut } from 'lucide-react'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -18,7 +19,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         </nav>
         <div className="p-3 border-t border-slate-700">
           <a href="/api/auth/signout" className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-400 hover:bg-slate-700 hover:text-white transition-colors w-full">
-            🚪 ออกจากระบบ
+            <LogOut className="w-4 h-4" /> ออกจากระบบ
           </a>
         </div>
       </aside>

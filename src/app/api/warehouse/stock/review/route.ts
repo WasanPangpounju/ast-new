@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
         s."fabricW",
         MAX(s."fabricCode") as "fabricCode",
         COUNT(*)::int as fold_count,
-        SUM(s."sumYard") as total_yard,
+        SUM(s."sumYard")::float as total_yard,
         MAX(s."createDate") as create_date
       FROM stockfabrics s
       WHERE ${where}
@@ -47,7 +47,13 @@ export async function GET(request: NextRequest) {
     `) as Promise<any[]>,
   ])
 
-  return Response.json({ groups, total: (totalRaw as any[])[0]?.cnt ?? 0, page, limit })
+  const mappedGroups = (groups as any[]).map(g => ({
+    ...g,
+    fold_count: Number(g.fold_count),
+    total_yard: Number(g.total_yard),
+  }))
+
+  return Response.json({ groups: mappedGroups, total: Number((totalRaw as any[])[0]?.cnt ?? 0), page, limit })
 }
 
 export async function PATCH(request: NextRequest) {

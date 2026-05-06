@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server'
 import { randomUUID } from 'crypto'
 
 export async function GET(request: NextRequest) {
+  try {
   const session = await auth()
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
         MAX(f."altFabricStruct") as "altFabricStruct",
         MAX(f."altPurchaseOrder") as "altPurchaseOrder",
         COUNT(*)::int as "foldCount",
-        SUM(f."sumYard") as "totalYard",
+        SUM(f."sumYard")::float as "totalYard",
         MAX(f."createDate") as "createDate"
       FROM fabricouts f
       WHERE f.deleted_at IS NULL
@@ -63,7 +64,7 @@ export async function GET(request: NextRequest) {
         MAX(f."altFabricStruct") as "altFabricStruct",
         MAX(f."altPurchaseOrder") as "altPurchaseOrder",
         COUNT(*)::int as "foldCount",
-        SUM(f."sumYard") as "totalYard",
+        SUM(f."sumYard")::float as "totalYard",
         MAX(f."createDate") as "createDate"
       FROM fabricouts f
       WHERE f.deleted_at IS NULL
@@ -81,7 +82,18 @@ export async function GET(request: NextRequest) {
     ` as any[]
   }
 
-  return Response.json({ bills, total: totalRaw[0]?.cnt ?? 0, page, limit })
+  const mappedBills = (bills as any[]).map(b => ({
+    ...b,
+    vatNo: Number(b.vatNo),
+    foldCount: Number(b.foldCount),
+    totalYard: Number(b.totalYard),
+  }))
+
+  return Response.json({ bills: mappedBills, total: Number(totalRaw[0]?.cnt ?? 0), page, limit })
+  } catch (e) {
+    console.error('[stock-deposit GET]', e)
+    return Response.json({ error: String(e) }, { status: 500 })
+  }
 }
 
 export async function POST(request: NextRequest) {

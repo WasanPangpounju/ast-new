@@ -4,70 +4,82 @@ import type { NextRequest } from 'next/server'
 import { randomUUID } from 'crypto'
 
 export async function GET(request: NextRequest) {
-  const session = await auth()
-  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const session = await auth()
+    if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { searchParams } = request.nextUrl
-  const page = Math.max(1, Number(searchParams.get('page') ?? 1))
-  const limit = 20
-  const offset = (page - 1) * limit
-  const search = searchParams.get('search') ?? ''
+    const { searchParams } = request.nextUrl
+    const page = Math.max(1, Number(searchParams.get('page') ?? 1))
+    const limit = 20
+    const offset = (page - 1) * limit
+    const search = searchParams.get('search') ?? ''
 
-  let bills: any[]
-  let totalRaw: any[]
+    let bills: any[]
+    let totalRaw: any[]
 
-  if (search) {
-    const like = `%${search}%`
-    bills = await prisma.$queryRaw`
-      SELECT
-        "vatType", "vatNo",
-        "customerName", "receiveName",
-        "fabricStruct", "fabricPattern", "fabricW",
-        MIN("createDate") as "createDate",
-        COUNT(*)::int as "foldCount",
-        SUM("sumYard") as "totalYard",
-        MAX("altFabricStruct") as "altFabricStruct",
-        MAX("altPurchaseOrder") as "altPurchaseOrder"
-      FROM fabricouts
-      WHERE deleted_at IS NULL
-        AND "customerName" ILIKE ${like}
-      GROUP BY "vatType", "vatNo", "customerName", "receiveName", "fabricStruct", "fabricPattern", "fabricW"
-      ORDER BY "vatNo" DESC
-      LIMIT ${limit} OFFSET ${offset}
-    ` as any[]
+    if (search) {
+      const like = `%${search}%`
+      bills = await prisma.$queryRaw`
+        SELECT
+          "vatType", "vatNo",
+          "customerName", "receiveName",
+          "fabricStruct", "fabricPattern", "fabricW",
+          MIN("createDate") as "createDate",
+          COUNT(*)::int as "foldCount",
+          SUM("sumYard")::float as "totalYard",
+          MAX("altFabricStruct") as "altFabricStruct",
+          MAX("altPurchaseOrder") as "altPurchaseOrder"
+        FROM fabricouts
+        WHERE deleted_at IS NULL
+          AND "customerName" ILIKE ${like}
+        GROUP BY "vatType", "vatNo", "customerName", "receiveName", "fabricStruct", "fabricPattern", "fabricW"
+        ORDER BY "vatNo" DESC
+        LIMIT ${limit} OFFSET ${offset}
+      ` as any[]
 
-    totalRaw = await prisma.$queryRaw`
-      SELECT COUNT(DISTINCT ("vatType", "vatNo"))::int as cnt
-      FROM fabricouts
-      WHERE deleted_at IS NULL
-        AND "customerName" ILIKE ${like}
-    ` as any[]
-  } else {
-    bills = await prisma.$queryRaw`
-      SELECT
-        "vatType", "vatNo",
-        "customerName", "receiveName",
-        "fabricStruct", "fabricPattern", "fabricW",
-        MIN("createDate") as "createDate",
-        COUNT(*)::int as "foldCount",
-        SUM("sumYard") as "totalYard",
-        MAX("altFabricStruct") as "altFabricStruct",
-        MAX("altPurchaseOrder") as "altPurchaseOrder"
-      FROM fabricouts
-      WHERE deleted_at IS NULL
-      GROUP BY "vatType", "vatNo", "customerName", "receiveName", "fabricStruct", "fabricPattern", "fabricW"
-      ORDER BY "vatNo" DESC
-      LIMIT ${limit} OFFSET ${offset}
-    ` as any[]
+      totalRaw = await prisma.$queryRaw`
+        SELECT COUNT(DISTINCT ("vatType", "vatNo"))::int as cnt
+        FROM fabricouts
+        WHERE deleted_at IS NULL
+          AND "customerName" ILIKE ${like}
+      ` as any[]
+    } else {
+      bills = await prisma.$queryRaw`
+        SELECT
+          "vatType", "vatNo",
+          "customerName", "receiveName",
+          "fabricStruct", "fabricPattern", "fabricW",
+          MIN("createDate") as "createDate",
+          COUNT(*)::int as "foldCount",
+          SUM("sumYard")::float as "totalYard",
+          MAX("altFabricStruct") as "altFabricStruct",
+          MAX("altPurchaseOrder") as "altPurchaseOrder"
+        FROM fabricouts
+        WHERE deleted_at IS NULL
+        GROUP BY "vatType", "vatNo", "customerName", "receiveName", "fabricStruct", "fabricPattern", "fabricW"
+        ORDER BY "vatNo" DESC
+        LIMIT ${limit} OFFSET ${offset}
+      ` as any[]
 
-    totalRaw = await prisma.$queryRaw`
-      SELECT COUNT(DISTINCT ("vatType", "vatNo"))::int as cnt
-      FROM fabricouts
-      WHERE deleted_at IS NULL
-    ` as any[]
+      totalRaw = await prisma.$queryRaw`
+        SELECT COUNT(DISTINCT ("vatType", "vatNo"))::int as cnt
+        FROM fabricouts
+        WHERE deleted_at IS NULL
+      ` as any[]
+    }
+
+    const mappedBills = (bills as any[]).map(b => ({
+      ...b,
+      foldCount: Number(b.foldCount),
+      totalYard: Number(b.totalYard),
+      vatNo: Number(b.vatNo),
+    }))
+
+    return Response.json({ bills: mappedBills, total: Number(totalRaw[0]?.cnt ?? 0), page, limit })
+  } catch (e) {
+    console.error('[bill GET]', e)
+    return Response.json({ error: String(e) }, { status: 500 })
   }
-
-  return Response.json({ bills, total: totalRaw[0]?.cnt ?? 0, page, limit })
 }
 
 export async function POST(request: NextRequest) {
