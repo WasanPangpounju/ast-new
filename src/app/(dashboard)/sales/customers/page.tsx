@@ -19,6 +19,7 @@ interface Coordinator {
   tel: string | null;
 }
 
+<<<<<<< HEAD
 const TYPES = ["ลูกค้า", "บุคคลธรรมดา", "นิติบุคคล", "โบรกเกอร์", "อื่นๆ"];
 
 const emptyForm = {
@@ -45,10 +46,38 @@ export default function SalesCustomersPage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+=======
+const TYPES = ['ลูกค้า', 'บุคคลธรรมดา', 'นิติบุคคล', 'โบรกเกอร์', 'อื่นๆ']
+const emptyForm = { name: '', tax: '', address: '', tel: '', email: '', type: 'ลูกค้า' }
+const emptyCoordForm = { name: '', jobTitle: '', tel: '' }
+
+export default function SalesCustomersPage() {
+  const [customers, setCustomers] = useState<Customer[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [loading, setLoading] = useState(true)
+  const [q, setQ] = useState('')
+  const [applied, setApplied] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [expanded, setExpanded] = useState<number | null>(null)
+  const [coordinators, setCoordinators] = useState<Coordinator[]>([])
+  const [coordLoading, setCoordLoading] = useState(false)
+  const [modal, setModal] = useState<'add' | 'edit' | null>(null)
+  const [editing, setEditing] = useState<Customer | null>(null)
+  const [form, setForm] = useState(emptyForm)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [coordModal, setCoordModal] = useState<'add' | 'edit' | null>(null)
+  const [editingCoord, setEditingCoord] = useState<Coordinator | null>(null)
+  const [coordForm, setCoordForm] = useState(emptyCoordForm)
+  const [coordSaving, setCoordSaving] = useState(false)
+  const [coordError, setCoordError] = useState('')
+>>>>>>> b1ff64723a5d3afc87343a121dd7e3fd368dc4ba
 
   const totalPages = Math.ceil(total / 20);
 
   const fetchCustomers = useCallback(() => {
+<<<<<<< HEAD
     setLoading(true);
     const p = new URLSearchParams({
       page: String(page),
@@ -62,11 +91,23 @@ export default function SalesCustomersPage() {
       })
       .finally(() => setLoading(false));
   }, [page, applied]);
+=======
+    setLoading(true)
+    const p = new URLSearchParams({ page: String(page) })
+    if (applied) p.set('q', applied)
+    if (typeFilter) p.set('type', typeFilter)
+    fetch(`/api/sales/customers?${p}`)
+      .then(r => r.json())
+      .then(d => { setCustomers(d.customers ?? []); setTotal(d.total ?? 0) })
+      .finally(() => setLoading(false))
+  }, [page, applied, typeFilter])
+>>>>>>> b1ff64723a5d3afc87343a121dd7e3fd368dc4ba
 
   useEffect(() => {
     fetchCustomers();
   }, [fetchCustomers]);
 
+<<<<<<< HEAD
   async function toggleExpand(customer: Customer) {
     if (expanded === customer.id) {
       setExpanded(null);
@@ -78,18 +119,36 @@ export default function SalesCustomersPage() {
       const res = await fetch(`/api/sales/customers/${customer.id}`);
       const d = await res.json();
       setCoordinators(d.coordinators ?? []);
+=======
+  async function fetchCoordinators(tax: string) {
+    setCoordLoading(true)
+    try {
+      const res = await fetch(`/api/sales/coordinators?tax=${encodeURIComponent(tax)}`)
+      const d = await res.json()
+      setCoordinators(d.coordinators ?? [])
+>>>>>>> b1ff64723a5d3afc87343a121dd7e3fd368dc4ba
     } catch {}
     setCoordLoading(false);
   }
 
+<<<<<<< HEAD
   function openAdd() {
     setEditing(null);
     setForm(emptyForm);
     setError("");
     setModal("add");
+=======
+  async function toggleExpand(customer: Customer) {
+    if (expanded === customer.id) { setExpanded(null); return }
+    setCoordinators([])
+    setExpanded(customer.id)
+    if (customer.tax) await fetchCoordinators(customer.tax)
+>>>>>>> b1ff64723a5d3afc87343a121dd7e3fd368dc4ba
   }
 
+  function openAdd() { setEditing(null); setForm(emptyForm); setError(''); setModal('add') }
   function openEdit(c: Customer) {
+<<<<<<< HEAD
     setEditing(c);
     setForm({
       name: c.name,
@@ -127,12 +186,69 @@ export default function SalesCustomersPage() {
     } finally {
       setSaving(false);
     }
+=======
+    setEditing(c)
+    setForm({ name: c.name, tax: c.tax ?? '', address: c.address ?? '', tel: c.tel ?? '', email: c.email ?? '', type: c.type ?? 'ลูกค้า' })
+    setError(''); setModal('edit')
+  }
+
+  async function handleSave() {
+    setSaving(true); setError('')
+    try {
+      const url = modal === 'edit' ? `/api/sales/customers/${editing!.id}` : '/api/sales/customers'
+      const method = modal === 'edit' ? 'PUT' : 'POST'
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      const d = await res.json()
+      if (!res.ok) { setError(d.error ?? 'เกิดข้อผิดพลาด'); return }
+      setModal(null); fetchCustomers()
+    } finally { setSaving(false) }
+>>>>>>> b1ff64723a5d3afc87343a121dd7e3fd368dc4ba
   }
 
   async function handleDelete(c: Customer) {
     if (!confirm(`ลบลูกค้า "${c.name}" ?`)) return;
     await fetch(`/api/sales/customers/${c.id}`, { method: "DELETE" });
     fetchCustomers();
+  }
+
+  function openAddCoord() {
+    setEditingCoord(null); setCoordForm(emptyCoordForm); setCoordError(''); setCoordModal('add')
+  }
+  function openEditCoord(coord: Coordinator) {
+    setEditingCoord(coord)
+    setCoordForm({ name: coord.name, jobTitle: coord.jobTitle ?? '', tel: coord.tel ?? '' })
+    setCoordError(''); setCoordModal('edit')
+  }
+
+  async function handleSaveCoord() {
+    setCoordSaving(true); setCoordError('')
+    const tax = customers.find(c => c.id === expanded)?.tax ?? ''
+    try {
+      const url = coordModal === 'edit' ? `/api/sales/coordinators/${editingCoord!.id}` : '/api/sales/coordinators'
+      const method = coordModal === 'edit' ? 'PUT' : 'POST'
+      const body = coordModal === 'edit'
+        ? { name: coordForm.name, jobTitle: coordForm.jobTitle, tel: coordForm.tel }
+        : { tax, name: coordForm.name, jobTitle: coordForm.jobTitle, tel: coordForm.tel }
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const d = await res.json()
+      if (!res.ok) { setCoordError(d.error ?? 'เกิดข้อผิดพลาด'); return }
+      setCoordModal(null)
+      if (tax) await fetchCoordinators(tax)
+    } finally { setCoordSaving(false) }
+  }
+
+  async function handleDeleteCoord(coord: Coordinator) {
+    if (!confirm(`ลบผู้ประสานงาน "${coord.name}" ?`)) return
+    await fetch(`/api/sales/coordinators/${coord.id}`, { method: 'DELETE' })
+    const tax = customers.find(c => c.id === expanded)?.tax ?? ''
+    if (tax) await fetchCoordinators(tax)
+  }
+
+  function handleExport() {
+    const p = new URLSearchParams()
+    if (applied) p.set('q', applied)
+    if (typeFilter) p.set('type', typeFilter)
+    window.location.href = `/api/sales/customers/export?${p}`
   }
 
   return (
@@ -144,6 +260,7 @@ export default function SalesCustomersPage() {
             ทั้งหมด {total.toLocaleString()} ราย
           </p>
         </div>
+<<<<<<< HEAD
         <button
           onClick={openAdd}
           className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium"
@@ -179,6 +296,35 @@ export default function SalesCustomersPage() {
         >
           เคลียร์
         </button>
+=======
+        <div className="flex gap-2">
+          <button onClick={handleExport}
+            className="px-4 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 font-medium">
+            ส่งออก Excel
+          </button>
+          <button onClick={openAdd}
+            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium">
+            ➕ เพิ่มลูกค้า
+          </button>
+        </div>
+      </div>
+
+      {/* Search + Filter */}
+      <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 shadow-sm flex gap-2 flex-wrap">
+        <input value={q} onChange={e => setQ(e.target.value)}
+          placeholder="ค้นหาชื่อหรือเลขที่ผู้เสียภาษี..."
+          onKeyDown={e => e.key === 'Enter' && (setPage(1), setApplied(q))}
+          className="flex-1 min-w-[180px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <select value={typeFilter} onChange={e => { setTypeFilter(e.target.value); setPage(1) }}
+          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700">
+          <option value="">ทุกประเภท</option>
+          {TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <button onClick={() => { setPage(1); setApplied(q) }}
+          className="px-5 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">ค้นหา</button>
+        <button onClick={() => { setQ(''); setApplied(''); setTypeFilter(''); setPage(1) }}
+          className="px-4 py-1.5 border border-gray-300 text-sm rounded-lg hover:bg-gray-50 text-gray-600">เคลียร์</button>
+>>>>>>> b1ff64723a5d3afc87343a121dd7e3fd368dc4ba
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -186,6 +332,7 @@ export default function SalesCustomersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs">
+<<<<<<< HEAD
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-12">
                   ลำดับ
                 </th>
@@ -207,10 +354,21 @@ export default function SalesCustomersPage() {
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-24">
                   จัดการ
                 </th>
+=======
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-12">ลำดับ</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-14">รหัส</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600">ชื่อลูกค้า</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-48">ที่อยู่</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-36">เลขที่ผู้เสียภาษี</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-28">โทรศัพท์</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-24">ประเภท</th>
+                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-24">จัดการ</th>
+>>>>>>> b1ff64723a5d3afc87343a121dd7e3fd368dc4ba
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
+<<<<<<< HEAD
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-gray-400">
                     <div className="flex flex-col items-center gap-2">
@@ -269,6 +427,89 @@ export default function SalesCustomersPage() {
                           >
                             ลบ
                           </button>
+=======
+                <tr><td colSpan={8} className="text-center py-12 text-gray-400">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    กำลังโหลด...
+                  </div>
+                </td></tr>
+              ) : customers.length === 0 ? (
+                <tr><td colSpan={8} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
+              ) : customers.map((c, i) => (
+                <>
+                  <tr key={c.id}
+                    className={`hover:bg-blue-50/30 cursor-pointer transition-colors ${expanded === c.id ? 'bg-blue-50/40' : ''}`}
+                    onClick={() => toggleExpand(c)}>
+                    <td className="px-3 py-2.5 text-xs text-gray-500">{(page - 1) * 20 + i + 1}</td>
+                    <td className="px-3 py-2.5 text-xs font-mono text-gray-600">{c.id}</td>
+                    <td className="px-3 py-2.5 font-medium text-gray-900">{c.name}</td>
+                    <td className="px-3 py-2.5 text-xs text-gray-500 w-48 max-w-[192px]">
+                      <span className="block truncate" title={c.address ?? ''}>{c.address ?? '-'}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-xs text-gray-600 font-mono">{c.tax ?? '-'}</td>
+                    <td className="px-3 py-2.5 text-xs text-gray-600">{c.tel ?? '-'}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{c.type ?? '-'}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1">
+                        <button onClick={() => openEdit(c)}
+                          className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">แก้ไข</button>
+                        <button onClick={() => handleDelete(c)}
+                          className="text-xs px-2 py-1 bg-red-50 text-red-600 rounded hover:bg-red-100">ลบ</button>
+                      </div>
+                    </td>
+                  </tr>
+                  {expanded === c.id && (
+                    <tr key={`expand-${c.id}`}>
+                      <td colSpan={8} className="bg-blue-50/60 px-6 py-3 border-t border-blue-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-gray-600 font-medium">ผู้ประสานงาน (tax: {c.tax ?? '-'})</span>
+                          <button
+                            onClick={e => { e.stopPropagation(); openAddCoord() }}
+                            className="text-xs px-2.5 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            + เพิ่มผู้ประสานงาน
+                          </button>
+                        </div>
+                        {coordLoading ? (
+                          <div className="text-xs text-gray-400">กำลังโหลด...</div>
+                        ) : coordinators.length === 0 ? (
+                          <div className="text-xs text-gray-400">ไม่มีข้อมูลผู้ประสานงาน</div>
+                        ) : (
+                          <table className="text-xs w-full max-w-2xl mb-1">
+                            <thead>
+                              <tr className="text-gray-500">
+                                <th className="text-left pr-4 py-1">ชื่อ</th>
+                                <th className="text-left pr-4 py-1">ตำแหน่ง</th>
+                                <th className="text-left pr-4 py-1">โทรศัพท์</th>
+                                <th className="text-left py-1">จัดการ</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {coordinators.map(coord => (
+                                <tr key={coord.id}>
+                                  <td className="pr-4 py-1 font-medium text-gray-800">{coord.name}</td>
+                                  <td className="pr-4 py-1 text-gray-600">{coord.jobTitle ?? '-'}</td>
+                                  <td className="pr-4 py-1 text-gray-600">{coord.tel ?? '-'}</td>
+                                  <td className="py-1">
+                                    <div className="flex gap-1">
+                                      <button
+                                        onClick={e => { e.stopPropagation(); openEditCoord(coord) }}
+                                        className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">แก้ไข</button>
+                                      <button
+                                        onClick={e => { e.stopPropagation(); handleDeleteCoord(coord) }}
+                                        className="px-2 py-0.5 bg-red-50 text-red-600 rounded hover:bg-red-100">ลบ</button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                        <div className="mt-2 text-xs text-gray-500">
+                          อีเมล: {c.email ?? '-'}
+>>>>>>> b1ff64723a5d3afc87343a121dd7e3fd368dc4ba
                         </div>
                       </td>
                     </tr>
@@ -370,6 +611,10 @@ export default function SalesCustomersPage() {
         )}
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Customer Add/Edit Modal */}
+>>>>>>> b1ff64723a5d3afc87343a121dd7e3fd368dc4ba
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
@@ -395,6 +640,7 @@ export default function SalesCustomersPage() {
                 </div>
               )}
               {[
+<<<<<<< HEAD
                 { label: "ชื่อลูกค้า *", key: "name" },
                 { label: "เลขที่ผู้เสียภาษี *", key: "tax" },
                 { label: "ที่อยู่", key: "address" },
@@ -412,6 +658,18 @@ export default function SalesCustomersPage() {
                     }
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+=======
+                { label: 'ชื่อลูกค้า *', key: 'name' },
+                { label: 'เลขที่ผู้เสียภาษี *', key: 'tax' },
+                { label: 'ที่อยู่', key: 'address' },
+                { label: 'โทรศัพท์', key: 'tel' },
+                { label: 'อีเมล', key: 'email' },
+              ].map(({ label, key }) => (
+                <div key={key}>
+                  <label className="block text-xs text-gray-600 mb-1">{label}</label>
+                  <input value={(form as any)[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+>>>>>>> b1ff64723a5d3afc87343a121dd7e3fd368dc4ba
                 </div>
               ))}
               <div>
@@ -446,6 +704,43 @@ export default function SalesCustomersPage() {
                 className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 font-medium"
               >
                 {saving ? "กำลังบันทึก..." : "บันทึก"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Coordinator Add/Edit Modal */}
+      {coordModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setCoordModal(null)} />
+          <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-md mx-4">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900 text-sm">
+                {coordModal === 'add' ? 'เพิ่มผู้ประสานงาน' : 'แก้ไขผู้ประสานงาน'}
+              </h2>
+              <button onClick={() => setCoordModal(null)} className="text-gray-400 hover:text-gray-600 text-lg">×</button>
+            </div>
+            <div className="p-5 space-y-3">
+              {coordError && <div className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2">{coordError}</div>}
+              {[
+                { label: 'ชื่อ *', key: 'name' },
+                { label: 'ตำแหน่ง', key: 'jobTitle' },
+                { label: 'โทรศัพท์', key: 'tel' },
+              ].map(({ label, key }) => (
+                <div key={key}>
+                  <label className="block text-xs text-gray-600 mb-1">{label}</label>
+                  <input value={(coordForm as any)[key]} onChange={e => setCoordForm(f => ({ ...f, [key]: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setCoordModal(null)}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600">ยกเลิก</button>
+              <button onClick={handleSaveCoord} disabled={coordSaving}
+                className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 font-medium">
+                {coordSaving ? 'กำลังบันทึก...' : 'บันทึก'}
               </button>
             </div>
           </div>

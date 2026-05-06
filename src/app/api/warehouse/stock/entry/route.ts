@@ -22,22 +22,28 @@ export async function POST(request: NextRequest) {
     .filter(r => r.yard > 0)
 
   const refId = randomUUID()
-  const date = new Date(createDate)
+  const date = createDate ? new Date(createDate) : new Date()
 
-  await prisma.stockFabric.createMany({
-    data: rows.map(r => ({
-      refId,
-      emp,
-      fabricStruct,
-      fabricPattern: fabricPattern || '',
-      fabricW: fabricW || '',
-      fabricCode: fabricCode || '',
-      customer: customer || 'AST',
-      fold: 1,
-      sumYard: r.yard,
-      createDate: date,
-    })),
-  })
+  try {
+    await prisma.stockFabric.createMany({
+      data: rows.map(r => ({
+        refId,
+        emp,
+        fabricStruct,
+        fabricPattern: fabricPattern || '',
+        fabricW: fabricW || '',
+        fabricCode: fabricCode || '',
+        customer: customer || 'AST',
+        fold: 1,
+        sumYard: r.yard,
+        createDate: date,
+      })),
+    })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[stock/entry] Prisma error:', msg)
+    return Response.json({ error: msg }, { status: 500 })
+  }
 
   return Response.json({ success: true, count: rows.length, refId })
 }
