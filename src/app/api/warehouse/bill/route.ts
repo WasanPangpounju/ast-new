@@ -113,26 +113,32 @@ export async function POST(request: NextRequest) {
   const refId = randomUUID()
   const date = new Date(createDate)
 
-  await prisma.fabricOut.createMany({
-    data: rows.map(r => ({
-      refId,
-      vatType,
-      vatNo: Number(vatNo),
-      fold: 1,
-      sumYard: r.yard,
-      fabricStruct: fabricStruct || '',
-      fabricPattern: fabricPattern || '',
-      fabricW: fabricW || '',
-      customerName,
-      receiveName: receiveName || customerName,
-      orderId: orderId ? Number(orderId) : null,
-      purchaseOrder: purchaseOrder || null,
-      createDate: date,
-      isDeposit: isDeposit ?? false,
-      altFabricStruct: altFabricStruct || null,
-      altPurchaseOrder: altPurchaseOrder || null,
-    })),
-  })
+  try {
+    await prisma.fabricOut.createMany({
+      data: rows.map(r => ({
+        refId,
+        vatType,
+        vatNo: Number(vatNo),
+        fold: 1,
+        sumYard: r.yard,
+        fabricStruct: fabricStruct || '',
+        fabricPattern: fabricPattern || '',
+        fabricW: fabricW || '',
+        customerName,
+        receiveName: receiveName || customerName,
+        orderId: orderId ? Number(orderId) : null,
+        purchaseOrder: purchaseOrder || null,
+        createDate: date,
+        isDeposit: isDeposit ?? false,
+        altFabricStruct: altFabricStruct || null,
+        altPurchaseOrder: altPurchaseOrder || null,
+      })),
+    })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[bill] Prisma error:', msg)
+    return Response.json({ error: msg }, { status: 500 })
+  }
 
   return Response.json({ success: true, count: rows.length, vatNo: Number(vatNo) })
 }
