@@ -208,7 +208,7 @@ export default function CreateOrderPage() {
   // Spec
   const [phewNumber, setPhewNumber] = useState('')
   const [phewW, setPhewW] = useState('')
-  const [stackType, setStackType] = useState('ม้วนเส้น')
+  const [stackType, setStackType] = useState('')
 
   // Quantity
   const [orderSumYard, setOrderSumYard] = useState('')
@@ -265,19 +265,6 @@ export default function CreateOrderPage() {
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
-  // Auto-calc priceM from priceYard (1 หลา = 0.9144 เมตร → 1 เมตร = 1.0936 หลา)
-  useEffect(() => {
-    if (priceYard && !isNaN(parseFloat(priceYard))) {
-      setPriceM((parseFloat(priceYard) / 1.0936).toFixed(2))
-    }
-  }, [priceYard])
-
-  // Auto-calc orderSumMeter from orderSumYard
-  useEffect(() => {
-    if (orderSumYard && !isNaN(parseFloat(orderSumYard))) {
-      setOrderSumMeter((parseFloat(orderSumYard) * 0.9144).toFixed(2))
-    }
-  }, [orderSumYard])
 
   // Auto-build fabric structure (disabled — use สร้าง button instead)
   // useEffect(() => {
@@ -537,62 +524,143 @@ export default function CreateOrderPage() {
                     </div>
                     <div>
                       <Label text="การลงผ้า" />
-                      <select value={stackType} onChange={e => setStackType(e.target.value)}
-                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
-                        <option>ม้วนเส้น</option>
-                        <option>อื่นๆ</option>
-                      </select>
+                      <Input value={stackType} onChange={setStackType} placeholder="การลงผ้า" />
                     </div>
                   </div>
 
                   {/* ── Order quantity ────────────────────────────────────── */}
                   <div className="space-y-3">
-                    {/* จำนวนออเดอร์ */}
+                    {/* จำนวนออเดอร์ — bidirectional */}
                     <div className="flex items-end gap-2">
                       <div className="flex-1">
                         <Label text="จำนวนออเดอร์ (หลา)" required />
-                        <Input value={orderSumYard} onChange={setOrderSumYard} placeholder="หลา" type="number" />
+                        <Input value={orderSumYard} type="number" placeholder="หลา"
+                          onChange={v => {
+                            setOrderSumYard(v)
+                            setOrderSumMeter(v && !isNaN(+v) ? (+v * 0.9144).toFixed(2) : '')
+                          }} />
                       </div>
                       <span className="text-sm text-gray-400 pb-2 shrink-0">หรือ</span>
                       <div className="flex-1">
                         <Label text="เมตร" />
-                        <Input value={orderSumMeter} onChange={setOrderSumMeter} placeholder="เมตร" type="number" />
+                        <Input value={orderSumMeter} type="number" placeholder="เมตร"
+                          onChange={v => {
+                            setOrderSumMeter(v)
+                            setOrderSumYard(v && !isNaN(+v) ? (+v / 0.9144).toFixed(2) : '')
+                          }} />
                       </div>
                     </div>
-                    {/* การสีน */}
+                    {/* การสืบ */}
                     <div className="flex items-end gap-2">
                       <div className="flex-1">
-                        <Label text="การสีน" required />
+                        <Label text="การสืบ" required />
                         <Input value={fabricSPY} onChange={setFabricSPY} placeholder="ไม่มีให้เลข 0" type="number" />
                       </div>
-                      <span className="text-sm text-gray-400 pb-2 shrink-0">หรือ</span>
-                      <div className="flex-1">
-                        <Label text="%" />
-                        <Input value={fabricSPYPct} onChange={setFabricSPYPct} placeholder="%" type="number" />
-                      </div>
+                      <span className="text-sm text-gray-400 pb-2 shrink-0">%</span>
                     </div>
+                    {/* รวมหลัง การสืบ (derived, read-only) */}
+                    {(() => {
+                      const yard = parseFloat(orderSumYard)
+                      const pct = parseFloat(fabricSPY)
+                      if (!yard) return null
+                      const totalYard = (!pct || pct === 0) ? yard : yard * (1 + pct / 100)
+                      const totalMeter = totalYard * 0.9144
+                      return (
+                        <div className="flex items-end gap-2 mt-1">
+                          <div className="flex-1">
+                            <Label text="รวม (หลา)" />
+                            <Input value={totalYard.toFixed(2)} readOnly />
+                          </div>
+                          <span className="text-sm text-gray-400 pb-2 shrink-0">/</span>
+                          <div className="flex-1">
+                            <Label text="รวม (เมตร)" />
+                            <Input value={totalMeter.toFixed(2)} readOnly />
+                          </div>
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   {/* ── Price ──────────────────────────────────────────────── */}
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <Label text="ราคาต่อหน่วย (บาท)" required />
-                      <Input value={priceYard} onChange={setPriceYard} placeholder="บาท/หลา" type="number" />
+                  <div className="space-y-3">
+                    {/* ราคาต่อหน่วย — bidirectional */}
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <Label text="ราคาต่อหน่วย (บาท/หลา)" required />
+                        <Input value={priceYard} type="number" placeholder="บาท/หลา"
+                          onChange={v => {
+                            setPriceYard(v)
+                            setPriceM(v && !isNaN(+v) ? (+v / 1.0936).toFixed(2) : '')
+                          }} />
+                      </div>
+                      <span className="text-sm text-gray-400 pb-2 shrink-0">หรือ</span>
+                      <div className="flex-1">
+                        <Label text="ราคา (บาท/เมตร)" />
+                        <Input value={priceM} type="number" placeholder="บาท/เมตร"
+                          onChange={v => {
+                            setPriceM(v)
+                            setPriceYard(v && !isNaN(+v) ? (+v * 1.0936).toFixed(2) : '')
+                          }} />
+                      </div>
                     </div>
-                    <span className="text-sm text-gray-400 pb-2 shrink-0">หรือ</span>
-                    <div className="flex-1">
-                      <Label text="เมตร" />
-                      <Input value={priceM} onChange={setPriceM} placeholder="บาท/เมตร" type="number" />
+
+                    {/* ส่วนลด + ราคาหลังลด */}
+                    <div className="flex items-end gap-2">
+                      <div className="w-40">
+                        <Label text="ส่วนลด (%)" />
+                        <Input value={discountP} onChange={setDiscountP} placeholder="%" type="number" />
+                      </div>
+                      {(() => {
+                        const py = parseFloat(priceYard)
+                        const pm = parseFloat(priceM)
+                        const dp = parseFloat(discountP)
+                        if ((!py && !pm) || isNaN(dp)) return null
+                        const factor = 1 - dp / 100
+                        const afterY = py ? py * factor : 0
+                        const afterM = pm ? pm * factor : 0
+                        return (
+                          <div className="flex items-end gap-2 flex-1">
+                            <span className="text-sm text-gray-400 pb-2 shrink-0">→ ราคาหลังลด</span>
+                            <div className="flex-1">
+                              <Label text="บาท/หลา" />
+                              <Input value={afterY.toFixed(2)} readOnly />
+                            </div>
+                            <span className="text-sm text-gray-400 pb-2 shrink-0">/</span>
+                            <div className="flex-1">
+                              <Label text="บาท/เมตร" />
+                              <Input value={afterM.toFixed(2)} readOnly />
+                            </div>
+                          </div>
+                        )
+                      })()}
                     </div>
-                    <div className="flex-1">
-                      <Label text="ส่วนลด (%)" />
-                      <Input value={discountP} onChange={setDiscountP} placeholder="%" type="number" />
-                    </div>
-                    <span className="text-sm text-gray-400 pb-2 shrink-0">หรือ</span>
-                    <div className="flex-1">
-                      <Label text="หลา" />
-                      <Input value={discountYard} onChange={setDiscountYard} placeholder="หลา" type="number" />
-                    </div>
+
+                    {/* ราคารวม */}
+                    {(() => {
+                      const py = parseFloat(priceYard)
+                      const pm = parseFloat(priceM)
+                      const yard = parseFloat(orderSumYard)
+                      const meter = parseFloat(orderSumMeter)
+                      const dp = parseFloat(discountP) || 0
+                      const factor = 1 - dp / 100
+                      if ((!py && !pm) || (!yard && !meter)) return null
+                      const total = yard && py
+                        ? yard * py * factor
+                        : meter * pm * factor
+                      return (
+                        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                          <span className="text-sm font-medium text-blue-800">ราคารวม</span>
+                          <span className="text-base font-semibold text-blue-900">
+                            {total.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} บาท
+                          </span>
+                          {yard ? (
+                            <span className="text-xs text-blue-600">({yard.toLocaleString()} หลา × {(py * factor).toFixed(2)} บาท/หลา)</span>
+                          ) : (
+                            <span className="text-xs text-blue-600">({meter.toLocaleString()} เมตร × {(pm * factor).toFixed(2)} บาท/เมตร)</span>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </div>
 
                   {/* ── Other fields (2 col) ───────────────────────────────── */}
