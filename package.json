@@ -11,6 +11,7 @@
     "migrate:mysql": "npx tsx scripts/migrate-from-mysql.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.95.0",
     "@hookform/resolvers": "^5.2.2",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",

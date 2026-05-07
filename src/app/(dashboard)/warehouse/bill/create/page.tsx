@@ -1,5 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import AiPhotoModal from '@/components/AiPhotoModal'
+import { AiReadResult } from '@/hooks/useAiPhotoRead'
 
 const GROUPS = 8
 const ROWS = 20
@@ -57,6 +59,10 @@ export default function BillCreatePage() {
   const inputRefs = useRef<(HTMLInputElement | null)[]>(Array(TOTAL_SLOTS).fill(null))
   const [saving, setSaving] = useState(false)
 
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+  const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set())
+  const [aiLowConfidence, setAiLowConfidence] = useState<Set<string>>(new Set())
+
   // Pre-fill from order query params
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
@@ -109,6 +115,38 @@ export default function BillCreatePage() {
   const totalFold = yardNums.filter(v => v > 0).length
   const totalYard = yardNums.reduce((a, b) => a + b, 0)
 
+  function handleAiResult(data: AiReadResult) {
+    const filled = new Set<string>()
+    const lowConf = new Set<string>()
+    if (data.fabricStruct != null)  { setFabricStruct(data.fabricStruct);   filled.add('fabricStruct') }
+    if (data.fabricPattern != null) { setFabricPattern(data.fabricPattern); filled.add('fabricPattern') }
+    if (data.fabricW != null)       { setFabricW(data.fabricW);             filled.add('fabricW') }
+    if (data.customer != null)      { setOrderer(data.customer); setReceiver(data.customer); filled.add('orderer') }
+    if (data.createDate != null)    { setBillDate(data.createDate);         filled.add('billDate') }
+    if (data.billRef != null)       { setBillNo(data.billRef);              filled.add('billNo') }
+    if (data.rows?.length) {
+      const next = Array(TOTAL_SLOTS).fill('')
+      data.rows.forEach((row, i) => { if (i < TOTAL_SLOTS) next[i] = String(row.yards) })
+      setYards(next)
+    }
+    if (data.confidence) {
+      Object.entries(data.confidence).forEach(([key, val]) => {
+        if (val === 'low' || val === 'medium') {
+          const mapped: Record<string, string> = { customer: 'orderer', billRef: 'billNo' }
+          lowConf.add(mapped[key] ?? key)
+        }
+      })
+    }
+    setAiFilledFields(filled)
+    setAiLowConfidence(lowConf)
+  }
+
+  function aiInputStyle(fieldName: string): React.CSSProperties {
+    if (aiLowConfidence.has(fieldName)) return { borderColor: '#d97706', background: '#fffbeb' }
+    if (aiFilledFields.has(fieldName))  return { borderColor: '#2563eb', background: '#eff6ff' }
+    return {}
+  }
+
   function resetForm() {
     setYards(Array(TOTAL_SLOTS).fill(''))
     setStockSearch('')
@@ -120,6 +158,8 @@ export default function BillCreatePage() {
     setIsDeposit(false)
     setAltFabricStruct('')
     setAltPurchaseOrder('')
+    setAiFilledFields(new Set())
+    setAiLowConfidence(new Set())
   }
 
   async function handleSave() {
@@ -161,10 +201,37 @@ export default function BillCreatePage() {
 
   return (
     <div className="p-4 w-full">
-      <div className="mb-4">
-        <h1 className="text-lg font-semibold text-gray-900">เปิดบิลผ้า</h1>
-        <p className="text-xs text-gray-500">สร้างบิลส่งผ้าใหม่</p>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-gray-900">เปิดบิลผ้า</h1>
+          <p className="text-xs text-gray-500">สร้างบิลส่งผ้าใหม่</p>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {aiFilledFields.size > 0 && (
+            <>
+              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                AI กรอก {aiFilledFields.size} field
+              </span>
+              {aiLowConfidence.size > 0 && (
+                <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>
+                  ตรวจสอบ {aiLowConfidence.size} field (สีส้ม)
+                </span>
+              )}
+            </>
+          )}
+          <button type="button" onClick={() => setAiModalOpen(true)}
+            style={{ padding: '6px 14px', fontSize: '13px', fontWeight: 500, borderRadius: '6px', border: '1px solid #2563eb', background: '#eff6ff', color: '#1d4ed8', cursor: 'pointer' }}>
+            📷 อ่านจากรูปถ่าย
+          </button>
+        </div>
       </div>
+
+      <AiPhotoModal
+        isOpen={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        docType="bill"
+        onResult={handleAiResult}
+      />
 
       {/* Header form */}
       <div className="bg-white border border-gray-200 shadow-sm p-4 mb-4 w-full">
@@ -186,6 +253,7 @@ export default function BillCreatePage() {
             <label className="block text-xs font-medium text-gray-700 mb-1">เลขที่บิล</label>
             <input value={billNo} onChange={e => setBillNo(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('billNo')}
               placeholder="เลขที่บิล" />
           </div>
 
@@ -193,7 +261,8 @@ export default function BillCreatePage() {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">วันที่</label>
             <input type="date" value={billDate} onChange={e => setBillDate(e.target.value)}
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('billDate')} />
           </div>
 
           {/* Stock search - full width */}
@@ -236,18 +305,21 @@ export default function BillCreatePage() {
             <label className="block text-xs font-medium text-gray-700 mb-1">โครงสร้างผ้า</label>
             <input value={fabricStruct} onChange={e => setFabricStruct(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('fabricStruct')}
               placeholder="โครงสร้างผ้า" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">ลายผ้า</label>
             <input value={fabricPattern} onChange={e => setFabricPattern(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('fabricPattern')}
               placeholder="ลายผ้า" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">หน้ากว้าง (นิ้ว)</label>
             <input value={fabricW} onChange={e => setFabricW(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('fabricW')}
               placeholder="หน้ากว้าง" />
           </div>
 
@@ -265,6 +337,7 @@ export default function BillCreatePage() {
               onBlur={() => setTimeout(() => setOrdererDropdown(false), 200)}
               placeholder="พิมพ์ชื่อลูกค้า..."
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('orderer')}
             />
             {ordererDropdown && ordererResults.length > 0 && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">

@@ -1,5 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import AiPhotoModal from '@/components/AiPhotoModal'
+import { AiReadResult } from '@/hooks/useAiPhotoRead'
 
 const GROUPS = 8
 const ROWS = 20
@@ -51,6 +53,10 @@ export default function StockCreateForm({ emp }: Props) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>(Array(TOTAL_SLOTS).fill(null))
   const [saving, setSaving] = useState(false)
 
+  const [aiModalOpen, setAiModalOpen] = useState(false)
+  const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set())
+  const [aiLowConfidence, setAiLowConfidence] = useState<Set<string>>(new Set())
+
   useEffect(() => {
     if (!stockSearch) { setStockResults([]); return }
     const t = setTimeout(() => {
@@ -92,6 +98,35 @@ export default function StockCreateForm({ emp }: Props) {
   const totalFold = yardNums.filter(v => v > 0).length
   const totalYard = yardNums.reduce((a, b) => a + b, 0)
 
+  function handleAiResult(data: AiReadResult) {
+    const filled = new Set<string>()
+    const lowConf = new Set<string>()
+    if (data.fabricCode != null)    { setFabricCode(data.fabricCode);       filled.add('fabricCode') }
+    if (data.fabricStruct != null)  { setFabricStruct(data.fabricStruct);   filled.add('fabricStruct') }
+    if (data.fabricPattern != null) { setFabricPattern(data.fabricPattern); filled.add('fabricPattern') }
+    if (data.fabricW != null)       { setFabricW(data.fabricW);             filled.add('fabricW') }
+    if (data.customer != null)      { setCustomer(data.customer);           filled.add('customer') }
+    if (data.createDate != null)    { setCreateDate(data.createDate);       filled.add('createDate') }
+    if (data.rows?.length) {
+      const next = Array(TOTAL_SLOTS).fill('')
+      data.rows.forEach((row, i) => { if (i < TOTAL_SLOTS) next[i] = String(row.yards) })
+      setYards(next)
+    }
+    if (data.confidence) {
+      Object.entries(data.confidence).forEach(([key, val]) => {
+        if (val === 'low' || val === 'medium') lowConf.add(key)
+      })
+    }
+    setAiFilledFields(filled)
+    setAiLowConfidence(lowConf)
+  }
+
+  function aiInputStyle(fieldName: string): React.CSSProperties {
+    if (aiLowConfidence.has(fieldName)) return { borderColor: '#d97706', background: '#fffbeb' }
+    if (aiFilledFields.has(fieldName))  return { borderColor: '#2563eb', background: '#eff6ff' }
+    return {}
+  }
+
   function resetForm() {
     setYards(Array(TOTAL_SLOTS).fill(''))
     setStockSearch('')
@@ -100,6 +135,8 @@ export default function StockCreateForm({ emp }: Props) {
     setFabricW('')
     setFabricCode('')
     setCustomer('')
+    setAiFilledFields(new Set())
+    setAiLowConfidence(new Set())
   }
 
   async function handleSave() {
@@ -127,10 +164,37 @@ export default function StockCreateForm({ emp }: Props) {
 
   return (
     <div className="p-4 max-w-full">
-      <div className="mb-4">
-        <h1 className="text-lg font-semibold text-gray-900">คีย์ผ้าเข้าสต็อก</h1>
-        <p className="text-xs text-gray-500">บันทึกผ้าเข้าสต็อก</p>
+      <div className="mb-4 flex items-start justify-between">
+        <div>
+          <h1 className="text-lg font-semibold text-gray-900">คีย์ผ้าเข้าสต็อก</h1>
+          <p className="text-xs text-gray-500">บันทึกผ้าเข้าสต็อก</p>
+        </div>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {aiFilledFields.size > 0 && (
+            <>
+              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+                AI กรอก {aiFilledFields.size} field
+              </span>
+              {aiLowConfidence.size > 0 && (
+                <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>
+                  ตรวจสอบ {aiLowConfidence.size} field (สีส้ม)
+                </span>
+              )}
+            </>
+          )}
+          <button type="button" onClick={() => setAiModalOpen(true)}
+            style={{ padding: '6px 14px', fontSize: '13px', fontWeight: 500, borderRadius: '6px', border: '1px solid #2563eb', background: '#eff6ff', color: '#1d4ed8', cursor: 'pointer' }}>
+            📷 อ่านจากรูปถ่าย
+          </button>
+        </div>
       </div>
+
+      <AiPhotoModal
+        isOpen={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        docType="stock_in"
+        onResult={handleAiResult}
+      />
 
       <div className="bg-white border border-gray-200 shadow-sm p-4 mb-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -139,7 +203,8 @@ export default function StockCreateForm({ emp }: Props) {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">วันที่</label>
             <input type="date" value={createDate} onChange={e => setCreateDate(e.target.value)}
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('createDate')} />
           </div>
 
           {/* Employee — read-only from session */}
@@ -190,18 +255,21 @@ export default function StockCreateForm({ emp }: Props) {
             <label className="block text-xs font-medium text-gray-700 mb-1">โครงสร้างผ้า</label>
             <input value={fabricStruct} onChange={e => setFabricStruct(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('fabricStruct')}
               placeholder="โครงสร้างผ้า" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">ลายผ้า</label>
             <input value={fabricPattern} onChange={e => setFabricPattern(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('fabricPattern')}
               placeholder="ลายผ้า" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">หน้ากว้าง (นิ้ว)</label>
             <input value={fabricW} onChange={e => setFabricW(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('fabricW')}
               placeholder="หน้ากว้าง" />
           </div>
           <div className="relative">
@@ -211,6 +279,7 @@ export default function StockCreateForm({ emp }: Props) {
               onFocus={() => { if (fabricCode) setFabricCodeDropdown(true) }}
               onBlur={() => setTimeout(() => setFabricCodeDropdown(false), 200)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('fabricCode')}
               placeholder="เช่น TC34/13065" />
             {fabricCodeDropdown && fabricCodeResults.length > 0 && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
@@ -234,7 +303,8 @@ export default function StockCreateForm({ emp }: Props) {
               onFocus={() => { if (customer) setCustomerDropdown(true) }}
               onBlur={() => setTimeout(() => setCustomerDropdown(false), 200)}
               placeholder="AST หรือชื่อลูกค้า..."
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={aiInputStyle('customer')} />
             {customerDropdown && customerResults.length > 0 && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
                 {customerResults.map(c => (
