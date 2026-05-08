@@ -24,6 +24,19 @@ interface CustomerOption {
   name: string
 }
 
+interface OrderSearchResult {
+  id: number
+  purchaseOrder: string
+  customerName: string
+  fabricStructure: string
+  fabricPattern: string
+  fabricId: string
+  fabricW: string
+  orderSumYard: number
+  deliveredYard: number
+  remainingYard: number
+}
+
 export default function BillCreatePage() {
   // Bill header
   const [billType, setBillType] = useState('A')
@@ -58,6 +71,13 @@ export default function BillCreatePage() {
   // Pre-fill from order navigation
   const [purchaseOrderParam, setPurchaseOrderParam] = useState('')
 
+  // Order search (ตัดจากออร์เดอร์)
+  const [orderSearch, setOrderSearch] = useState('')
+  const [orderResults, setOrderResults] = useState<OrderSearchResult[]>([])
+  const [orderDropdown, setOrderDropdown] = useState(false)
+  const [linkedOrderId, setLinkedOrderId] = useState<number | null>(null)
+  const [linkedSO, setLinkedSO] = useState('')
+
   // Yards grid
   const [yards, setYards] = useState<string[]>(Array(TOTAL_SLOTS).fill(''))
   const inputRefs = useRef<(HTMLInputElement | null)[]>(Array(TOTAL_SLOTS).fill(null))
@@ -70,13 +90,41 @@ export default function BillCreatePage() {
   // Pre-fill from order query params
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
-    if (p.get('customerName')) {
-      setOrderer(p.get('customerName')!)
-      setReceiver(p.get('customerName')!)
+    const customerName = p.get('customerName') || ''
+    const fs = p.get('fabricStruct') || ''
+    const fp = p.get('fabricPattern') || ''
+    const fw = p.get('fabricW') || ''
+
+    if (customerName) { setOrderer(customerName); setReceiver(customerName) }
+    if (fs) setFabricStruct(fs)
+    if (fp) setFabricPattern(fp)
+    if (fw) setFabricW(fw)
+    if (p.get('purchaseOrder')) {
+      setPurchaseOrderParam(p.get('purchaseOrder')!)
+      setLinkedSO(p.get('purchaseOrder')!)
     }
-    if (p.get('fabricStruct')) setFabricStruct(p.get('fabricStruct')!)
-    if (p.get('fabricPattern')) setFabricPattern(p.get('fabricPattern')!)
-    if (p.get('purchaseOrder')) setPurchaseOrderParam(p.get('purchaseOrder')!)
+    if (p.get('orderId')) setLinkedOrderId(Number(p.get('orderId')))
+
+    if (fs || customerName) {
+      const sp = new URLSearchParams()
+      if (fs) sp.set('fabricStruct', fs)
+      if (fp) sp.set('fabricPattern', fp)
+      if (fw) sp.set('fabricW', fw)
+      if (customerName) sp.set('customer', customerName)
+      fetch('/api/warehouse/stock/search?' + sp)
+        .then(r => r.json())
+        .then(data => {
+          if (data.results?.length > 0) {
+            const s = data.results[0]
+            setSelectedStock(s)
+            setStockSearch(s.fabricStruct + (s.fabricPattern ? ' / ' + s.fabricPattern : '') + (s.fabricW ? ' ' + s.fabricW + '"' : ''))
+            setFabricStruct(s.fabricStruct)
+            setFabricPattern(s.fabricPattern ?? '')
+            setFabricW(s.fabricW ?? '')
+          }
+        })
+        .catch(() => {})
+    }
   }, [])
 
   // Auto-fill billNo when type changes
@@ -98,6 +146,18 @@ export default function BillCreatePage() {
     }, 300)
     return () => clearTimeout(t)
   }, [stockSearch])
+
+  // Order search debounce
+  useEffect(() => {
+    if (!orderSearch) { setOrderResults([]); return }
+    const t = setTimeout(() => {
+      fetch('/api/warehouse/orders/search?q=' + encodeURIComponent(orderSearch))
+        .then(r => r.json())
+        .then(d => setOrderResults(d.orders ?? []))
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [orderSearch])
 
   // Customer search debounce
   useEffect(() => {
@@ -157,6 +217,9 @@ export default function BillCreatePage() {
     setStockResults([])
     setStockDropdown(false)
     setSelectedStock(null)
+    setOrderSearch('')
+    setOrderResults([])
+    setOrderDropdown(false)
     setFabricStruct('')
     setFabricPattern('')
     setFabricW('')
@@ -193,6 +256,7 @@ export default function BillCreatePage() {
           altFabricStruct,
           altPurchaseOrder,
           purchaseOrder: purchaseOrderParam || undefined,
+          orderId: linkedOrderId || undefined,
         }),
       })
       const data = await res.json()
@@ -322,6 +386,81 @@ export default function BillCreatePage() {
                 <span className="font-semibold" style={{ color: (selectedStock.produced_fold - selectedStock.used_fold) >= 0 ? '#15803d' : '#dc2626' }}>
                   คงเหลือ: {(selectedStock.produced_fold - selectedStock.used_fold).toLocaleString()} พับ / {Math.round(selectedStock.produced_yard - selectedStock.used_yard).toLocaleString()} หลา
                 </span>
+              </div>
+            )}
+          </div>
+
+          {/* Order search - full width */}
+          <div className="md:col-span-3 relative">
+            <label className="block text-xs font-medium text-gray-700 mb-1">ตัดจากออร์เดอร์ (เลือก SO)</label>
+            <input
+              value={orderSearch}
+              onChange={e => { setOrderSearch(e.target.value); setOrderDropdown(true) }}
+              onFocus={() => { if (orderSearch) setOrderDropdown(true) }}
+              onBlur={() => setTimeout(() => setOrderDropdown(false), 200)}
+              placeholder="พิมพ์เลข SO หรือชื่อลูกค้า..."
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+            {orderDropdown && orderResults.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-64 overflow-y-auto">
+                {orderResults.map((o, i) => (
+                  <button key={i} type="button"
+                    onMouseDown={async () => {
+                      setOrderSearch(o.purchaseOrder)
+                      setFabricStruct(o.fabricStructure)
+                      setFabricPattern(o.fabricPattern)
+                      setFabricW(o.fabricW)
+                      setOrderer(o.customerName)
+                      setReceiver(o.customerName)
+                      setPurchaseOrderParam(o.purchaseOrder)
+                      setLinkedOrderId(o.id)
+                      setLinkedSO(o.purchaseOrder)
+                      setOrderDropdown(false)
+                      setSelectedStock(null)
+                      setStockSearch('')
+                      // Auto-match stock by order's fabric details
+                      try {
+                        const sp = new URLSearchParams()
+                        if (o.fabricStructure) sp.set('fabricStruct', o.fabricStructure)
+                        if (o.fabricPattern) sp.set('fabricPattern', o.fabricPattern)
+                        if (o.fabricW) sp.set('fabricW', o.fabricW)
+                        if (o.customerName) sp.set('customer', o.customerName)
+                        const res = await fetch('/api/warehouse/stock/search?' + sp)
+                        const data = await res.json()
+                        if (data.results?.length > 0) {
+                          const s = data.results[0]
+                          setSelectedStock(s)
+                          setStockSearch(s.fabricStruct + (s.fabricPattern ? ' / ' + s.fabricPattern : '') + (s.fabricW ? ' ' + s.fabricW + '"' : ''))
+                          setFabricStruct(s.fabricStruct)
+                          setFabricPattern(s.fabricPattern ?? '')
+                          setFabricW(s.fabricW ?? '')
+                        }
+                      } catch {}
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-green-50 text-xs border-b border-gray-100 last:border-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-semibold text-green-700">{o.purchaseOrder}</span>
+                      <span className="text-gray-700 font-medium">{o.customerName}</span>
+                      {o.fabricId && <span className="text-gray-400">[{o.fabricId}]</span>}
+                    </div>
+                    <div className="flex flex-wrap gap-3 mt-0.5 text-gray-500">
+                      {o.fabricStructure && <span>{o.fabricStructure}</span>}
+                      {o.fabricPattern && <span>{o.fabricPattern}</span>}
+                      {o.fabricW && <span>{o.fabricW}"</span>}
+                      <span className="text-blue-600">สั่ง: {Number(o.orderSumYard).toLocaleString()} หลา</span>
+                      <span className="text-orange-600">ส่งแล้ว: {Number(o.deliveredYard).toLocaleString()} หลา</span>
+                      <span style={{ color: o.remainingYard > 0 ? '#15803d' : '#2563eb', fontWeight: 600 }}>
+                        คงค้าง: {Number(o.remainingYard).toLocaleString()} หลา
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {linkedSO && (
+              <div className="mt-1 px-3 py-1.5 bg-green-50 border border-green-200 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                <span className="font-mono font-semibold text-green-800">SO: {linkedSO}</span>
+                <span className="text-green-700">เชื่อมออร์เดอร์นี้แล้ว — ยอดคงค้างจะอัปเดตอัตโนมัติเมื่อบันทึก</span>
               </div>
             )}
           </div>

@@ -79,6 +79,7 @@ export default function WarehouseOrdersPage() {
       customerName: order.customerName ?? '',
       fabricStruct: order.fabricStructure ?? '',
       fabricPattern: order.fabricPattern ?? '',
+      fabricW: order.fabricAst?.fabricW ?? order.fabricAst?.phewW ?? '',
       fabricCode: order.fabricId ?? '',
     })
     window.location.href = `/warehouse/bill/create?${params}`
