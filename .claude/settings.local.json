@@ -32,7 +32,10 @@
       "Bash(Remove-Item *)",
       "Bash(git commit *)",
       "Bash(Get-Item \"C:\\\\Users\\\\Friendly Dev\\\\project\\\\ast-new\\\\src\\\\app\\\\api\\\\warehouse\\\\bill\\\\folds\\\\route.ts\" -ErrorAction SilentlyContinue)",
-      "Bash(Select-Object FullName, Length)"
+      "Bash(Select-Object FullName, Length)",
+      "Bash(Get-ChildItem -Path . -Force)",
+      "Bash(Select-Object Name)",
+      "PowerShell(head *)"
     ]
   }
 }

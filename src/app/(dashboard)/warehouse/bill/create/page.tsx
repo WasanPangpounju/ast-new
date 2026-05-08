@@ -11,9 +11,12 @@ interface StockResult {
   fabricStruct: string
   fabricPattern: string
   fabricW: string
+  fabricCode: string | null
   customer: string
   produced_fold: number
   produced_yard: number
+  used_fold: number
+  used_yard: number
 }
 
 interface CustomerOption {
@@ -28,10 +31,15 @@ export default function BillCreatePage() {
   const [billDate, setBillDate] = useState(new Date().toISOString().slice(0, 10))
   const [remark, setRemark] = useState('ได้รับผ้าตามรายการข้างบนนี้ไว้ถูกต้องและเรียบร้อยแล้ว')
 
-  // Stock search
-  const [stockSearch, setStockSearch] = useState('')
+  // Stock search filters
+  const [filterCustomer, setFilterCustomer] = useState('')
+  const [filterStruct, setFilterStruct] = useState('')
+  const [filterPattern, setFilterPattern] = useState('')
+  const [filterW, setFilterW] = useState('')
+  const [filterCode, setFilterCode] = useState('')
   const [stockResults, setStockResults] = useState<StockResult[]>([])
-  const [stockDropdown, setStockDropdown] = useState(false)
+  const [stockShowResults, setStockShowResults] = useState(false)
+  const [selectedStock, setSelectedStock] = useState<StockResult | null>(null)
 
   // Fabric fields (auto-filled, editable)
   const [fabricStruct, setFabricStruct] = useState('')
@@ -85,15 +93,22 @@ export default function BillCreatePage() {
 
   // Stock search debounce
   useEffect(() => {
-    if (!stockSearch || stockSearch.length < 1) { setStockResults([]); return }
+    const hasFilter = filterCustomer || filterStruct || filterPattern || filterW || filterCode
+    if (!hasFilter) { setStockResults([]); setStockShowResults(false); return }
     const t = setTimeout(() => {
-      fetch('/api/warehouse/stock/search?q=' + encodeURIComponent(stockSearch))
+      const p = new URLSearchParams()
+      if (filterCustomer) p.set('customer', filterCustomer)
+      if (filterStruct) p.set('fabricStruct', filterStruct)
+      if (filterPattern) p.set('fabricPattern', filterPattern)
+      if (filterW) p.set('fabricW', filterW)
+      if (filterCode) p.set('fabricCode', filterCode)
+      fetch('/api/warehouse/stock/search?' + p)
         .then(r => r.json())
-        .then(d => setStockResults(d.results ?? []))
+        .then(d => { setStockResults(d.results ?? []); setStockShowResults(true) })
         .catch(() => {})
     }, 300)
     return () => clearTimeout(t)
-  }, [stockSearch])
+  }, [filterCustomer, filterStruct, filterPattern, filterW, filterCode])
 
   // Customer search debounce
   useEffect(() => {
@@ -149,7 +164,14 @@ export default function BillCreatePage() {
 
   function resetForm() {
     setYards(Array(TOTAL_SLOTS).fill(''))
-    setStockSearch('')
+    setFilterCustomer('')
+    setFilterStruct('')
+    setFilterPattern('')
+    setFilterW('')
+    setFilterCode('')
+    setStockResults([])
+    setStockShowResults(false)
+    setSelectedStock(null)
     setFabricStruct('')
     setFabricPattern('')
     setFabricW('')
@@ -265,39 +287,108 @@ export default function BillCreatePage() {
               style={aiInputStyle('billDate')} />
           </div>
 
-          {/* Stock search - full width */}
-          <div className="md:col-span-3 relative">
+          {/* Stock search filters - full width */}
+          <div className="md:col-span-3">
             <label className="block text-xs font-medium text-gray-700 mb-1">ตัดจากสต็อก (เลือกรายการ)</label>
-            <input
-              value={stockSearch}
-              onChange={e => { setStockSearch(e.target.value); setStockDropdown(true) }}
-              onFocus={() => { if (stockSearch) setStockDropdown(true) }}
-              onBlur={() => setTimeout(() => setStockDropdown(false), 200)}
-              placeholder="พิมพ์โครงสร้างผ้า, ลาย, หรือหน้ากว้าง..."
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            {stockDropdown && stockResults.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-64 overflow-y-auto">
-                {stockResults.map((s, i) => (
-                  <button key={i} type="button"
-                    onMouseDown={() => {
-                      setStockSearch(s.fabricStruct + (s.fabricPattern ? ' / ' + s.fabricPattern : '') + ' ' + s.fabricW)
-                      setFabricStruct(s.fabricStruct)
-                      setFabricPattern(s.fabricPattern ?? '')
-                      setFabricW(s.fabricW ?? '')
-                      setStockDropdown(false)
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs border-b border-gray-100 last:border-0">
-                    <div className="font-medium text-gray-800">{s.fabricStruct}</div>
-                    <div className="text-gray-500 flex gap-3 mt-0.5">
-                      <span>{s.fabricPattern || '-'}</span>
-                      <span>หน้า: {s.fabricW}</span>
-                      <span className="text-blue-600">ผลิตแล้ว: {Number(s.produced_fold).toLocaleString()} พับ</span>
-                    </div>
-                  </button>
-                ))}
+            <div className="border border-gray-200 bg-gray-50 p-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 mb-2">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">ลูกค้า</label>
+                  <input
+                    value={filterCustomer}
+                    onChange={e => { setFilterCustomer(e.target.value); setSelectedStock(null) }}
+                    placeholder="AST"
+                    className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">โครงสร้างผ้า</label>
+                  <input
+                    value={filterStruct}
+                    onChange={e => { setFilterStruct(e.target.value); setSelectedStock(null) }}
+                    placeholder="โครงสร้างผ้า..."
+                    className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">ลายผ้า</label>
+                  <input
+                    value={filterPattern}
+                    onChange={e => { setFilterPattern(e.target.value); setSelectedStock(null) }}
+                    placeholder="ลายผ้า..."
+                    className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">หน้ากว้าง</label>
+                  <input
+                    value={filterW}
+                    onChange={e => { setFilterW(e.target.value); setSelectedStock(null) }}
+                    placeholder="นิ้ว..."
+                    className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">รหัสผ้า</label>
+                  <input
+                    value={filterCode}
+                    onChange={e => { setFilterCode(e.target.value); setSelectedStock(null) }}
+                    placeholder="รหัสผ้า..."
+                    className="w-full border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                  />
+                </div>
               </div>
-            )}
+
+              {/* Search results */}
+              {stockShowResults && stockResults.length > 0 && (
+                <div className="border border-gray-200 bg-white max-h-52 overflow-y-auto">
+                  {stockResults.map((s, i) => {
+                    const remaining = (s.produced_fold ?? 0) - (s.used_fold ?? 0)
+                    return (
+                      <button key={i} type="button"
+                        onClick={() => {
+                          setFabricStruct(s.fabricStruct)
+                          setFabricPattern(s.fabricPattern ?? '')
+                          setFabricW(s.fabricW ?? '')
+                          setOrderer(s.customer)
+                          setReceiver(s.customer)
+                          setSelectedStock(s)
+                          setStockShowResults(false)
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs border-b border-gray-100 last:border-0">
+                        <div className="font-medium text-gray-800">
+                          {s.fabricStruct}{s.fabricPattern ? ` / ${s.fabricPattern}` : ''}{s.fabricW ? ` ${s.fabricW}"` : ''}
+                          {s.fabricCode ? <span className="text-gray-400 ml-1">[{s.fabricCode}]</span> : null}
+                        </div>
+                        <div className="flex flex-wrap gap-3 mt-0.5">
+                          <span className="text-gray-500">ลูกค้า: {s.customer}</span>
+                          <span className="text-blue-600">ผลิต: {Number(s.produced_fold).toLocaleString()} พับ / {Number(s.produced_yard).toLocaleString()} หลา</span>
+                          <span className="text-orange-600">ใช้ไป: {Number(s.used_fold).toLocaleString()} พับ</span>
+                          <span style={{ color: remaining >= 0 ? '#15803d' : '#dc2626', fontWeight: 600 }}>คงเหลือ: {remaining.toLocaleString()} พับ</span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {stockShowResults && stockResults.length === 0 && (
+                <div className="text-xs text-gray-400 py-2 text-center border border-gray-200 bg-white">ไม่พบรายการในสต็อก</div>
+              )}
+
+              {/* Selected stock info bar */}
+              {selectedStock && (
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                  <span className="font-semibold text-blue-800">
+                    ✓ {selectedStock.fabricStruct}{selectedStock.fabricPattern ? ` / ${selectedStock.fabricPattern}` : ''}{selectedStock.fabricW ? ` ${selectedStock.fabricW}"` : ''}
+                  </span>
+                  <span className="text-blue-700">ผลิตแล้ว: {Number(selectedStock.produced_fold).toLocaleString()} พับ / {Math.round(Number(selectedStock.produced_yard)).toLocaleString()} หลา</span>
+                  <span className="text-orange-700">ใช้ไป: {Number(selectedStock.used_fold).toLocaleString()} พับ / {Math.round(Number(selectedStock.used_yard)).toLocaleString()} หลา</span>
+                  <span className="font-bold" style={{ color: (selectedStock.produced_fold - selectedStock.used_fold) >= 0 ? '#15803d' : '#dc2626' }}>
+                    คงเหลือ: {(selectedStock.produced_fold - selectedStock.used_fold).toLocaleString()} พับ / {Math.round(selectedStock.produced_yard - selectedStock.used_yard).toLocaleString()} หลา
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Fabric fields - auto-filled, editable */}
