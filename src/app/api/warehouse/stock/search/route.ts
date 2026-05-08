@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
 
   if (q) {
     const eq = esc(q)
-    conditions.push(`(s."fabricStruct" ILIKE '%${eq}%' OR s."fabricPattern" ILIKE '%${eq}%' OR s."fabricW" ILIKE '%${eq}%' OR s."fabricCode" ILIKE '%${eq}%')`)
+    conditions.push(`(s."fabricStruct" ILIKE '%${eq}%' OR s."fabricPattern" ILIKE '%${eq}%' OR s."fabricW" ILIKE '%${eq}%' OR s."fabricCode" ILIKE '%${eq}%' OR COALESCE(s."customer", 'AST') ILIKE '%${eq}%')`)
   }
   if (filterCustomer) conditions.push(`COALESCE(s."customer", 'AST') ILIKE '%${esc(filterCustomer)}%'`)
   if (filterStruct) conditions.push(`s."fabricStruct" ILIKE '%${esc(filterStruct)}%'`)
