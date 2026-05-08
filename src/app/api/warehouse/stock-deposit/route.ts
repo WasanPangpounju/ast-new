@@ -5,91 +5,72 @@ import { randomUUID } from 'crypto'
 
 export async function GET(request: NextRequest) {
   try {
-  const session = await auth()
-  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    const session = await auth()
+    if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { searchParams } = request.nextUrl
-  const page = Math.max(1, Number(searchParams.get('page') ?? 1))
-  const limit = 20
-  const offset = (page - 1) * limit
-  const search = searchParams.get('search') ?? ''
+    const { searchParams } = request.nextUrl
+    const page   = Math.max(1, Number(searchParams.get('page') ?? 1))
+    const limit  = 20
+    const offset = (page - 1) * limit
+    const search = searchParams.get('search') ?? ''
 
-  let bills: any[]
-  let totalRaw: any[]
+    const like = search ? `%${search}%` : null
 
-  if (search) {
-    const like = `%${search}%`
-    bills = await prisma.$queryRaw`
+    const whereDeposit = like
+      ? `f.deleted_at IS NULL AND f."isDeposit" = true AND (f."customerName" ILIKE '${like.replace(/'/g, "''")}' OR f."fabricStruct" ILIKE '${like.replace(/'/g, "''")}')`
+      : `f.deleted_at IS NULL AND f."isDeposit" = true`
+
+    const bills = await prisma.$queryRawUnsafe(`
       SELECT
         f."refId",
-        MAX(f."vatType") as "vatType",
-        MAX(f."vatNo")::int as "vatNo",
-        MAX(f."customerName") as "customerName",
-        MAX(f."fabricStruct") as "fabricStruct",
-        MAX(f."fabricPattern") as "fabricPattern",
-        MAX(f."fabricW") as "fabricW",
-        MAX(f."purchaseOrder") as "purchaseOrder",
-        MAX(f."altFabricStruct") as "altFabricStruct",
-        MAX(f."altPurchaseOrder") as "altPurchaseOrder",
-        COUNT(*)::int as "foldCount",
-        SUM(f."sumYard")::float as "totalYard",
-        MAX(f."createDate") as "createDate"
+        MAX(f."vatType")                         AS "vatType",
+        MAX(f."vatNo")::int                      AS "vatNo",
+        MAX(f."customerName")                    AS "customerName",
+        MAX(f."fabricStruct")                    AS "fabricStruct",
+        MAX(f."fabricPattern")                   AS "fabricPattern",
+        MAX(f."fabricW")                         AS "fabricW",
+        MAX(f."purchaseOrder")                   AS "purchaseOrder",
+        MAX(f."altFabricStruct")                 AS "altFabricStruct",
+        MAX(f."altPurchaseOrder")                AS "altPurchaseOrder",
+        COUNT(*)::int                            AS "foldCount",
+        SUM(f."sumYard")::float                  AS "totalYard",
+        MAX(f."createDate")                      AS "createDate",
+        COALESCE(w."withdrawnFold", 0)::int      AS "withdrawnFold",
+        COALESCE(w."withdrawnYard", 0)::float    AS "withdrawnYard"
       FROM fabricouts f
-      WHERE f.deleted_at IS NULL
-        AND f."isDeposit" = true
-        AND (f."customerName" ILIKE ${like} OR f."fabricStruct" ILIKE ${like})
-      GROUP BY f."refId"
+      LEFT JOIN (
+        SELECT
+          "altPurchaseOrder",
+          COUNT(*)::int       AS "withdrawnFold",
+          SUM("sumYard")::float AS "withdrawnYard"
+        FROM fabricouts
+        WHERE deleted_at IS NULL
+          AND "isDeposit" = false
+          AND "altPurchaseOrder" IS NOT NULL
+        GROUP BY "altPurchaseOrder"
+      ) w ON w."altPurchaseOrder" = f."refId"
+      WHERE ${whereDeposit}
+      GROUP BY f."refId", w."withdrawnFold", w."withdrawnYard"
       ORDER BY MAX(f."createDate") DESC
       LIMIT ${limit} OFFSET ${offset}
-    ` as any[]
+    `) as any[]
 
-    totalRaw = await prisma.$queryRaw`
-      SELECT COUNT(DISTINCT f."refId")::int as cnt
+    const totalRaw = await prisma.$queryRawUnsafe(`
+      SELECT COUNT(DISTINCT f."refId")::int AS cnt
       FROM fabricouts f
-      WHERE f.deleted_at IS NULL
-        AND f."isDeposit" = true
-        AND (f."customerName" ILIKE ${like} OR f."fabricStruct" ILIKE ${like})
-    ` as any[]
-  } else {
-    bills = await prisma.$queryRaw`
-      SELECT
-        f."refId",
-        MAX(f."vatType") as "vatType",
-        MAX(f."vatNo")::int as "vatNo",
-        MAX(f."customerName") as "customerName",
-        MAX(f."fabricStruct") as "fabricStruct",
-        MAX(f."fabricPattern") as "fabricPattern",
-        MAX(f."fabricW") as "fabricW",
-        MAX(f."purchaseOrder") as "purchaseOrder",
-        MAX(f."altFabricStruct") as "altFabricStruct",
-        MAX(f."altPurchaseOrder") as "altPurchaseOrder",
-        COUNT(*)::int as "foldCount",
-        SUM(f."sumYard")::float as "totalYard",
-        MAX(f."createDate") as "createDate"
-      FROM fabricouts f
-      WHERE f.deleted_at IS NULL
-        AND f."isDeposit" = true
-      GROUP BY f."refId"
-      ORDER BY MAX(f."createDate") DESC
-      LIMIT ${limit} OFFSET ${offset}
-    ` as any[]
+      WHERE ${whereDeposit}
+    `) as any[]
 
-    totalRaw = await prisma.$queryRaw`
-      SELECT COUNT(DISTINCT f."refId")::int as cnt
-      FROM fabricouts f
-      WHERE f.deleted_at IS NULL
-        AND f."isDeposit" = true
-    ` as any[]
-  }
+    const mappedBills = bills.map((b: any) => ({
+      ...b,
+      vatNo:         Number(b.vatNo),
+      foldCount:     Number(b.foldCount),
+      totalYard:     Number(b.totalYard),
+      withdrawnFold: Number(b.withdrawnFold),
+      withdrawnYard: Number(b.withdrawnYard),
+    }))
 
-  const mappedBills = (bills as any[]).map(b => ({
-    ...b,
-    vatNo: Number(b.vatNo),
-    foldCount: Number(b.foldCount),
-    totalYard: Number(b.totalYard),
-  }))
-
-  return Response.json({ bills: mappedBills, total: Number(totalRaw[0]?.cnt ?? 0), page, limit })
+    return Response.json({ bills: mappedBills, total: Number(totalRaw[0]?.cnt ?? 0), page, limit })
   } catch (e) {
     console.error('[stock-deposit GET]', e)
     return Response.json({ error: String(e) }, { status: 500 })
@@ -124,23 +105,23 @@ export async function POST(request: NextRequest) {
     .filter(r => r.yard > 0)
 
   const refId = randomUUID()
-  const date = new Date(createDate)
+  const date  = new Date(createDate)
 
   await prisma.fabricOut.createMany({
     data: rows.map(r => ({
       refId,
       vatType,
-      vatNo: Number(vatNo),
-      fold: 1,
-      sumYard: r.yard,
-      fabricStruct: fabricStruct || '',
-      fabricPattern: fabricPattern || '',
-      fabricW: fabricW || '',
+      vatNo:          Number(vatNo),
+      fold:           1,
+      sumYard:        r.yard,
+      fabricStruct:   fabricStruct || '',
+      fabricPattern:  fabricPattern || '',
+      fabricW:        fabricW || '',
       customerName,
-      receiveName: receiveName || customerName,
-      createDate: date,
-      isDeposit: false,
-      altFabricStruct: null,
+      receiveName:    receiveName || customerName,
+      createDate:     date,
+      isDeposit:      false,
+      altFabricStruct:  null,
       altPurchaseOrder: depositRefId || null,
     })),
   })
