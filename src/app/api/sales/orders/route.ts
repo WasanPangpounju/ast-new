@@ -12,7 +12,7 @@ function nextPurchaseOrder(vat: string, existing: string[]): string {
     .map(p => parseInt(p.slice(prefix.length), 10))
     .filter(n => !isNaN(n))
   const next = used.length ? Math.max(...used) + 1 : 1
-  return `${prefix}${next.toString().padStart(2, '0')}`
+  return `${prefix}${next}`
 }
 
 export async function GET(request: NextRequest) {
@@ -38,13 +38,19 @@ export async function GET(request: NextRequest) {
     })
   }
   if (status) conditions.push({ status })
-  if (month && year) {
+  if (year) {
     const thYear = parseInt(year) - 543
-    const pad = month.padStart(2, '0')
-    const start = new Date(`${thYear}-${pad}-01`)
-    const end = new Date(start)
-    end.setMonth(end.getMonth() + 1)
-    conditions.push({ createDate: { gte: start, lt: end } })
+    if (month) {
+      const pad = month.padStart(2, '0')
+      const start = new Date(`${thYear}-${pad}-01`)
+      const end = new Date(start)
+      end.setMonth(end.getMonth() + 1)
+      conditions.push({ createDate: { gte: start, lt: end } })
+    } else {
+      const start = new Date(`${thYear}-01-01`)
+      const end = new Date(`${thYear + 1}-01-01`)
+      conditions.push({ createDate: { gte: start, lt: end } })
+    }
   }
 
   const where = conditions.length === 1 ? conditions[0] : { AND: conditions }
@@ -85,6 +91,7 @@ export async function POST(request: NextRequest) {
     machineNumber, surcharge, commission, po,
     note, productionNote, payment,
     deadlines,
+    createStructure,
   } = body
 
   if (!vat || !['SO', 'SOX', 'SOB'].includes(vat))
@@ -193,8 +200,93 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return order
+    // create BillOfStructure (insert only — never overwrite)
+    if (createStructure) {
+      const bosExists = await tx.astBillOfStructure.findUnique({ where: { sourceOrderId: order.id } })
+      if (!bosExists) {
+        const bos = await tx.astBillOfStructure.create({
+          data: {
+            purchaseOrder,
+            sourceOrderId: order.id,
+            vat,
+            customerName: customerName?.trim() ?? null,
+            emp: coordinator?.trim() ?? null,
+            fabricId: fabricId?.trim() ?? null,
+            fabricPattern: fabricPattern?.trim() ?? null,
+            fabricStructure: fabricStructure?.trim() ?? null,
+            yarnHCount: yarnHCount?.trim() ?? null,
+            fabricW: fabricW?.trim() ?? null,
+            phewNumber: phewNumber?.trim() ?? null,
+            phewW: phewW?.trim() ?? null,
+            stackType: stackType?.trim() ?? null,
+            warpYarn1: warpYarn1?.trim() ?? null,
+            warpComp1: warpComp1?.trim() ?? null,
+            warpCount1: warpCount1?.trim() ?? null,
+            warpRatio1: warpRatio1?.trim() ?? null,
+            warpYarn2: warpYarn2?.trim() ?? null,
+            warpComp2: warpComp2?.trim() ?? null,
+            warpCount2: warpCount2?.trim() ?? null,
+            warpRatio2: warpRatio2?.trim() ?? null,
+            weftYarn1: weftYarn1?.trim() ?? null,
+            weftComp1: weftComp1?.trim() ?? null,
+            weftCount1: weftCount1?.trim() ?? null,
+            weftRatio1: weftRatio1?.trim() ?? null,
+            weftYarn2: weftYarn2?.trim() ?? null,
+            weftComp2: weftComp2?.trim() ?? null,
+            weftCount2: weftCount2?.trim() ?? null,
+            weftRatio2: weftRatio2?.trim() ?? null,
+            weftYarn3: weftYarn3?.trim() ?? null,
+            weftComp3: weftComp3?.trim() ?? null,
+            weftCount3: weftCount3?.trim() ?? null,
+            weftRatio3: weftRatio3?.trim() ?? null,
+            weftYarn4: weftYarn4?.trim() ?? null,
+            weftComp4: weftComp4?.trim() ?? null,
+            weftCount4: weftCount4?.trim() ?? null,
+            weftRatio4: weftRatio4?.trim() ?? null,
+            orderSumYard: orderSumYard ? parseFloat(orderSumYard) : null,
+            fabricSPY: fabricSPY ? parseFloat(fabricSPY) : null,
+            priceYard: priceYard ? parseFloat(priceYard) : null,
+            priceM: priceM ? parseFloat(priceM) : null,
+            discountP: discountP ? parseFloat(discountP) : null,
+            machineNumber: machineNumber?.trim() ?? null,
+            surcharge: surcharge?.trim() ?? null,
+            commission: commission ? parseFloat(commission) : null,
+            po: po?.trim() ?? null,
+            note: note?.trim() ?? null,
+            productionNote: productionNote?.trim() ?? null,
+            payment: payment?.trim() ?? null,
+            status: 'รอดำเนินการ',
+            createDate: new Date(),
+          },
+        })
+        if (Array.isArray(deadlines) && deadlines.length > 0) {
+          for (const dl of deadlines) {
+            if (dl.dt) {
+              await tx.bosDeadline.create({
+                data: {
+                  bosId: bos.id,
+                  dt: new Date(dl.dt),
+                  label: dl.label ?? 'กำหนดส่ง',
+                  qty: dl.qty ? parseFloat(dl.qty) : null,
+                  unit: dl.unit ?? 'หลา',
+                  pct: dl.pct ? parseFloat(dl.pct) : null,
+                },
+              })
+            }
+          }
+        }
+        return { order, bos, bosCreated: true }
+      }
+      return { order, bos: bosExists, bosCreated: false }
+    }
+
+    return { order, bos: null, bosCreated: false }
   })
 
-  return Response.json({ order: result, purchaseOrder }, { status: 201 })
+  return Response.json({
+    order: result.order,
+    billOfStructure: result.bos,
+    bosCreated: result.bosCreated,
+    purchaseOrder,
+  }, { status: 201 })
 }

@@ -44,7 +44,7 @@ const navItems: NavItem[] = [
     children: [
       { href: "/sales/customers", label: "ข้อมูลลูกค้า" },
       { href: "/sales/suppliers", label: "ข้อมูลซัพพลายเออร์" },
-      { href: "/sales/orders", label: "ใบสั่งขาย" },
+      { href: "/sales/orders/create", label: "ใบสั่งขาย" },
       { href: "/sales/orders/review", label: "ตรวจสอบใบสั่งขาย" },
     ],
   },
@@ -64,6 +64,7 @@ const navItems: NavItem[] = [
     ),
     children: [
       { href: "/warehouse/stock/create", label: "คีย์ผ้าเข้าสต็อก" },
+      { href: "/warehouse/stock/scan", label: "สแกนรูปคีย์ผ้าเข้าสต็อก" },
       { href: "/warehouse/fabric-in/review", label: "ตรวจสอบคีย์ผ้า" },
       { href: "/warehouse/stock/purchase", label: "คีย์ผ้าซื้อเข้า" },
       { href: "/warehouse/stock/purchase/review", label: "ตรวจสอบผ้าซื้อเข้า" },

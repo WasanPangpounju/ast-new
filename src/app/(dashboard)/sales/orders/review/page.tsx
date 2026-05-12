@@ -24,6 +24,37 @@ const STATUS_STYLES: Record<string, string> = {
 const STATUSES = ['รอดำเนินการ', 'อนุมัติให้ผลิต', 'เสร็จสิ้น', 'ยกเลิก', 'no data']
 const FILTER_STATUSES = ['', ...STATUSES]
 
+const MONTHS = [
+  { v: '', label: 'ทุกเดือน' },
+  { v: '1', label: 'มกราคม' },
+  { v: '2', label: 'กุมภาพันธ์' },
+  { v: '3', label: 'มีนาคม' },
+  { v: '4', label: 'เมษายน' },
+  { v: '5', label: 'พฤษภาคม' },
+  { v: '6', label: 'มิถุนายน' },
+  { v: '7', label: 'กรกฎาคม' },
+  { v: '8', label: 'สิงหาคม' },
+  { v: '9', label: 'กันยายน' },
+  { v: '10', label: 'ตุลาคม' },
+  { v: '11', label: 'พฤศจิกายน' },
+  { v: '12', label: 'ธันวาคม' },
+]
+
+const NOW = new Date()
+const CURRENT_MONTH = String(NOW.getMonth() + 1)
+const CURRENT_YEAR = String(NOW.getFullYear() + 543)
+
+function buildYearOptions() {
+  const years: { v: string; label: string }[] = [{ v: '', label: 'ทุกปี' }]
+  const cur = parseInt(CURRENT_YEAR)
+  for (let y = cur; y >= cur - 5; y--) {
+    years.push({ v: String(y), label: String(y) })
+  }
+  return years
+}
+
+const YEAR_OPTIONS = buildYearOptions()
+
 export default function SalesOrdersReviewPage() {
   const router = useRouter()
   const [orders, setOrders] = useState<Order[]>([])
@@ -32,7 +63,14 @@ export default function SalesOrdersReviewPage() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [applied, setApplied] = useState({ q: '', status: '' })
+  const [month, setMonth] = useState(CURRENT_MONTH)
+  const [year, setYear] = useState(CURRENT_YEAR)
+  const [applied, setApplied] = useState({
+    q: '',
+    status: '',
+    month: '',
+    year: '',
+  })
   const [updatingId, setUpdatingId] = useState<number | null>(null)
 
   const totalPages = Math.ceil(total / 20)
@@ -42,6 +80,12 @@ export default function SalesOrdersReviewPage() {
     const p = new URLSearchParams({ page: String(page) })
     if (applied.q) p.set('q', applied.q)
     if (applied.status) p.set('status', applied.status)
+    if (applied.month && applied.year) {
+      p.set('month', applied.month)
+      p.set('year', applied.year)
+    } else if (applied.year && !applied.month) {
+      p.set('year', applied.year)
+    }
     fetch(`/api/sales/orders?${p}`)
       .then(r => r.json())
       .then(d => { setOrders(d.orders ?? []); setTotal(d.total ?? 0) })
@@ -64,6 +108,24 @@ export default function SalesOrdersReviewPage() {
     }
   }
 
+  function applyFilter() {
+    setPage(1)
+    setApplied({ q, status: statusFilter, month, year })
+  }
+
+  function clearFilter() {
+    setQ('')
+    setStatusFilter('')
+    setMonth('')
+    setYear('')
+    setPage(1)
+    setApplied({ q: '', status: '', month: '', year: '' })
+  }
+
+  function openPrint(orderId: number, type: 'purchaseorder' | 'structure') {
+    window.open(`/print/sales/orders/${orderId}/${type}`, '_blank')
+  }
+
   const fmtDate = (d: string) => {
     try {
       const dt = new Date(d)
@@ -80,18 +142,71 @@ export default function SalesOrdersReviewPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 shadow-sm flex flex-wrap gap-2">
-        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && (setPage(1), setApplied({ q, status: statusFilter }))}
-          placeholder="ค้นหา SO หรือชื่อลูกค้า..."
-          className="flex-1 min-w-[200px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-          {FILTER_STATUSES.map((s, i) => <option key={s} value={s}>{i === 0 ? 'ทุกสถานะ' : s}</option>)}
-        </select>
-        <button onClick={() => { setPage(1); setApplied({ q, status: statusFilter }) }}
-          className="px-5 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">ค้นหา</button>
-        <button onClick={() => { setQ(''); setStatusFilter(''); setPage(1); setApplied({ q: '', status: '' }) }}
-          className="px-4 py-1.5 border border-gray-300 text-sm rounded-lg hover:bg-gray-50 text-gray-600">เคลียร์</button>
+      {/* Filter bar */}
+      <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 shadow-sm">
+        {/* Row 1: search + status */}
+        <div className="flex flex-wrap gap-2 mb-2">
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && applyFilter()}
+            placeholder="ค้นหา SO หรือชื่อลูกค้า..."
+            className="flex-1 min-w-[200px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <select
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {FILTER_STATUSES.map((s, i) => (
+              <option key={s} value={s}>{i === 0 ? 'ทุกสถานะ' : s}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Row 2: month + year + buttons */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 whitespace-nowrap">เดือน / ปี :</span>
+            <select
+              value={month}
+              onChange={e => setMonth(e.target.value)}
+              className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {MONTHS.map(m => (
+                <option key={m.v} value={m.v}>{m.label}</option>
+              ))}
+            </select>
+            <select
+              value={year}
+              onChange={e => setYear(e.target.value)}
+              className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {YEAR_OPTIONS.map(y => (
+                <option key={y.v} value={y.v}>{y.label}</option>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={applyFilter}
+            className="px-5 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+          >
+            ค้นหา
+          </button>
+          <button
+            onClick={clearFilter}
+            className="px-4 py-1.5 border border-gray-300 text-sm rounded-lg hover:bg-gray-50 text-gray-600"
+          >
+            เคลียร์
+          </button>
+          {/* Show active filter label */}
+          {(applied.month || applied.year) && (
+            <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-lg border border-blue-200">
+              {applied.month ? MONTHS.find(m => m.v === applied.month)?.label : 'ทุกเดือน'}
+              {applied.year ? ` ${applied.year}` : ''}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -107,19 +222,23 @@ export default function SalesOrdersReviewPage() {
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-24">วันที่</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-36">สถานะปัจจุบัน</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-44">เปลี่ยนสถานะ</th>
-                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-16">ดู</th>
+                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-52">เอกสาร</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={9} className="text-center py-12 text-gray-400">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                    กำลังโหลด...
-                  </div>
-                </td></tr>
+                <tr>
+                  <td colSpan={9} className="text-center py-12 text-gray-400">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                      กำลังโหลด...
+                    </div>
+                  </td>
+                </tr>
               ) : orders.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
+                <tr>
+                  <td colSpan={9} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td>
+                </tr>
               ) : orders.map((o, i) => {
                 const s = o.status ?? 'no data'
                 return (
@@ -155,8 +274,26 @@ export default function SalesOrdersReviewPage() {
                       </select>
                     </td>
                     <td className="px-3 py-2.5 text-center">
-                      <button onClick={() => router.push(`/sales/orders/${o.id}`)}
-                        className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">ดู</button>
+                      <div className="flex items-center justify-center gap-1 flex-wrap">
+                        <button
+                          onClick={() => router.push(`/sales/orders/${o.id}`)}
+                          className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 whitespace-nowrap"
+                        >
+                          ดู
+                        </button>
+                        <button
+                          onClick={() => openPrint(o.id, 'purchaseorder')}
+                          className="text-xs px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 whitespace-nowrap"
+                        >
+                          ใบสั่งขาย
+                        </button>
+                        <button
+                          onClick={() => openPrint(o.id, 'structure')}
+                          className="text-xs px-2 py-1 bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 whitespace-nowrap"
+                        >
+                          ใบโครงสร้าง
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )

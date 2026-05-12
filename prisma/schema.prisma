@@ -135,6 +135,7 @@ model AstPurchaseOrder {
   fabricOuts         FabricOut[]
   inventories        Inventory[]
   orderShipped       OrderShipped?
+  billOfStructure    AstBillOfStructure?
 
   @@index([vat])
   @@index([customerName])
@@ -480,6 +481,97 @@ model PackageAst {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("packageasts")
+}
+
+// ─── BILL OF STRUCTURE ───────────────────────────────
+
+model AstBillOfStructure {
+  id              Int       @id @default(autoincrement())
+  /// References AstPurchaseOrder.purchaseOrder
+  purchaseOrder   String    @unique
+  sourceOrderId   Int       @unique
+  vat             String?
+  customerName    String?
+  emp             String?
+  fabricId        String?
+  fabricPattern   String?
+  fabricStructure String?
+  // Fabric specs (from FabricAst)
+  yarnHCount      String?
+  fabricW         String?
+  phewNumber      String?
+  phewW           String?
+  stackType       String?
+  // Warp yarns
+  warpYarn1       String?
+  warpComp1       String?
+  warpCount1      String?
+  warpRatio1      String?
+  warpYarn2       String?
+  warpComp2       String?
+  warpCount2      String?
+  warpRatio2      String?
+  // Weft yarns
+  weftYarn1       String?
+  weftComp1       String?
+  weftCount1      String?
+  weftRatio1      String?
+  weftYarn2       String?
+  weftComp2       String?
+  weftCount2      String?
+  weftRatio2      String?
+  weftYarn3       String?
+  weftComp3       String?
+  weftCount3      String?
+  weftRatio3      String?
+  weftYarn4       String?
+  weftComp4       String?
+  weftCount4      String?
+  weftRatio4      String?
+  // Order quantities
+  orderSumYard    Float?
+  fabricSPY       Float?
+  // Pricing
+  priceYard       Float?    @map("price_yard")
+  priceM          Float?    @map("price_m")
+  discountP       Float?    @map("discount_p")
+  // Other
+  machineNumber   String?   @map("machine_number")
+  surcharge       String?
+  commission      Float?
+  po              String?
+  note            String?
+  productionNote  String?   @map("production_note")
+  payment         String?
+  createDate      DateTime  @default(now()) @map("create_date")
+  status          String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  sourceOrder AstPurchaseOrder @relation(fields: [sourceOrderId], references: [id])
+  deadlines   BosDeadline[]
+
+  @@index([purchaseOrder])
+  @@index([sourceOrderId])
+  @@map("ast_bill_of_structures")
+}
+
+model BosDeadline {
+  id        Int                @id @default(autoincrement())
+  bosId     Int
+  dt        DateTime?
+  label     String?
+  qty       Float?
+  unit      String?
+  pct       Float?
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  bos AstBillOfStructure @relation(fields: [bosId], references: [id])
+
+  @@index([bosId])
+  @@map("bos_deadlines")
 }
 
 // ─── LEGACY (DO NOT USE FOR NEW FEATURES) ────────────

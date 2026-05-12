@@ -280,7 +280,7 @@ export default function StockCreateForm({ emp }: Props) {
               onBlur={() => setTimeout(() => setFabricCodeDropdown(false), 200)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               style={aiInputStyle('fabricCode')}
-              placeholder="เช่น TC34/13065" />
+              placeholder="เช่น TR16/7864 2/2" />
             {fabricCodeDropdown && fabricCodeResults.length > 0 && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
                 {fabricCodeResults.map((r, i) => (
