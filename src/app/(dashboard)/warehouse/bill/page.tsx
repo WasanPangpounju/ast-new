@@ -195,10 +195,10 @@ export default function BillListPage() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">เลขที่บิล</th>
-                <th className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600">วันที่</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600">วันที่</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ลูกค้า / ผู้รับ</th>
-                <th className="hidden md:table-cell text-left px-3 py-2.5 font-medium text-gray-600">โครงสร้างผ้า</th>
-                <th className="hidden sm:table-cell text-right px-3 py-2.5 font-medium text-gray-600 w-16">พับ</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600">โครงสร้างผ้า</th>
+                <th className="text-right px-3 py-2.5 font-medium text-gray-600 w-16">พับ</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 w-24">หลา</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-24">พิมพ์</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-20" aria-label="actions"></th>
@@ -217,7 +217,7 @@ export default function BillListPage() {
               ) : bills.map((b, i) => (
                 <tr key={i} className="hover:bg-blue-50/30 transition-colors">
                   <td className="px-3 py-2 font-mono font-medium text-blue-700">{b.vatType} - {b.vatNo}</td>
-                  <td className="hidden sm:table-cell px-3 py-2 text-gray-500">{fmtDate(b.createDate)}</td>
+                  <td className="px-3 py-2 text-gray-500">{fmtDate(b.createDate)}</td>
                   <td className="px-3 py-2">
                     <div className="font-medium text-gray-800">{b.customerName ?? "-"}</div>
                     {b.receiveName && <div className="text-gray-400">{b.receiveName}</div>}
@@ -228,7 +228,7 @@ export default function BillListPage() {
                     {b.fabricPattern ?? ""}
                     {b.altPurchaseOrder && <span className="ml-1 text-gray-400">({b.altPurchaseOrder})</span>}
                   </td>
-                  <td className="hidden sm:table-cell px-3 py-2 text-right text-gray-800">{b.foldCount}</td>
+                  <td className="px-3 py-2 text-right text-gray-800">{b.foldCount}</td>
                   <td className="px-3 py-2 text-right font-medium text-gray-900">{Number(b.totalYard).toLocaleString()}</td>
                   <td className="px-3 py-2 text-center">
                     <button type="button" onClick={() => openPrint(b.vatType, b.vatNo)}

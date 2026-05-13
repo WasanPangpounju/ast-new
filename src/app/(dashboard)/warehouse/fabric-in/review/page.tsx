@@ -209,13 +209,13 @@ export default function StockReviewPage() {
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600">วันที่</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600">วันที่</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ลูกค้า</th>
-                <th className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600">รหัสผ้า</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600">รหัสผ้า</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">โครงสร้างผ้า</th>
-                <th className="hidden md:table-cell text-left px-3 py-2.5 font-medium text-gray-600">ลายผ้า</th>
-                <th className="hidden md:table-cell text-center px-3 py-2.5 font-medium text-gray-600">หน้ากว้าง</th>
-                <th className="hidden sm:table-cell text-right px-3 py-2.5 font-medium text-gray-600">พับ</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600">ลายผ้า</th>
+                <th className="text-center px-3 py-2.5 font-medium text-gray-600">หน้ากว้าง</th>
+                <th className="text-right px-3 py-2.5 font-medium text-gray-600">พับ</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600">หลา</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-16"></th>
               </tr>
@@ -232,13 +232,13 @@ export default function StockReviewPage() {
                 <tr><td colSpan={9} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
               ) : groups.map((g, i) => (
                 <tr key={i} className="hover:bg-blue-50/30 transition-colors">
-                  <td className="hidden sm:table-cell px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(g.create_date)}</td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(g.create_date)}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate">{g.customer}</td>
-                  <td className="hidden sm:table-cell px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{g.fabricCode || '-'}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{g.fabricCode || '-'}</td>
                   <td className="px-3 py-2 text-gray-800 max-w-[180px] truncate">{g.fabricStruct ?? '-'}</td>
-                  <td className="hidden md:table-cell px-3 py-2 text-gray-600 max-w-30 truncate">{g.fabricPattern || '-'}</td>
-                  <td className="hidden md:table-cell px-3 py-2 text-center text-gray-700">{g.fabricW || '-'}</td>
-                  <td className="hidden sm:table-cell px-3 py-2 text-right text-gray-800">{g.fold_count.toLocaleString()}</td>
+                  <td className="px-3 py-2 text-gray-600 max-w-30 truncate">{g.fabricPattern || '-'}</td>
+                  <td className="px-3 py-2 text-center text-gray-700">{g.fabricW || '-'}</td>
+                  <td className="px-3 py-2 text-right text-gray-800">{g.fold_count.toLocaleString()}</td>
                   <td className="px-3 py-2 text-right font-medium text-gray-900">{Math.round(Number(g.total_yard)).toLocaleString()}</td>
                   <td className="px-3 py-2 text-center">
                     <button type="button" onClick={() => openManage(g)}

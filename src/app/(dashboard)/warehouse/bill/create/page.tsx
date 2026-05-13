@@ -1,247 +1,305 @@
-'use client'
-import { useState, useEffect, useRef } from 'react'
-import AiPhotoModal from '@/components/AiPhotoModal'
-import { AiReadResult } from '@/hooks/useAiPhotoRead'
+"use client";
+import { useState, useEffect, useRef } from "react";
+import AiPhotoModal from "@/components/AiPhotoModal";
+import { AiReadResult } from "@/hooks/useAiPhotoRead";
 
-const GROUPS = 8
-const ROWS = 20
-const TOTAL_SLOTS = GROUPS * ROWS
+const GROUPS = 8;
+const ROWS = 20;
+const TOTAL_SLOTS = GROUPS * ROWS;
 
 interface StockResult {
-  fabricStruct: string
-  fabricPattern: string
-  fabricW: string
-  fabricCode: string | null
-  customer: string
-  produced_fold: number
-  produced_yard: number
-  used_fold: number
-  used_yard: number
+  fabricStruct: string;
+  fabricPattern: string;
+  fabricW: string;
+  fabricCode: string | null;
+  customer: string;
+  produced_fold: number;
+  produced_yard: number;
+  used_fold: number;
+  used_yard: number;
 }
 
 interface CustomerOption {
-  id: number
-  name: string
+  id: number;
+  name: string;
 }
 
 interface OrderSearchResult {
-  id: number
-  purchaseOrder: string
-  customerName: string
-  fabricStructure: string
-  fabricPattern: string
-  fabricId: string
-  fabricW: string
-  orderSumYard: number
-  deliveredYard: number
-  remainingYard: number
+  id: number;
+  purchaseOrder: string;
+  customerName: string;
+  fabricStructure: string;
+  fabricPattern: string;
+  fabricId: string;
+  fabricW: string;
+  orderSumYard: number;
+  deliveredYard: number;
+  remainingYard: number;
 }
 
 export default function BillCreatePage() {
   // Bill header
-  const [billType, setBillType] = useState('A')
-  const [billNo, setBillNo] = useState('')
-  const [billDate, setBillDate] = useState(new Date().toISOString().slice(0, 10))
-  const [remark, setRemark] = useState('ได้รับผ้าตามรายการข้างบนนี้ไว้ถูกต้องและเรียบร้อยแล้ว')
+  const [billType, setBillType] = useState("A");
+  const [billNo, setBillNo] = useState("");
+  const [billDate, setBillDate] = useState(
+    new Date().toISOString().slice(0, 10),
+  );
+  const [remark, setRemark] = useState(
+    "ได้รับผ้าตามรายการข้างบนนี้ไว้ถูกต้องและเรียบร้อยแล้ว",
+  );
 
   // Stock search
-  const [stockSearch, setStockSearch] = useState('')
-  const [stockResults, setStockResults] = useState<StockResult[]>([])
-  const [stockDropdown, setStockDropdown] = useState(false)
-  const [selectedStock, setSelectedStock] = useState<StockResult | null>(null)
+  const [stockSearch, setStockSearch] = useState("");
+  const [stockResults, setStockResults] = useState<StockResult[]>([]);
+  const [stockDropdown, setStockDropdown] = useState(false);
+  const [selectedStock, setSelectedStock] = useState<StockResult | null>(null);
 
   // Fabric fields (auto-filled, editable)
-  const [fabricStruct, setFabricStruct] = useState('')
-  const [fabricPattern, setFabricPattern] = useState('')
-  const [fabricW, setFabricW] = useState('')
+  const [fabricStruct, setFabricStruct] = useState("");
+  const [fabricPattern, setFabricPattern] = useState("");
+  const [fabricW, setFabricW] = useState("");
 
   // Customer (ผู้สั่ง)
-  const [orderer, setOrderer] = useState('')
-  const [ordererResults, setOrdererResults] = useState<CustomerOption[]>([])
-  const [ordererDropdown, setOrdererDropdown] = useState(false)
+  const [orderer, setOrderer] = useState("");
+  const [ordererResults, setOrdererResults] = useState<CustomerOption[]>([]);
+  const [ordererDropdown, setOrdererDropdown] = useState(false);
 
   // Receiver (ผู้รับ)
-  const [receiver, setReceiver] = useState('')
+  const [receiver, setReceiver] = useState("");
 
   // Deposit options
-  const [isDeposit, setIsDeposit] = useState(false)
-  const [altFabricStruct, setAltFabricStruct] = useState('')
-  const [altPurchaseOrder, setAltPurchaseOrder] = useState('')
+  const [isDeposit, setIsDeposit] = useState(false);
+  const [altFabricStruct, setAltFabricStruct] = useState("");
+  const [altPurchaseOrder, setAltPurchaseOrder] = useState("");
 
   // Pre-fill from order navigation
-  const [purchaseOrderParam, setPurchaseOrderParam] = useState('')
+  const [purchaseOrderParam, setPurchaseOrderParam] = useState("");
 
   // Order search (ตัดจากออร์เดอร์)
-  const [orderSearch, setOrderSearch] = useState('')
-  const [orderResults, setOrderResults] = useState<OrderSearchResult[]>([])
-  const [orderDropdown, setOrderDropdown] = useState(false)
-  const [linkedOrderId, setLinkedOrderId] = useState<number | null>(null)
-  const [linkedSO, setLinkedSO] = useState('')
+  const [orderSearch, setOrderSearch] = useState("");
+  const [orderResults, setOrderResults] = useState<OrderSearchResult[]>([]);
+  const [orderDropdown, setOrderDropdown] = useState(false);
+  const [linkedOrderId, setLinkedOrderId] = useState<number | null>(null);
+  const [linkedSO, setLinkedSO] = useState("");
 
   // Yards grid
-  const [yards, setYards] = useState<string[]>(Array(TOTAL_SLOTS).fill(''))
-  const inputRefs = useRef<(HTMLInputElement | null)[]>(Array(TOTAL_SLOTS).fill(null))
-  const [saving, setSaving] = useState(false)
+  const [yards, setYards] = useState<string[]>(Array(TOTAL_SLOTS).fill(""));
+  const inputRefs = useRef<(HTMLInputElement | null)[]>(
+    Array(TOTAL_SLOTS).fill(null),
+  );
+  const [saving, setSaving] = useState(false);
 
-  const [aiModalOpen, setAiModalOpen] = useState(false)
-  const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set())
-  const [aiLowConfidence, setAiLowConfidence] = useState<Set<string>>(new Set())
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set());
+  const [aiLowConfidence, setAiLowConfidence] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Pre-fill from order query params
   useEffect(() => {
-    const p = new URLSearchParams(window.location.search)
-    const customerName = p.get('customerName') || ''
-    const fs = p.get('fabricStruct') || ''
-    const fp = p.get('fabricPattern') || ''
-    const fw = p.get('fabricW') || ''
+    const p = new URLSearchParams(window.location.search);
+    const customerName = p.get("customerName") || "";
+    const fs = p.get("fabricStruct") || "";
+    const fp = p.get("fabricPattern") || "";
+    const fw = p.get("fabricW") || "";
 
-    if (customerName) { setOrderer(customerName); setReceiver(customerName) }
-    if (fs) setFabricStruct(fs)
-    if (fp) setFabricPattern(fp)
-    if (fw) setFabricW(fw)
-    if (p.get('purchaseOrder')) {
-      setPurchaseOrderParam(p.get('purchaseOrder')!)
-      setLinkedSO(p.get('purchaseOrder')!)
+    if (customerName) {
+      setOrderer(customerName);
+      setReceiver(customerName);
     }
-    if (p.get('orderId')) setLinkedOrderId(Number(p.get('orderId')))
+    if (fs) setFabricStruct(fs);
+    if (fp) setFabricPattern(fp);
+    if (fw) setFabricW(fw);
+    if (p.get("purchaseOrder")) {
+      setPurchaseOrderParam(p.get("purchaseOrder")!);
+      setLinkedSO(p.get("purchaseOrder")!);
+    }
+    if (p.get("orderId")) setLinkedOrderId(Number(p.get("orderId")));
 
     if (fs || customerName) {
-      const sp = new URLSearchParams()
-      if (fs) sp.set('fabricStruct', fs)
-      if (fp) sp.set('fabricPattern', fp)
-      if (fw) sp.set('fabricW', fw)
-      if (customerName) sp.set('customer', customerName)
-      fetch('/api/warehouse/stock/search?' + sp)
-        .then(r => r.json())
-        .then(data => {
+      const sp = new URLSearchParams();
+      if (fs) sp.set("fabricStruct", fs);
+      if (fp) sp.set("fabricPattern", fp);
+      if (fw) sp.set("fabricW", fw);
+      if (customerName) sp.set("customer", customerName);
+      fetch("/api/warehouse/stock/search?" + sp)
+        .then((r) => r.json())
+        .then((data) => {
           if (data.results?.length > 0) {
-            const s = data.results[0]
-            setSelectedStock(s)
-            setStockSearch(s.fabricStruct + (s.fabricPattern ? ' / ' + s.fabricPattern : '') + (s.fabricW ? ' ' + s.fabricW + '"' : ''))
-            setFabricStruct(s.fabricStruct)
-            setFabricPattern(s.fabricPattern ?? '')
-            setFabricW(s.fabricW ?? '')
+            const s = data.results[0];
+            setSelectedStock(s);
+            setStockSearch(
+              s.fabricStruct +
+                (s.fabricPattern ? " / " + s.fabricPattern : "") +
+                (s.fabricW ? " " + s.fabricW + '"' : ""),
+            );
+            setFabricStruct(s.fabricStruct);
+            setFabricPattern(s.fabricPattern ?? "");
+            setFabricW(s.fabricW ?? "");
           }
         })
-        .catch(() => {})
+        .catch(() => {});
     }
-  }, [])
+  }, []);
 
   // Auto-fill billNo when type changes
   useEffect(() => {
-    fetch('/api/warehouse/bill/next-vatno?type=' + billType)
-      .then(r => r.json())
-      .then(d => { if (d.nextNo) setBillNo(String(d.nextNo)) })
-      .catch(() => {})
-  }, [billType])
+    fetch("/api/warehouse/bill/next-vatno?type=" + billType)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.nextNo) setBillNo(String(d.nextNo));
+      })
+      .catch(() => {});
+  }, [billType]);
 
   // Stock search debounce
   useEffect(() => {
-    if (!stockSearch) { setStockResults([]); return }
+    if (!stockSearch) {
+      setStockResults([]);
+      return;
+    }
     const t = setTimeout(() => {
-      fetch('/api/warehouse/stock/search?q=' + encodeURIComponent(stockSearch))
-        .then(r => r.json())
-        .then(d => setStockResults(d.results ?? []))
-        .catch(() => {})
-    }, 300)
-    return () => clearTimeout(t)
-  }, [stockSearch])
+      fetch("/api/warehouse/stock/search?q=" + encodeURIComponent(stockSearch))
+        .then((r) => r.json())
+        .then((d) => setStockResults(d.results ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [stockSearch]);
 
   // Order search debounce
   useEffect(() => {
-    if (!orderSearch) { setOrderResults([]); return }
+    if (!orderSearch) {
+      setOrderResults([]);
+      return;
+    }
     const t = setTimeout(() => {
-      fetch('/api/warehouse/orders/search?q=' + encodeURIComponent(orderSearch))
-        .then(r => r.json())
-        .then(d => setOrderResults(d.orders ?? []))
-        .catch(() => {})
-    }, 300)
-    return () => clearTimeout(t)
-  }, [orderSearch])
+      fetch("/api/warehouse/orders/search?q=" + encodeURIComponent(orderSearch))
+        .then((r) => r.json())
+        .then((d) => setOrderResults(d.orders ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [orderSearch]);
 
   // Customer search debounce
   useEffect(() => {
-    if (!orderer || orderer.length < 1) { setOrdererResults([]); return }
+    if (!orderer || orderer.length < 1) {
+      setOrdererResults([]);
+      return;
+    }
     const t = setTimeout(() => {
-      fetch('/api/warehouse/customers?q=' + encodeURIComponent(orderer))
-        .then(r => r.json())
-        .then(d => setOrdererResults(d.customers ?? []))
-        .catch(() => {})
-    }, 300)
-    return () => clearTimeout(t)
-  }, [orderer])
+      fetch("/api/warehouse/customers?q=" + encodeURIComponent(orderer))
+        .then((r) => r.json())
+        .then((d) => setOrdererResults(d.customers ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [orderer]);
 
   const setYard = (idx: number, val: string) => {
-    setYards(prev => { const next = [...prev]; next[idx] = val; return next })
-  }
+    setYards((prev) => {
+      const next = [...prev];
+      next[idx] = val;
+      return next;
+    });
+  };
 
-  const yardNums = yards.map(v => parseFloat(v) || 0)
-  const totalFold = yardNums.filter(v => v > 0).length
-  const totalYard = yardNums.reduce((a, b) => a + b, 0)
+  const yardNums = yards.map((v) => parseFloat(v) || 0);
+  const totalFold = yardNums.filter((v) => v > 0).length;
+  const totalYard = yardNums.reduce((a, b) => a + b, 0);
 
   function handleAiResult(data: AiReadResult) {
-    const filled = new Set<string>()
-    const lowConf = new Set<string>()
-    if (data.fabricStruct != null)  { setFabricStruct(data.fabricStruct);   filled.add('fabricStruct') }
-    if (data.fabricPattern != null) { setFabricPattern(data.fabricPattern); filled.add('fabricPattern') }
-    if (data.fabricW != null)       { setFabricW(data.fabricW);             filled.add('fabricW') }
-    if (data.customer != null)      { setOrderer(data.customer); setReceiver(data.customer); filled.add('orderer') }
-    if (data.createDate != null)    { setBillDate(data.createDate);         filled.add('billDate') }
-    if (data.billRef != null)       { setBillNo(data.billRef);              filled.add('billNo') }
+    const filled = new Set<string>();
+    const lowConf = new Set<string>();
+    if (data.fabricStruct != null) {
+      setFabricStruct(data.fabricStruct);
+      filled.add("fabricStruct");
+    }
+    if (data.fabricPattern != null) {
+      setFabricPattern(data.fabricPattern);
+      filled.add("fabricPattern");
+    }
+    if (data.fabricW != null) {
+      setFabricW(data.fabricW);
+      filled.add("fabricW");
+    }
+    if (data.customer != null) {
+      setOrderer(data.customer);
+      setReceiver(data.customer);
+      filled.add("orderer");
+    }
+    if (data.createDate != null) {
+      setBillDate(data.createDate);
+      filled.add("billDate");
+    }
+    if (data.billRef != null) {
+      setBillNo(data.billRef);
+      filled.add("billNo");
+    }
     if (data.rows?.length) {
-      const next = Array(TOTAL_SLOTS).fill('')
-      data.rows.forEach((row, i) => { if (i < TOTAL_SLOTS) next[i] = String(row.yards) })
-      setYards(next)
+      const next = Array(TOTAL_SLOTS).fill("");
+      data.rows.forEach((row, i) => {
+        if (i < TOTAL_SLOTS) next[i] = String(row.yards);
+      });
+      setYards(next);
     }
     if (data.confidence) {
       Object.entries(data.confidence).forEach(([key, val]) => {
-        if (val === 'low' || val === 'medium') {
-          const mapped: Record<string, string> = { customer: 'orderer', billRef: 'billNo' }
-          lowConf.add(mapped[key] ?? key)
+        if (val === "low" || val === "medium") {
+          const mapped: Record<string, string> = {
+            customer: "orderer",
+            billRef: "billNo",
+          };
+          lowConf.add(mapped[key] ?? key);
         }
-      })
+      });
     }
-    setAiFilledFields(filled)
-    setAiLowConfidence(lowConf)
+    setAiFilledFields(filled);
+    setAiLowConfidence(lowConf);
   }
 
   function aiInputStyle(fieldName: string): React.CSSProperties {
-    if (aiLowConfidence.has(fieldName)) return { borderColor: '#d97706', background: '#fffbeb' }
-    if (aiFilledFields.has(fieldName))  return { borderColor: '#2563eb', background: '#eff6ff' }
-    return {}
+    if (aiLowConfidence.has(fieldName))
+      return { borderColor: "#d97706", background: "#fffbeb" };
+    if (aiFilledFields.has(fieldName))
+      return { borderColor: "#2563eb", background: "#eff6ff" };
+    return {};
   }
 
   function resetForm() {
-    setYards(Array(TOTAL_SLOTS).fill(''))
-    setStockSearch('')
-    setStockResults([])
-    setStockDropdown(false)
-    setSelectedStock(null)
-    setOrderSearch('')
-    setOrderResults([])
-    setOrderDropdown(false)
-    setFabricStruct('')
-    setFabricPattern('')
-    setFabricW('')
-    setOrderer('')
-    setReceiver('')
-    setIsDeposit(false)
-    setAltFabricStruct('')
-    setAltPurchaseOrder('')
-    setAiFilledFields(new Set())
-    setAiLowConfidence(new Set())
+    setYards(Array(TOTAL_SLOTS).fill(""));
+    setStockSearch("");
+    setStockResults([]);
+    setStockDropdown(false);
+    setSelectedStock(null);
+    setOrderSearch("");
+    setOrderResults([]);
+    setOrderDropdown(false);
+    setFabricStruct("");
+    setFabricPattern("");
+    setFabricW("");
+    setOrderer("");
+    setReceiver("");
+    setIsDeposit(false);
+    setAltFabricStruct("");
+    setAltPurchaseOrder("");
+    setAiFilledFields(new Set());
+    setAiLowConfidence(new Set());
   }
 
   async function handleSave() {
     if (!billType || !orderer || totalFold === 0) {
-      alert('กรุณากรอกข้อมูลให้ครบ: ประเภทบิล, ผู้สั่ง, และหลาผ้าอย่างน้อย 1 ช่อง')
-      return
+      alert(
+        "กรุณากรอกข้อมูลให้ครบ: ประเภทบิล, ผู้สั่ง, และหลาผ้าอย่างน้อย 1 ช่อง",
+      );
+      return;
     }
-    setSaving(true)
+    setSaving(true);
     try {
-      const res = await fetch('/api/warehouse/bill', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/warehouse/bill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vatType: billType,
           vatNo: Number(billNo),
@@ -258,15 +316,15 @@ export default function BillCreatePage() {
           purchaseOrder: purchaseOrderParam || undefined,
           orderId: linkedOrderId || undefined,
         }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? 'บันทึกไม่สำเร็จ')
-      alert(`บันทึกสำเร็จ ${data.count} รายการ บิลเลขที่ ${data.vatNo}`)
-      resetForm()
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "บันทึกไม่สำเร็จ");
+      alert(`บันทึกสำเร็จ ${data.count} รายการ บิลเลขที่ ${data.vatNo}`);
+      resetForm();
     } catch (err: any) {
-      alert('เกิดข้อผิดพลาด: ' + err.message)
+      alert("เกิดข้อผิดพลาด: " + err.message);
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
@@ -277,22 +335,64 @@ export default function BillCreatePage() {
           <h1 className="text-lg font-semibold text-gray-900">เปิดบิลผ้า</h1>
           <p className="text-xs text-gray-500">สร้างบิลส่งผ้าใหม่</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           {aiFilledFields.size > 0 && (
             <>
-              <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>
+              <span
+                style={{
+                  fontSize: "11px",
+                  padding: "2px 8px",
+                  borderRadius: "6px",
+                  background: "#eff6ff",
+                  color: "#1d4ed8",
+                  border: "1px solid #bfdbfe",
+                }}
+              >
                 AI กรอก {aiFilledFields.size} field
               </span>
               {aiLowConfidence.size > 0 && (
-                <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '6px', background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' }}>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    padding: "2px 8px",
+                    borderRadius: "6px",
+                    background: "#fffbeb",
+                    color: "#92400e",
+                    border: "1px solid #fde68a",
+                  }}
+                >
                   ตรวจสอบ {aiLowConfidence.size} field (สีส้ม)
                 </span>
               )}
             </>
           )}
-          <button type="button" onClick={() => setAiModalOpen(true)}
-            style={{ padding: '6px 14px', fontSize: '13px', fontWeight: 500, borderRadius: '6px', border: '1px solid #2563eb', background: '#eff6ff', color: '#1d4ed8', cursor: 'pointer' }}>
-            📷 อ่านจากรูปถ่าย
+          <button
+            type="button"
+            onClick={() => setAiModalOpen(true)}
+            style={{
+              padding: "6px 14px",
+              fontSize: "13px",
+              fontWeight: 500,
+              borderRadius: "6px",
+              border: "1px solid #2563eb",
+              background: "#eff6ff",
+              color: "#1d4ed8",
+              cursor: "pointer",
+              display: 'flex'
+            }}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              fill="currentColor"
+              className="bi bi-camera-fill mr-1"
+              viewBox="0 0 16 16"
+            >
+              <path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0" />
+              <path d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4zm.5 2a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1m9 2.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0" />
+            </svg>{" "}
+            อ่านจากรูปถ่าย
           </button>
         </div>
       </div>
@@ -307,12 +407,16 @@ export default function BillCreatePage() {
       {/* Header form */}
       <div className="bg-white border border-gray-200 shadow-sm p-4 mb-4 w-full">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-
           {/* Bill type */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">ประเภทบิล</label>
-            <select value={billType} onChange={e => setBillType(e.target.value)}
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm h-8.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              ประเภทบิล
+            </label>
+            <select
+              value={billType}
+              onChange={(e) => setBillType(e.target.value)}
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm h-8.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
               <option value="A">A</option>
               <option value="B">B</option>
               <option value="C">C</option>
@@ -321,28 +425,47 @@ export default function BillCreatePage() {
 
           {/* Bill number */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">เลขที่บิล</label>
-            <input value={billNo} onChange={e => setBillNo(e.target.value)}
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              เลขที่บิล
+            </label>
+            <input
+              value={billNo}
+              onChange={(e) => setBillNo(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={aiInputStyle('billNo')}
-              placeholder="เลขที่บิล" />
+              style={aiInputStyle("billNo")}
+              placeholder="เลขที่บิล"
+            />
           </div>
 
           {/* Bill date */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">วันที่</label>
-            <input type="date" value={billDate} onChange={e => setBillDate(e.target.value)}
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              วันที่
+            </label>
+            <input
+              type="date"
+              value={billDate}
+              onChange={(e) => setBillDate(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={aiInputStyle('billDate')} />
+              style={aiInputStyle("billDate")}
+            />
           </div>
 
           {/* Stock search - full width */}
           <div className="md:col-span-3 relative">
-            <label className="block text-xs font-medium text-gray-700 mb-1">ตัดจากสต็อก (เลือกรายการ)</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              ตัดจากสต็อก (เลือกรายการ)
+            </label>
             <input
               value={stockSearch}
-              onChange={e => { setStockSearch(e.target.value); setStockDropdown(true); setSelectedStock(null) }}
-              onFocus={() => { if (stockSearch) setStockDropdown(true) }}
+              onChange={(e) => {
+                setStockSearch(e.target.value);
+                setStockDropdown(true);
+                setSelectedStock(null);
+              }}
+              onFocus={() => {
+                if (stockSearch) setStockDropdown(true);
+              }}
               onBlur={() => setTimeout(() => setStockDropdown(false), 200)}
               placeholder="พิมพ์ลูกค้า, โครงสร้างผ้า, ลาย, หน้ากว้าง, หรือรหัสผ้า..."
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -350,41 +473,93 @@ export default function BillCreatePage() {
             {stockDropdown && stockResults.length > 0 && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-64 overflow-y-auto">
                 {stockResults.map((s, i) => {
-                  const remaining = (s.produced_fold ?? 0) - (s.used_fold ?? 0)
+                  const remaining = (s.produced_fold ?? 0) - (s.used_fold ?? 0);
                   return (
-                    <button key={i} type="button"
+                    <button
+                      key={i}
+                      type="button"
                       onMouseDown={() => {
-                        setStockSearch(s.fabricStruct + (s.fabricPattern ? ' / ' + s.fabricPattern : '') + (s.fabricW ? ' ' + s.fabricW + '"' : ''))
-                        setFabricStruct(s.fabricStruct)
-                        setFabricPattern(s.fabricPattern ?? '')
-                        setFabricW(s.fabricW ?? '')
-                        setOrderer(s.customer)
-                        setReceiver(s.customer)
-                        setSelectedStock(s)
-                        setStockDropdown(false)
+                        setStockSearch(
+                          s.fabricStruct +
+                            (s.fabricPattern ? " / " + s.fabricPattern : "") +
+                            (s.fabricW ? " " + s.fabricW + '"' : ""),
+                        );
+                        setFabricStruct(s.fabricStruct);
+                        setFabricPattern(s.fabricPattern ?? "");
+                        setFabricW(s.fabricW ?? "");
+                        setOrderer(s.customer);
+                        setReceiver(s.customer);
+                        setSelectedStock(s);
+                        setStockDropdown(false);
                       }}
-                      className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs border-b border-gray-100 last:border-0">
+                      className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs border-b border-gray-100 last:border-0"
+                    >
                       <div className="font-medium text-gray-800">
-                        {s.fabricStruct}{s.fabricPattern ? ` / ${s.fabricPattern}` : ''}{s.fabricW ? ` ${s.fabricW}"` : ''}
-                        {s.fabricCode ? <span className="text-gray-400 ml-1">[{s.fabricCode}]</span> : null}
+                        {s.fabricStruct}
+                        {s.fabricPattern ? ` / ${s.fabricPattern}` : ""}
+                        {s.fabricW ? ` ${s.fabricW}"` : ""}
+                        {s.fabricCode ? (
+                          <span className="text-gray-400 ml-1">
+                            [{s.fabricCode}]
+                          </span>
+                        ) : null}
                       </div>
                       <div className="flex flex-wrap gap-3 mt-0.5 text-gray-500">
                         <span>ลูกค้า: {s.customer}</span>
-                        <span className="text-blue-600">ผลิต: {Number(s.produced_fold).toLocaleString()} พับ</span>
-                        <span className="text-orange-600">ใช้ไป: {Number(s.used_fold).toLocaleString()} พับ</span>
-                        <span style={{ color: remaining >= 0 ? '#15803d' : '#dc2626', fontWeight: 600 }}>คงเหลือ: {remaining.toLocaleString()} พับ</span>
+                        <span className="text-blue-600">
+                          ผลิต: {Number(s.produced_fold).toLocaleString()} พับ
+                        </span>
+                        <span className="text-orange-600">
+                          ใช้ไป: {Number(s.used_fold).toLocaleString()} พับ
+                        </span>
+                        <span
+                          style={{
+                            color: remaining >= 0 ? "#15803d" : "#dc2626",
+                            fontWeight: 600,
+                          }}
+                        >
+                          คงเหลือ: {remaining.toLocaleString()} พับ
+                        </span>
                       </div>
                     </button>
-                  )
+                  );
                 })}
               </div>
             )}
             {selectedStock && (
               <div className="mt-1 px-3 py-1.5 bg-blue-50 border border-blue-200 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-                <span className="text-blue-700">ผลิตแล้ว: {Number(selectedStock.produced_fold).toLocaleString()} พับ / {Math.round(Number(selectedStock.produced_yard)).toLocaleString()} หลา</span>
-                <span className="text-orange-700">ใช้ไป: {Number(selectedStock.used_fold).toLocaleString()} พับ / {Math.round(Number(selectedStock.used_yard)).toLocaleString()} หลา</span>
-                <span className="font-semibold" style={{ color: (selectedStock.produced_fold - selectedStock.used_fold) >= 0 ? '#15803d' : '#dc2626' }}>
-                  คงเหลือ: {(selectedStock.produced_fold - selectedStock.used_fold).toLocaleString()} พับ / {Math.round(selectedStock.produced_yard - selectedStock.used_yard).toLocaleString()} หลา
+                <span className="text-blue-700">
+                  ผลิตแล้ว:{" "}
+                  {Number(selectedStock.produced_fold).toLocaleString()} พับ /{" "}
+                  {Math.round(
+                    Number(selectedStock.produced_yard),
+                  ).toLocaleString()}{" "}
+                  หลา
+                </span>
+                <span className="text-orange-700">
+                  ใช้ไป: {Number(selectedStock.used_fold).toLocaleString()} พับ
+                  /{" "}
+                  {Math.round(Number(selectedStock.used_yard)).toLocaleString()}{" "}
+                  หลา
+                </span>
+                <span
+                  className="font-semibold"
+                  style={{
+                    color:
+                      selectedStock.produced_fold - selectedStock.used_fold >= 0
+                        ? "#15803d"
+                        : "#dc2626",
+                  }}
+                >
+                  คงเหลือ:{" "}
+                  {(
+                    selectedStock.produced_fold - selectedStock.used_fold
+                  ).toLocaleString()}{" "}
+                  พับ /{" "}
+                  {Math.round(
+                    selectedStock.produced_yard - selectedStock.used_yard,
+                  ).toLocaleString()}{" "}
+                  หลา
                 </span>
               </div>
             )}
@@ -392,11 +567,18 @@ export default function BillCreatePage() {
 
           {/* Order search - full width */}
           <div className="md:col-span-3 relative">
-            <label className="block text-xs font-medium text-gray-700 mb-1">ตัดจากออร์เดอร์ (เลือก SO)</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              ตัดจากออร์เดอร์ (เลือก SO)
+            </label>
             <input
               value={orderSearch}
-              onChange={e => { setOrderSearch(e.target.value); setOrderDropdown(true) }}
-              onFocus={() => { if (orderSearch) setOrderDropdown(true) }}
+              onChange={(e) => {
+                setOrderSearch(e.target.value);
+                setOrderDropdown(true);
+              }}
+              onFocus={() => {
+                if (orderSearch) setOrderDropdown(true);
+              }}
               onBlur={() => setTimeout(() => setOrderDropdown(false), 200)}
               placeholder="พิมพ์เลข SO หรือชื่อลูกค้า..."
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
@@ -404,52 +586,78 @@ export default function BillCreatePage() {
             {orderDropdown && orderResults.length > 0 && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-64 overflow-y-auto">
                 {orderResults.map((o, i) => (
-                  <button key={i} type="button"
+                  <button
+                    key={i}
+                    type="button"
                     onMouseDown={async () => {
-                      setOrderSearch(o.purchaseOrder)
-                      setFabricStruct(o.fabricStructure)
-                      setFabricPattern(o.fabricPattern)
-                      setFabricW(o.fabricW)
-                      setOrderer(o.customerName)
-                      setReceiver(o.customerName)
-                      setPurchaseOrderParam(o.purchaseOrder)
-                      setLinkedOrderId(o.id)
-                      setLinkedSO(o.purchaseOrder)
-                      setOrderDropdown(false)
-                      setSelectedStock(null)
-                      setStockSearch('')
+                      setOrderSearch(o.purchaseOrder);
+                      setFabricStruct(o.fabricStructure);
+                      setFabricPattern(o.fabricPattern);
+                      setFabricW(o.fabricW);
+                      setOrderer(o.customerName);
+                      setReceiver(o.customerName);
+                      setPurchaseOrderParam(o.purchaseOrder);
+                      setLinkedOrderId(o.id);
+                      setLinkedSO(o.purchaseOrder);
+                      setOrderDropdown(false);
+                      setSelectedStock(null);
+                      setStockSearch("");
                       // Auto-match stock by order's fabric details
                       try {
-                        const sp = new URLSearchParams()
-                        if (o.fabricStructure) sp.set('fabricStruct', o.fabricStructure)
-                        if (o.fabricPattern) sp.set('fabricPattern', o.fabricPattern)
-                        if (o.fabricW) sp.set('fabricW', o.fabricW)
-                        if (o.customerName) sp.set('customer', o.customerName)
-                        const res = await fetch('/api/warehouse/stock/search?' + sp)
-                        const data = await res.json()
+                        const sp = new URLSearchParams();
+                        if (o.fabricStructure)
+                          sp.set("fabricStruct", o.fabricStructure);
+                        if (o.fabricPattern)
+                          sp.set("fabricPattern", o.fabricPattern);
+                        if (o.fabricW) sp.set("fabricW", o.fabricW);
+                        if (o.customerName) sp.set("customer", o.customerName);
+                        const res = await fetch(
+                          "/api/warehouse/stock/search?" + sp,
+                        );
+                        const data = await res.json();
                         if (data.results?.length > 0) {
-                          const s = data.results[0]
-                          setSelectedStock(s)
-                          setStockSearch(s.fabricStruct + (s.fabricPattern ? ' / ' + s.fabricPattern : '') + (s.fabricW ? ' ' + s.fabricW + '"' : ''))
-                          setFabricStruct(s.fabricStruct)
-                          setFabricPattern(s.fabricPattern ?? '')
-                          setFabricW(s.fabricW ?? '')
+                          const s = data.results[0];
+                          setSelectedStock(s);
+                          setStockSearch(
+                            s.fabricStruct +
+                              (s.fabricPattern ? " / " + s.fabricPattern : "") +
+                              (s.fabricW ? " " + s.fabricW + '"' : ""),
+                          );
+                          setFabricStruct(s.fabricStruct);
+                          setFabricPattern(s.fabricPattern ?? "");
+                          setFabricW(s.fabricW ?? "");
                         }
                       } catch {}
                     }}
-                    className="w-full text-left px-3 py-2 hover:bg-green-50 text-xs border-b border-gray-100 last:border-0">
+                    className="w-full text-left px-3 py-2 hover:bg-green-50 text-xs border-b border-gray-100 last:border-0"
+                  >
                     <div className="flex items-center gap-2">
-                      <span className="font-mono font-semibold text-green-700">{o.purchaseOrder}</span>
-                      <span className="text-gray-700 font-medium">{o.customerName}</span>
-                      {o.fabricId && <span className="text-gray-400">[{o.fabricId}]</span>}
+                      <span className="font-mono font-semibold text-green-700">
+                        {o.purchaseOrder}
+                      </span>
+                      <span className="text-gray-700 font-medium">
+                        {o.customerName}
+                      </span>
+                      {o.fabricId && (
+                        <span className="text-gray-400">[{o.fabricId}]</span>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-3 mt-0.5 text-gray-500">
                       {o.fabricStructure && <span>{o.fabricStructure}</span>}
                       {o.fabricPattern && <span>{o.fabricPattern}</span>}
                       {o.fabricW && <span>{o.fabricW}"</span>}
-                      <span className="text-blue-600">สั่ง: {Number(o.orderSumYard).toLocaleString()} หลา</span>
-                      <span className="text-orange-600">ส่งแล้ว: {Number(o.deliveredYard).toLocaleString()} หลา</span>
-                      <span style={{ color: o.remainingYard > 0 ? '#15803d' : '#2563eb', fontWeight: 600 }}>
+                      <span className="text-blue-600">
+                        สั่ง: {Number(o.orderSumYard).toLocaleString()} หลา
+                      </span>
+                      <span className="text-orange-600">
+                        ส่งแล้ว: {Number(o.deliveredYard).toLocaleString()} หลา
+                      </span>
+                      <span
+                        style={{
+                          color: o.remainingYard > 0 ? "#15803d" : "#2563eb",
+                          fontWeight: 600,
+                        }}
+                      >
                         คงค้าง: {Number(o.remainingYard).toLocaleString()} หลา
                       </span>
                     </div>
@@ -459,61 +667,87 @@ export default function BillCreatePage() {
             )}
             {linkedSO && (
               <div className="mt-1 px-3 py-1.5 bg-green-50 border border-green-200 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-                <span className="font-mono font-semibold text-green-800">SO: {linkedSO}</span>
-                <span className="text-green-700">เชื่อมออร์เดอร์นี้แล้ว — ยอดคงค้างจะอัปเดตอัตโนมัติเมื่อบันทึก</span>
+                <span className="font-mono font-semibold text-green-800">
+                  SO: {linkedSO}
+                </span>
+                <span className="text-green-700">
+                  เชื่อมออร์เดอร์นี้แล้ว — ยอดคงค้างจะอัปเดตอัตโนมัติเมื่อบันทึก
+                </span>
               </div>
             )}
           </div>
 
           {/* Fabric fields - auto-filled, editable */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">โครงสร้างผ้า</label>
-            <input value={fabricStruct} onChange={e => setFabricStruct(e.target.value)}
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              โครงสร้างผ้า
+            </label>
+            <input
+              value={fabricStruct}
+              onChange={(e) => setFabricStruct(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={aiInputStyle('fabricStruct')}
-              placeholder="โครงสร้างผ้า" />
+              style={aiInputStyle("fabricStruct")}
+              placeholder="โครงสร้างผ้า"
+            />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">ลายผ้า</label>
-            <input value={fabricPattern} onChange={e => setFabricPattern(e.target.value)}
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              ลายผ้า
+            </label>
+            <input
+              value={fabricPattern}
+              onChange={(e) => setFabricPattern(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={aiInputStyle('fabricPattern')}
-              placeholder="ลายผ้า" />
+              style={aiInputStyle("fabricPattern")}
+              placeholder="ลายผ้า"
+            />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">หน้ากว้าง (นิ้ว)</label>
-            <input value={fabricW} onChange={e => setFabricW(e.target.value)}
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              หน้ากว้าง (นิ้ว)
+            </label>
+            <input
+              value={fabricW}
+              onChange={(e) => setFabricW(e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={aiInputStyle('fabricW')}
-              placeholder="หน้ากว้าง" />
+              style={aiInputStyle("fabricW")}
+              placeholder="หน้ากว้าง"
+            />
           </div>
 
           {/* Orderer with autocomplete */}
           <div className="relative">
-            <label className="block text-xs font-medium text-gray-700 mb-1">ผู้สั่ง (Order by)</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              ผู้สั่ง (Order by)
+            </label>
             <input
               value={orderer}
-              onChange={e => {
-                setOrderer(e.target.value)
-                setReceiver(e.target.value)
-                setOrdererDropdown(true)
+              onChange={(e) => {
+                setOrderer(e.target.value);
+                setReceiver(e.target.value);
+                setOrdererDropdown(true);
               }}
-              onFocus={() => { if (orderer) setOrdererDropdown(true) }}
+              onFocus={() => {
+                if (orderer) setOrdererDropdown(true);
+              }}
               onBlur={() => setTimeout(() => setOrdererDropdown(false), 200)}
               placeholder="พิมพ์ชื่อลูกค้า..."
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={aiInputStyle('orderer')}
+              style={aiInputStyle("orderer")}
             />
             {ordererDropdown && ordererResults.length > 0 && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
-                {ordererResults.map(c => (
-                  <button key={c.id} type="button"
+                {ordererResults.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
                     onMouseDown={() => {
-                      setOrderer(c.name)
-                      setReceiver(c.name)
-                      setOrdererDropdown(false)
+                      setOrderer(c.name);
+                      setReceiver(c.name);
+                      setOrdererDropdown(false);
                     }}
-                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0"
+                  >
                     {c.name}
                   </button>
                 ))}
@@ -523,10 +757,12 @@ export default function BillCreatePage() {
 
           {/* Receiver - editable, auto-filled from orderer */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">ผู้รับ (Received by)</label>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              ผู้รับ (Received by)
+            </label>
             <input
               value={receiver}
-              onChange={e => setReceiver(e.target.value)}
+              onChange={(e) => setReceiver(e.target.value)}
               placeholder="ชื่อผู้รับ (ถ้าต่างจากผู้สั่ง แก้ได้)"
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
@@ -534,31 +770,54 @@ export default function BillCreatePage() {
 
           {/* Remark */}
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">หมายเหตุ</label>
-            <input value={remark} onChange={e => setRemark(e.target.value)}
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              หมายเหตุ
+            </label>
+            <input
+              value={remark}
+              onChange={(e) => setRemark(e.target.value)}
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
         </div>
 
         {/* Extra options */}
         <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={isDeposit} onChange={e => setIsDeposit(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-            <span className="text-sm font-medium text-gray-700">ฝากจัดเก็บ</span>
-            <span className="text-xs text-gray-400">(จะแสดงในสต็อกผ้าฝากจัดเก็บ)</span>
+            <input
+              type="checkbox"
+              checked={isDeposit}
+              onChange={(e) => setIsDeposit(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm font-medium text-gray-700">
+              ฝากจัดเก็บ
+            </span>
+            <span className="text-xs text-gray-400">
+              (จะแสดงในสต็อกผ้าฝากจัดเก็บ)
+            </span>
           </label>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">แทนโครงสร้างผ้า (ถ้ามี)</label>
-            <input value={altFabricStruct} onChange={e => setAltFabricStruct(e.target.value)}
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              แทนโครงสร้างผ้า (ถ้ามี)
+            </label>
+            <input
+              value={altFabricStruct}
+              onChange={(e) => setAltFabricStruct(e.target.value)}
               placeholder="ใช้แทนโครงสร้างผ้าจริงในพิมพ์บิล..."
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">แทนผู้สั่งซื้อ (ถ้ามี)</label>
-            <input value={altPurchaseOrder} onChange={e => setAltPurchaseOrder(e.target.value)}
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              แทนผู้สั่งซื้อ (ถ้ามี)
+            </label>
+            <input
+              value={altPurchaseOrder}
+              onChange={(e) => setAltPurchaseOrder(e.target.value)}
               placeholder="ใช้แทนผู้สั่งซื้อจริงในพิมพ์บิล..."
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
         </div>
 
@@ -566,8 +825,15 @@ export default function BillCreatePage() {
         {totalFold > 0 && (
           <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-4 text-xs">
             <span className="text-gray-500">สรุป:</span>
-            <span className="font-semibold text-blue-700">{totalFold.toLocaleString()} พับ</span>
-            <span className="font-semibold text-gray-700">{totalYard.toLocaleString(undefined, {maximumFractionDigits:2})} หลา</span>
+            <span className="font-semibold text-blue-700">
+              {totalFold.toLocaleString()} พับ
+            </span>
+            <span className="font-semibold text-gray-700">
+              {totalYard.toLocaleString(undefined, {
+                maximumFractionDigits: 2,
+              })}{" "}
+              หลา
+            </span>
           </div>
         )}
       </div>
@@ -579,7 +845,11 @@ export default function BillCreatePage() {
             <thead>
               <tr>
                 {Array.from({ length: GROUPS }, (_, g) => (
-                  <th key={g} colSpan={2} className="border border-gray-400 px-2 py-1 text-center bg-gray-100 font-medium text-gray-600">
+                  <th
+                    key={g}
+                    colSpan={2}
+                    className="border border-gray-400 px-2 py-1 text-center bg-gray-100 font-medium text-gray-600"
+                  >
                     ลำดับ&nbsp;&nbsp;หลา
                   </th>
                 ))}
@@ -587,33 +857,44 @@ export default function BillCreatePage() {
             </thead>
             <tbody>
               {Array.from({ length: ROWS }, (_, r) => (
-                <tr key={r} className={r % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                <tr
+                  key={r}
+                  className={r % 2 === 0 ? "bg-white" : "bg-gray-50/50"}
+                >
                   {Array.from({ length: GROUPS }, (_, g) => {
-                    const idx = g * ROWS + r
-                    const slotNo = idx + 1
+                    const idx = g * ROWS + r;
+                    const slotNo = idx + 1;
                     return (
-                      <td key={g} colSpan={2} className="border border-gray-200 p-0">
+                      <td
+                        key={g}
+                        colSpan={2}
+                        className="border border-gray-200 p-0"
+                      >
                         <div className="flex items-center">
-                          <span className="text-gray-400 text-xs w-7 text-right pr-1 select-none flex-shrink-0">{slotNo}</span>
+                          <span className="text-gray-400 text-xs w-7 text-right pr-1 select-none flex-shrink-0">
+                            {slotNo}
+                          </span>
                           <input
-                            ref={el => { inputRefs.current[idx] = el }}
+                            ref={(el) => {
+                              inputRefs.current[idx] = el;
+                            }}
                             type="number"
                             min="0"
                             step="0.5"
                             value={yards[idx]}
-                            onChange={e => setYard(idx, e.target.value)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault()
-                                const next = inputRefs.current[idx + 1]
-                                if (next) next.focus()
+                            onChange={(e) => setYard(idx, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                const next = inputRefs.current[idx + 1];
+                                if (next) next.focus();
                               }
                             }}
                             className="w-full text-right text-xs border-0 outline-none py-1 px-1 focus:bg-yellow-50"
                           />
                         </div>
                       </td>
-                    )
+                    );
                   })}
                 </tr>
               ))}
@@ -621,14 +902,25 @@ export default function BillCreatePage() {
             <tfoot>
               <tr className="bg-yellow-100 font-semibold border-t-2 border-gray-400">
                 {Array.from({ length: GROUPS }, (_, g) => {
-                  const groupSum = yards.slice(g * ROWS, (g + 1) * ROWS)
-                    .reduce((s, v) => s + (parseFloat(v) || 0), 0)
+                  const groupSum = yards
+                    .slice(g * ROWS, (g + 1) * ROWS)
+                    .reduce((s, v) => s + (parseFloat(v) || 0), 0);
                   return (
-                    <td key={g} colSpan={2} className="border border-gray-400 px-2 py-1.5 text-center">
+                    <td
+                      key={g}
+                      colSpan={2}
+                      className="border border-gray-400 px-2 py-1.5 text-center"
+                    >
                       <div className="text-xs text-gray-500">รวม:</div>
-                      <div className="text-sm font-bold text-gray-800">{groupSum > 0 ? groupSum.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-'}</div>
+                      <div className="text-sm font-bold text-gray-800">
+                        {groupSum > 0
+                          ? groupSum.toLocaleString(undefined, {
+                              maximumFractionDigits: 2,
+                            })
+                          : "-"}
+                      </div>
                     </td>
-                  )
+                  );
                 })}
               </tr>
             </tfoot>
@@ -638,19 +930,28 @@ export default function BillCreatePage() {
 
       {/* Action buttons */}
       <div className="flex items-center justify-end gap-3">
-        <button type="button" onClick={resetForm}
-          className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600">
+        <button
+          type="button"
+          onClick={resetForm}
+          className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600"
+        >
           ล้างฟอร์ม
         </button>
-        <button onClick={handleSave} disabled={saving}
-          className="px-6 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium disabled:opacity-50">
-          {saving ? 'กำลังบันทึก...' : 'บันทึกรายการถัดไป'}
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-6 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium disabled:opacity-50"
+        >
+          {saving ? "กำลังบันทึก..." : "บันทึกรายการถัดไป"}
         </button>
-        <button onClick={handleSave} disabled={saving}
-          className="px-6 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium disabled:opacity-50">
-          {saving ? 'กำลังบันทึก...' : 'บันทึกเสร็จสิ้น'}
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-6 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium disabled:opacity-50"
+        >
+          {saving ? "กำลังบันทึก..." : "บันทึกเสร็จสิ้น"}
         </button>
       </div>
     </div>
-  )
+  );
 }
