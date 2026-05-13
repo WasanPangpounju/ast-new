@@ -217,15 +217,21 @@ export default function WarehouseOrdersPage() {
                         : <span className="text-gray-300">-</span>}
                     </td>
                     <td className="px-3 py-2.5 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => openDetail(order)}
-                          className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors">
-                          รายละเอียด
-                        </button>
-                        <button onClick={() => handleSend(order)}
-                          className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
-                          ส่ง
-                        </button>
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openDetail(order)}
+                            className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors">
+                            รายละเอียด
+                          </button>
+                          <button onClick={() => handleSend(order)}
+                            className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">
+                            ส่ง
+                          </button>
+                        </div>
+                        <a href={`/sales/orders/${order.id}/structure`} target="_blank"
+                          className="text-xs px-2 py-1 bg-teal-50 text-teal-700 border border-teal-300 rounded hover:bg-teal-100 transition-colors whitespace-nowrap">
+                          ใบโครงสร้าง
+                        </a>
                       </div>
                     </td>
                   </tr>
