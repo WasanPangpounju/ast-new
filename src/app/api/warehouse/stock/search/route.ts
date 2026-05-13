@@ -43,8 +43,8 @@ export async function GET(request: NextRequest) {
 
   if (field === 'fabricCode') {
     const pattern = `%${q}%`
-    const results = await prisma.$queryRaw<{ fabricCode: string; fabricStruct: string; fabricPattern: string }[]>`
-      SELECT DISTINCT s."fabricCode", s."fabricStruct", s."fabricPattern"
+    const results = await prisma.$queryRaw<{ fabricCode: string; fabricStruct: string; fabricPattern: string; fabricW: string }[]>`
+      SELECT DISTINCT s."fabricCode", s."fabricStruct", s."fabricPattern", s."fabricW"
       FROM stockfabrics s
       WHERE s.deleted_at IS NULL
         AND s."fabricCode" IS NOT NULL AND s."fabricCode" <> ''

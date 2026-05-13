@@ -7,23 +7,12 @@ export async function GET(request: NextRequest) {
 
   if (q.length < 1) return Response.json({ companies: [] })
 
-  const [customers, suppliers] = await Promise.all([
-    prisma.customer.findMany({
-      where: { deletedAt: null, name: { contains: q, mode: 'insensitive' } },
-      select: { name: true },
-      take: 10,
-    }),
-    prisma.supplier.findMany({
-      where: { deletedAt: null, name: { contains: q, mode: 'insensitive' } },
-      select: { name: true },
-      take: 10,
-    }),
-  ])
+  const suppliers = await prisma.supplier.findMany({
+    where: { deletedAt: null, name: { contains: q, mode: 'insensitive' } },
+    select: { name: true },
+    orderBy: { name: 'asc' },
+    take: 20,
+  })
 
-  const seen = new Set<string>()
-  const companies: string[] = []
-  for (const { name } of [...customers, ...suppliers]) {
-    if (!seen.has(name)) { seen.add(name); companies.push(name) }
-  }
-  return Response.json({ companies: companies.slice(0, 20) })
+  return Response.json({ companies: suppliers.map(s => s.name) })
 }

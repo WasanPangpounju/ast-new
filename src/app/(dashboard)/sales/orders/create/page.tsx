@@ -67,15 +67,6 @@ function YarnAC({ value, onChange, side, placeholder }: {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!value) { setSugs([]); return }
-    const t = setTimeout(() => {
-      fetch(`/api/sales/autocomplete/yarns?q=${encodeURIComponent(value)}&type=${side}`)
-        .then(r => r.json()).then(d => setSugs(d.yarns ?? []))
-    }, 200)
-    return () => clearTimeout(t)
-  }, [value, side])
-
-  useEffect(() => {
     function onDown(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
@@ -83,9 +74,21 @@ function YarnAC({ value, onChange, side, placeholder }: {
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') { setOpen(false); return }
+    if (e.key === ' ') {
+      const q = value.trim()
+      if (!q) return
+      fetch(`/api/sales/autocomplete/yarns?q=${encodeURIComponent(q)}&type=${side}`)
+        .then(r => r.json())
+        .then(d => { setSugs(d.yarns ?? []); setOpen(true) })
+    }
+  }
+
   return (
     <div ref={ref} className="relative">
-      <input value={value} onChange={e => { onChange(e.target.value); setOpen(true) }} placeholder={placeholder}
+      <input value={value} onChange={e => onChange(e.target.value)} onKeyDown={handleKeyDown}
+        placeholder={placeholder}
         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
       {open && sugs.length > 0 && (
         <div className="absolute z-30 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto">
@@ -99,7 +102,7 @@ function YarnAC({ value, onChange, side, placeholder }: {
   )
 }
 
-// ─── Company autocomplete (pulls from customers + suppliers) ──────────────────
+// ─── Company autocomplete (pulls from suppliers) ──────────────────────────────
 
 function CompAC({ value, onChange }: {
   value: string; onChange: (v: string) => void
@@ -109,15 +112,6 @@ function CompAC({ value, onChange }: {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!value) { setSugs([]); return }
-    const t = setTimeout(() => {
-      fetch(`/api/sales/autocomplete/yarn-companies?q=${encodeURIComponent(value)}`)
-        .then(r => r.json()).then(d => setSugs(d.companies ?? []))
-    }, 200)
-    return () => clearTimeout(t)
-  }, [value])
-
-  useEffect(() => {
     function onDown(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
     }
@@ -125,9 +119,21 @@ function CompAC({ value, onChange }: {
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Escape') { setOpen(false); return }
+    if (e.key === ' ') {
+      const q = value.trim()
+      if (!q) return
+      fetch(`/api/sales/autocomplete/yarn-companies?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(d => { setSugs(d.companies ?? []); setOpen(true) })
+    }
+  }
+
   return (
     <div ref={ref} className="relative">
-      <input value={value} onChange={e => { onChange(e.target.value); setOpen(true) }} placeholder="บริษัท"
+      <input value={value} onChange={e => onChange(e.target.value)} onKeyDown={handleKeyDown}
+        placeholder="บริษัท"
         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
       {open && sugs.length > 0 && (
         <div className="absolute z-30 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto">
@@ -151,6 +157,38 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'verify',   label: 'ตรวจสอบใบสั่งขาย' },
 ]
 
+// ─── Yarn row ─────────────────────────────────────────────────────────────────
+
+function YarnRow({
+  label, required, yarn, comp, count, ratio,
+  onYarn, onComp, onCount, onRatio, side, grayRatio = false,
+}: {
+  label: string; required?: boolean
+  yarn: string; comp: string; count: string; ratio: string
+  onYarn: (v: string) => void; onComp: (v: string) => void
+  onCount: (v: string) => void; onRatio: (v: string) => void
+  side: 'warp' | 'weft'; grayRatio?: boolean
+}) {
+  return (
+    <tr>
+      <td className="pr-2 py-1 text-xs text-gray-500 whitespace-nowrap align-top pt-2 w-28">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </td>
+      <td className="pr-2 py-1"><YarnAC value={yarn} onChange={onYarn} side={side} placeholder={label} /></td>
+      <td className="pr-2 py-1"><CompAC value={comp} onChange={onComp} /></td>
+      <td className="pr-2 py-1">
+        <input type="number" value={count} onChange={e => onCount(e.target.value)} placeholder="เส้น"
+          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+      </td>
+      <td className="py-1">
+        <input type="text" value={ratio} onChange={e => onRatio(e.target.value)} placeholder="อัตราส่วน"
+          className={`w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500
+            ${grayRatio ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''}`} />
+      </td>
+    </tr>
+  )
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function CreateOrderPage() {
@@ -159,9 +197,12 @@ export default function CreateOrderPage() {
   const [secOpen, setSecOpen] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [toast, setToast] = useState('')
+  const [fabricStructureError, setFabricStructureError] = useState(false)
   const [orderNo, setOrderNo] = useState('')
   const [orderNoEdited, setOrderNoEdited] = useState(false)
   const [orderNoLoading, setOrderNoLoading] = useState(false)
+  const [billNo, setBillNo] = useState('')
 
   // Header
   const [createDate, setCreateDate] = useState(TODAY)
@@ -243,13 +284,15 @@ export default function CreateOrderPage() {
   const [productionNote, setProductionNote] = useState('')
   const [payment, setPayment] = useState('ชำระเงินภายใน 15 วันหลังได้รับสินค้า')
 
-  // Fetch next order number when vat changes (unless user has manually edited)
+  // Fetch next SO number (changes with vat) and global bill count (always)
   useEffect(() => {
-    if (orderNoEdited) return
     setOrderNoLoading(true)
     fetch(`/api/sales/orders/next-no?vat=${vat}`)
       .then(r => r.json())
-      .then(d => { if (d.purchaseOrder) setOrderNo(d.purchaseOrder) })
+      .then(d => {
+        if (d.purchaseOrder && !orderNoEdited) setOrderNo(d.purchaseOrder)
+        if (d.billNo) setBillNo(d.billNo.toString())
+      })
       .catch(() => {})
       .finally(() => setOrderNoLoading(false))
   }, [vat, orderNoEdited])
@@ -286,71 +329,75 @@ export default function CreateOrderPage() {
     setDeadlines(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: value } : r))
   }
 
+  function buildFormBody(extra?: object) {
+    return JSON.stringify({
+      vat, purchaseOrder: orderNo || undefined, createDate, customerName, coordinator,
+      fabricId, fabricPattern, fabricStructure,
+      fabricW, yarnHCount, phewNumber, phewW, stackType,
+      warpYarn1, warpComp1, warpCount1, warpRatio1,
+      warpYarn2, warpComp2, warpCount2, warpRatio2,
+      weftYarn1, weftComp1, weftCount1, weftRatio1,
+      weftYarn2, weftComp2, weftCount2, weftRatio2,
+      weftYarn3, weftComp3, weftCount3, weftRatio3,
+      weftYarn4, weftComp4, weftCount4, weftRatio4,
+      orderSumYard, fabricSPY,
+      priceYard, priceM, discountP, discountYard,
+      machineNumber, surcharge, commission, po,
+      note, productionNote, payment,
+      deadlines,
+      ...extra,
+    })
+  }
+
+  function validate(): boolean {
+    if (!fabricStructure.trim()) {
+      setFabricStructureError(true)
+      return false
+    }
+    return true
+  }
+
+  // ปุ่ม 💾 ใบสั่งขาย — บันทึก SO + สร้าง BillOfStructure + toast + อยู่หน้าเดิม
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!validate()) return
     setSaving(true); setError('')
     try {
       const res = await fetch('/api/sales/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          vat, purchaseOrder: orderNo || undefined, createDate, customerName, coordinator,
-          fabricId, fabricPattern, fabricStructure,
-          fabricW, yarnHCount, phewNumber, phewW, stackType,
-          warpYarn1, warpComp1, warpCount1, warpRatio1,
-          warpYarn2, warpComp2, warpCount2, warpRatio2,
-          weftYarn1, weftComp1, weftCount1, weftRatio1,
-          weftYarn2, weftComp2, weftCount2, weftRatio2,
-          weftYarn3, weftComp3, weftCount3, weftRatio3,
-          weftYarn4, weftComp4, weftCount4, weftRatio4,
-          orderSumYard, fabricSPY,
-          priceYard, priceM, discountP, discountYard,
-          machineNumber, surcharge, commission, po,
-          note, productionNote, payment,
-          deadlines,
-        }),
+        body: buildFormBody({ createStructure: true }),
       })
       const d = await res.json()
       if (!res.ok) { setError(d.error ?? 'เกิดข้อผิดพลาด'); return }
-      router.push(`/sales/orders/${d.order.id}`)
+      setToast('บันทึกสำเร็จ')
+      setTimeout(() => setToast(''), 3000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ปุ่ม 🏭 ใบโครงสร้าง — บันทึก SO + เปิดฟอร์มใบโครงสร้าง
+  async function handleOpenStructure() {
+    if (!validate()) return
+    setSaving(true); setError('')
+    try {
+      const soRes = await fetch('/api/sales/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: buildFormBody(),
+      })
+      const soData = await soRes.json()
+      if (!soRes.ok) { setError(soData.error ?? 'เกิดข้อผิดพลาด'); return }
+
+      await fetch(`/api/sales/orders/${soData.order.id}/open-structure`, { method: 'POST' })
+      router.push(`/sales/orders/${soData.order.id}/structure`)
     } finally {
       setSaving(false)
     }
   }
 
   const thaiDate = toThaiDate(createDate)
-
-  // ─── Yarn row helper ──────────────────────────────────────────────────────
-
-  function YarnRow({
-    label, required, yarn, comp, count, ratio,
-    onYarn, onComp, onCount, onRatio, side, grayRatio = false,
-  }: {
-    label: string; required?: boolean
-    yarn: string; comp: string; count: string; ratio: string
-    onYarn: (v: string) => void; onComp: (v: string) => void
-    onCount: (v: string) => void; onRatio: (v: string) => void
-    side: 'warp' | 'weft'; grayRatio?: boolean
-  }) {
-    return (
-      <tr>
-        <td className="pr-2 py-1 text-xs text-gray-500 whitespace-nowrap align-top pt-2 w-28">
-          {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-        </td>
-        <td className="pr-2 py-1"><YarnAC value={yarn} onChange={onYarn} side={side} placeholder={label} /></td>
-        <td className="pr-2 py-1"><CompAC value={comp} onChange={onComp} /></td>
-        <td className="pr-2 py-1">
-          <input type="number" value={count} onChange={e => onCount(e.target.value)} placeholder="เส้น"
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
-        </td>
-        <td className="py-1">
-          <input type="text" value={ratio} onChange={e => onRatio(e.target.value)} placeholder="อัตราส่วน"
-            className={`w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500
-              ${grayRatio ? 'bg-gray-100 cursor-not-allowed text-gray-400' : ''}`} />
-        </td>
-      </tr>
-    )
-  }
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -370,13 +417,16 @@ export default function CreateOrderPage() {
           ))}
         </div>
         <div className="pb-1.5 pr-1 text-sm text-gray-600">
-          วันที่ {thaiDate}&nbsp;&nbsp;NO.<span className="font-semibold text-blue-700">{orderNo || '...'}</span>
+          วันที่ {thaiDate}&nbsp;&nbsp;NO.<span className="font-semibold text-blue-700">{billNo || '...'}</span>
         </div>
       </div>
 
       {/* ── Content ──────────────────────────────────────────────────────────── */}
       <div className="p-3 max-w-4xl">
         <form onSubmit={handleSubmit}>
+          {toast && (
+            <div className="text-xs text-green-700 bg-green-50 border border-green-300 rounded px-3 py-2 mb-3">{toast}</div>
+          )}
           {error && (
             <div className="text-xs text-red-600 bg-red-50 border border-red-300 rounded px-3 py-2 mb-3">{error}</div>
           )}
@@ -395,7 +445,7 @@ export default function CreateOrderPage() {
                 <div className="p-5 space-y-4">
                   {/* Header: date + NO right-aligned */}
                   <div className="flex justify-end text-sm text-gray-600">
-                    วันที่ {thaiDate}&nbsp;&nbsp;NO.<span className="font-medium text-gray-900">{orderNo || '...'}</span>
+                    วันที่ {thaiDate}&nbsp;&nbsp;NO.<span className="font-medium text-gray-900">{billNo || '...'}</span>
                   </div>
 
                   {/* Row 1: No. | วันที่ */}
@@ -403,13 +453,10 @@ export default function CreateOrderPage() {
                     <div>
                       <Label text="No." />
                       <Input
-                        value={orderNo}
-                        onChange={v => {
-                          setOrderNo(v)
-                          if (v === '') setOrderNoEdited(false)
-                          else setOrderNoEdited(true)
-                        }}
-                        placeholder={orderNoLoading ? 'กำลังโหลด...' : 'เลขที่ใบสั่งขาย'}
+                        value={billNo}
+                        readOnly
+                        gray
+                        placeholder="กำลังโหลด..."
                       />
                     </div>
                     <div>
@@ -468,16 +515,29 @@ export default function CreateOrderPage() {
                     <div className="flex gap-2">
                       <input
                         value={fabricStructure}
-                        onChange={e => setFabricStructure(e.target.value)}
+                        onChange={e => {
+                          setFabricStructure(e.target.value)
+                          if (e.target.value.trim()) setFabricStructureError(false)
+                        }}
                         placeholder="สร้างอัตโนมัติหรือพิมพ์เอง"
-                        className="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className={`flex-1 border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1
+                          ${fabricStructureError
+                            ? 'border-red-400 focus:ring-red-400 bg-red-50'
+                            : 'border-gray-300 focus:ring-blue-500'}`}
                       />
                       <button type="button"
-                        onClick={() => setFabricStructure(buildFabricStruct(warpYarn1, warpCount1, warpYarn2, weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4))}
+                        onClick={() => {
+                          const v = buildFabricStruct(warpYarn1, warpCount1, warpYarn2, weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4)
+                          setFabricStructure(v)
+                          if (v.trim()) setFabricStructureError(false)
+                        }}
                         className="px-4 py-1.5 bg-teal-600 text-white text-sm rounded font-medium hover:bg-teal-700 whitespace-nowrap">
                         สร้าง
                       </button>
                     </div>
+                    {fabricStructureError && (
+                      <p className="text-xs text-red-500 mt-1">กรุณากรอกโครงสร้างผ้า หรือกด "สร้าง" เพื่อสร้างอัตโนมัติ</p>
+                    )}
                   </div>
 
                   {/* Row 5: จำนวนด้ายยืน | หน้าผ้า */}
@@ -699,14 +759,22 @@ export default function CreateOrderPage() {
                       <Label text="VAT" />
                       <select value={vat} onChange={e => setVat(e.target.value)}
                         className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500">
-                        <option value="SO">SO (including vat)</option>
+                        <option value="SO">SO (excluding vat)</option>
+                        <option value="SOX">SO (including vat)</option>
                         <option value="SOB">SOB</option>
-                        <option value="SOX">SOX</option>
                       </select>
                     </div>
                     <div>
                       <Label text="เลขที่ใบสั่งซื้อ" />
-                      <Input value="รอสร้าง" readOnly />
+                      <Input
+                        value={orderNo}
+                        onChange={v => {
+                          setOrderNo(v)
+                          if (v === '') setOrderNoEdited(false)
+                          else setOrderNoEdited(true)
+                        }}
+                        placeholder={orderNoLoading ? 'กำลังโหลด...' : 'เลขที่ใบสั่งซื้อ'}
+                      />
                     </div>
                     <div>
                       <Label text="PO ลูกค้า" />
@@ -790,9 +858,8 @@ export default function CreateOrderPage() {
                       className="px-7 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700 disabled:opacity-60">
                       {saving ? 'กำลังสร้าง...' : '💾 ใบสั่งขาย'}
                     </button>
-                    <button type="button"
-                      onClick={() => { if (window.confirm('บันทึกและไปหน้าใบโครงสร้าง?')) handleSubmit({ preventDefault: () => {} } as React.FormEvent) }}
-                      className="px-7 py-2 bg-teal-700 text-white text-sm rounded font-medium hover:bg-teal-800">
+                    <button type="button" disabled={saving} onClick={handleOpenStructure}
+                      className="px-7 py-2 bg-teal-700 text-white text-sm rounded font-medium hover:bg-teal-800 disabled:opacity-60">
                       🏭 ใบโครงสร้าง
                     </button>
                   </div>
