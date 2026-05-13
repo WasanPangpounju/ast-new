@@ -106,7 +106,7 @@ export default function SalesOrdersPage() {
 
       {/* Filter */}
       <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 shadow-sm">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">ค้นหา</label>
             <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()}

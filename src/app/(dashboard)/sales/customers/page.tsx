@@ -182,13 +182,13 @@ export default function SalesCustomersPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs">
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-12">ลำดับ</th>
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-14">รหัส</th>
+                <th className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-12">ลำดับ</th>
+                <th className="hidden md:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-14">รหัส</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ชื่อลูกค้า</th>
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-48">ที่อยู่</th>
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-36">เลขที่ผู้เสียภาษี</th>
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-28">โทรศัพท์</th>
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-24">ประเภท</th>
+                <th className="hidden lg:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-48">ที่อยู่</th>
+                <th className="hidden md:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-36">เลขที่ผู้เสียภาษี</th>
+                <th className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-28">โทรศัพท์</th>
+                <th className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-24">ประเภท</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-24">จัดการ</th>
               </tr>
             </thead>
@@ -207,15 +207,15 @@ export default function SalesCustomersPage() {
                   <tr
                     className={`hover:bg-blue-50/30 cursor-pointer transition-colors ${expanded === c.id ? 'bg-blue-50/40' : ''}`}
                     onClick={() => toggleExpand(c)}>
-                    <td className="px-3 py-2.5 text-xs text-gray-500">{(page - 1) * 20 + i + 1}</td>
-                    <td className="px-3 py-2.5 text-xs font-mono text-gray-600">{c.id}</td>
+                    <td className="hidden sm:table-cell px-3 py-2.5 text-xs text-gray-500">{(page - 1) * 20 + i + 1}</td>
+                    <td className="hidden md:table-cell px-3 py-2.5 text-xs font-mono text-gray-600">{c.id}</td>
                     <td className="px-3 py-2.5 font-medium text-gray-900">{c.name}</td>
-                    <td className="px-3 py-2.5 text-xs text-gray-500 w-48 max-w-[192px]">
+                    <td className="hidden lg:table-cell px-3 py-2.5 text-xs text-gray-500 w-48 max-w-48">
                       <span className="block truncate" title={c.address ?? ''}>{c.address ?? '-'}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-gray-600 font-mono">{c.tax ?? '-'}</td>
-                    <td className="px-3 py-2.5 text-xs text-gray-600">{c.tel ?? '-'}</td>
-                    <td className="px-3 py-2.5">
+                    <td className="hidden md:table-cell px-3 py-2.5 text-xs text-gray-600 font-mono">{c.tax ?? '-'}</td>
+                    <td className="hidden sm:table-cell px-3 py-2.5 text-xs text-gray-600">{c.tel ?? '-'}</td>
+                    <td className="hidden sm:table-cell px-3 py-2.5">
                       <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{c.type ?? '-'}</span>
                     </td>
                     <td className="px-3 py-2.5 text-center" onClick={e => e.stopPropagation()}>

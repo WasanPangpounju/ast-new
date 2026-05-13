@@ -27,6 +27,8 @@ export async function GET(
       fabricPattern: true,
       fabricW: true,
       createDate: true,
+      altFabricStruct: true,
+      altPurchaseOrder: true,
     },
   })
 

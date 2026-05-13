@@ -52,7 +52,7 @@ export default function StockPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="block text-xs text-gray-500 mb-1">โครงสร้างผ้า / ลายผ้า</label>
             <input value={q} onChange={e => setQ(e.target.value)}

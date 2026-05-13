@@ -99,14 +99,14 @@ export default function SalesOrdersReviewPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs">
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-10">ลำดับ</th>
+                <th className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-10">ลำดับ</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-28">เลขที่ใบสั่งขาย</th>
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-14">ประเภท</th>
+                <th className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-14">ประเภท</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ลูกค้า</th>
-                <th className="text-right px-3 py-2.5 font-medium text-gray-600 w-20">ราคา/หลา</th>
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-24">วันที่</th>
+                <th className="hidden md:table-cell text-right px-3 py-2.5 font-medium text-gray-600 w-20">ราคา/หลา</th>
+                <th className="hidden md:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-24">วันที่</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-36">สถานะปัจจุบัน</th>
-                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-44">เปลี่ยนสถานะ</th>
+                <th className="hidden lg:table-cell text-center px-3 py-2.5 font-medium text-gray-600 w-44">เปลี่ยนสถานะ</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-16">ดู</th>
               </tr>
             </thead>
@@ -124,27 +124,27 @@ export default function SalesOrdersReviewPage() {
                 const s = o.status ?? 'no data'
                 return (
                   <tr key={o.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-3 py-2.5 text-xs text-gray-500">{(page - 1) * 20 + i + 1}</td>
+                    <td className="hidden sm:table-cell px-3 py-2.5 text-xs text-gray-500">{(page - 1) * 20 + i + 1}</td>
                     <td className="px-3 py-2.5">
                       <span className="font-mono text-blue-600 font-medium text-xs">{o.purchaseOrder}</span>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="hidden sm:table-cell px-3 py-2.5">
                       <span className={`text-xs px-1.5 py-0.5 rounded font-mono font-medium ${
                         o.vat === 'SOX' ? 'bg-purple-100 text-purple-700' :
                         o.vat === 'SOB' ? 'bg-orange-100 text-orange-700' :
                         'bg-blue-100 text-blue-700'}`}>{o.vat}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-gray-800 max-w-[220px] truncate">{o.customerName ?? '-'}</td>
-                    <td className="px-3 py-2.5 text-right text-xs text-gray-700">
+                    <td className="px-3 py-2.5 text-xs text-gray-800 max-w-55 truncate">{o.customerName ?? '-'}</td>
+                    <td className="hidden md:table-cell px-3 py-2.5 text-right text-xs text-gray-700">
                       {o.priceYard ? o.priceYard.toLocaleString() : '-'}
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{fmtDate(o.createDate)}</td>
+                    <td className="hidden md:table-cell px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{fmtDate(o.createDate)}</td>
                     <td className="px-3 py-2.5 text-center">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[s] ?? 'bg-gray-100 text-gray-500'}`}>
                         {s}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-center">
+                    <td className="hidden lg:table-cell px-3 py-2.5 text-center">
                       <select
                         value={o.status ?? 'no data'}
                         disabled={updatingId === o.id}

@@ -489,7 +489,7 @@ function Tab2() {
 
       {/* Summary cards */}
       {result && (
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
             <div className="text-xs text-blue-600 mb-1">ยอดรับเข้า</div>
             <div className="text-xl font-bold text-blue-800">
@@ -738,7 +738,7 @@ function Tab3() {
 
       {/* Summary cards */}
       {result && (
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
             <div className="text-xs text-blue-600 mb-1">ยอดรับเข้าสะสม</div>
             <div className="text-xl font-bold text-blue-800">
