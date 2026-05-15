@@ -122,7 +122,7 @@ export default function BillPrintPage({
         /* a4-page screen — padding อยู่ใน CSS */
         .a4-page {
           width: 210mm;
-          height: 277mm;
+          height: 300mm;
           padding: 10mm 12mm;
           box-sizing: border-box;
         }
@@ -136,7 +136,7 @@ export default function BillPrintPage({
           @page { size: A4 portrait; margin: 0mm; }
           html, body {
             width: 210mm;
-            height: 297mm;
+            height: 300mm;
             margin: 0;
             padding: 0;
             -webkit-print-color-adjust: exact;
@@ -158,7 +158,7 @@ export default function BillPrintPage({
 
           .a4-page {
             width: 228mm !important;
-            height: 279mm !important;
+            height: 300mm !important;
             padding: 10mm 12mm !important;
             margin: 0 !important;
             overflow: hidden !important;
@@ -177,8 +177,12 @@ export default function BillPrintPage({
             display: flex !important;
             flex-direction: column !important;
           }
-          /* Footer เต็มพื้นที่ที่เหลือจากตาราง */
-          .a4-page .bill-footer { flex: 1 !important; }
+
+          /* เพิ่มขนาดตัวอักษรหนึ่งไซต์ตอนพิมพ์ */
+          .a4-page .text-xs   { font-size: 14px !important; }
+          .a4-page .text-sm   { font-size: 16px !important; }
+          .a4-page .text-base { font-size: 18px !important; }
+          .a4-page .text-lg   { font-size: 20px !important; }
         }
       `}</style>
 
@@ -248,7 +252,7 @@ export default function BillPrintPage({
                 </div>
 
                 {/* Info — ไม่มีกรอบ */}
-                <div className="grid grid-cols-2 gap-8 mb-2 shrink-0 text-[15px] print-sm mt-10">
+                <div className="grid grid-cols-2 gap-8 mb-2 shrink-0 text-[15px] print-sm mt-20">
                   <div>
                     <span className="font-bold">ผู้สั่ง Order by :</span>
                     <span className="font-bold ml-1">
@@ -274,7 +278,7 @@ export default function BillPrintPage({
                 </div>
 
                 {/* Table + Footer */}
-                <div className=" flex flex-col h-full">                  {/* Table — flex-1 เต็มพื้นที่ */}
+                <div className=" flex flex-col h-full flex-1">                  {/* Table — flex-1 เต็มพื้นที่ */}
                   <div className="overflow-hidden shrink-0">
                     <table className="bill-table w-full border-collapse text-sm">
                       <thead>
