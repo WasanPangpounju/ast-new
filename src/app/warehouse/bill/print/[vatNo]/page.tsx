@@ -95,12 +95,10 @@ export default function BillPrintPage({
 
     for (let i = 0; i < pageEls.length; i++) {
       const canvas = await html2canvas(pageEls[i] as HTMLElement, {
-        scale: 3,
+        scale: 5,
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
-        windowWidth: 794,
-        windowHeight: 1123,
       });
       const imgData = canvas.toDataURL("image/png");
       if (i > 0) pdf.addPage();
@@ -309,10 +307,10 @@ export default function BillPrintPage({
                         <tr>
                           {Array.from({ length: COLS }, (_, c) => (
                             <React.Fragment key={c}>
-                              <th className="bill-th-idx border border-[#555] text-center text-xs font-medium print-sm">
+                              <th className="bill-th-idx border-2 border-[#555] text-center text-xs font-medium print-sm">
                                 ลำดับ
                               </th>
-                              <th className="bill-th-yard border border-[#555]  text-center text-xs font-medium print-sm">
+                              <th className="bill-th-yard border-2 border-[#555]  text-center text-xs font-medium print-sm">
                                 หลา
                               </th>
                             </React.Fragment>
@@ -348,10 +346,10 @@ export default function BillPrintPage({
                         <tr className="h-8">
                           {Array.from({ length: COLS }, (_, c) => (
                             <React.Fragment key={c}>
-                              <td className="border border-[#555] px-1 text-center text-sm font-semibold w-6 print-sm">
+                              <td className="border-2 border-[#555] px-1 text-center text-sm font-semibold w-6 print-sm">
                                 รวม
                               </td>
-                              <td className="border border-[#555] px-1 text-right text-sm font-semibold print-sm">
+                              <td className="border-2 border-[#555] px-1 text-right text-sm font-semibold print-sm">
                                 {colSums[c] > 0
                                   ? colSums[c].toLocaleString()
                                   : 0}
