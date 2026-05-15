@@ -132,8 +132,8 @@ export default function BillPrintPage({
         /* ปิด Safari auto font scaling + เพิ่มความหนาตัวอักษรทั้งหมด */
         .a4-page * { -webkit-text-size-adjust: none; text-size-adjust: none; font-weight: 600; }
 
-        /* เส้นตารางและกรอบหนาขึ้น สีเดียวกันหมด */
-        .a4-page th, .a4-page td { border-width: 2px !important; border-color: #555 !important; }
+        /* สีเส้นตารางเดียวกันหมด ขนาดเท่าเดิม */
+        .a4-page th, .a4-page td { border-color: #555 !important; }
         .bill-footer { border-width: 2px !important; border-color: #555 !important; }
         .bill-footer .border-r { border-right-width: 2px !important; border-color: #555 !important; }
 
