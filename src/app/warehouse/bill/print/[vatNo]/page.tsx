@@ -21,7 +21,7 @@ interface Roll {
   altPurchaseOrder: string | null;
 }
 
-const COLS = 6;
+const COLS = 8;
 const ROWS_PER_COL = 20;
 
 export default function BillPrintPage({
@@ -158,8 +158,8 @@ export default function BillPrintPage({
           }
 
           .a4-page {
-            width: 210mm !important;
-            height: 297mm !important;
+            width: 228mm !important;
+            height: 279mm !important;
             padding: 10mm 12mm !important;
             margin: 0 !important;
             overflow: hidden !important;
@@ -186,7 +186,7 @@ export default function BillPrintPage({
           </svg>
           พิมพ์
         </button>
-        {/* <button
+        <button
           type="button"
           onClick={handleDownloadPDF}
           className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm"
@@ -196,7 +196,7 @@ export default function BillPrintPage({
             <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/>
           </svg>
           ดาวน์โหลด PDF
-        </button> */}
+        </button>
         <button
           type="button"
           onClick={() => window.close()}
@@ -228,19 +228,19 @@ export default function BillPrintPage({
               <div className="a4-page bg-white shadow-xl print:shadow-none mx-auto flex flex-col">
                 {/* Header */}
                 <div className="flex justify-between items-baseline mb-2 shrink-0">
-                  <span className="text-xs print-xs">
+                  <span className="text-sm print-xs">
                     แผ่นที่ {pageIdx + 1} จาก ทั้งหมด {totalPages} แผ่น
                   </span>
-                  <h1 className="text-[18px] font-bold print-h1">
+                  <h1 className="text-[20px] font-bold print-h1">
                     ใบส่งสินค้า / Delivery Note
                   </h1>
-                  <span className="text-[13px] font-bold print-sm">
+                  <span className="text-[15px] font-bold print-sm">
                     เลขที่ {vatType} - {vatNo}
                   </span>
                 </div>
 
                 {/* Info — ไม่มีกรอบ */}
-                <div className="grid grid-cols-2 gap-8 mb-2 shrink-0 text-[13px] print-sm">
+                <div className="grid grid-cols-2 gap-8 mb-2 shrink-0 text-[15px] print-sm mt-10">
                   <div>
                     <span className="font-bold">ผู้สั่ง Order by :</span>
                     <span className="font-bold ml-1">
@@ -252,7 +252,7 @@ export default function BillPrintPage({
                     <span className="font-bold ml-1">{receiverName}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-2  gap-8 mb-2 shrink-0 text-[13px] print-sm">
+                <div className="grid grid-cols-2  gap-8 mb-2 shrink-0 text-[15px] print-sm">
                   <div>
                     <span className="font-bold">รหัสผ้า Code :</span>
                     <span className="font-bold ml-1">{fabricCode}</span>
@@ -265,19 +265,19 @@ export default function BillPrintPage({
                   </div>
                 </div>
 
-                {/* Table + Footer — มี border รวม */}
-                <div className=" flex flex-col h-full">
-                  {/* Table */}
-                  <div className="overflow-hidden">
-                    <table className="bill-table w-full border-collapse text-xs">
+                {/* Table + Footer */}
+                <div className="flex flex-col flex-1 overflow-hidden">
+                  {/* Table — flex-1 เต็มพื้นที่ */}
+                  <div className="flex-1 overflow-hidden">
+                    <table className="bill-table w-full h-full border-collapse text-sm">
                       <thead>
                         <tr>
                           {Array.from({ length: COLS }, (_, c) => (
                             <React.Fragment key={c}>
-                              <th className="bill-th-idx border border-[#555] px-1 py-1 text-center text-xs font-medium print-xs">
+                              <th className="bill-th-idx border border-[#555] text-center text-xs font-medium print-sm">
                                 ลำดับ
                               </th>
-                              <th className="bill-th-yard border border-[#555] px-1 py-1 text-center text-xs font-medium print-xs">
+                              <th className="bill-th-yard border border-[#555]  text-center text-xs font-medium print-sm">
                                 หลา
                               </th>
                             </React.Fragment>
@@ -296,10 +296,10 @@ export default function BillPrintPage({
                                 1;
                               return (
                                 <React.Fragment key={c}>
-                                  <td className="border border-[#999] px-1 text-center text-xs text-gray-500 w-4 print-xs">
+                                  <td className="border border-[#999] px-1 text-center text-sm text-gray-500 w-4 print-sm">
                                     {slotNo}
                                   </td>
-                                  <td className="border border-[#999] px-1 text-center text-base font-bold print-base">
+                                  <td className="border border-[#999] px-1 text-center text-lg font-bold print-base">
                                     {roll?.sumYard
                                       ? Number(roll.sumYard).toLocaleString()
                                       : ""}
@@ -313,10 +313,10 @@ export default function BillPrintPage({
                         <tr className="h-8">
                           {Array.from({ length: COLS }, (_, c) => (
                             <React.Fragment key={c}>
-                              <td className="border border-[#555] px-1 text-center text-xs font-semibold w-6 print-xs">
+                              <td className="border border-[#555] px-1 text-center text-sm font-semibold w-6 print-sm">
                                 รวม
                               </td>
-                              <td className="border border-[#555] px-1 text-right text-xs font-semibold print-xs">
+                              <td className="border border-[#555] px-1 text-right text-sm font-semibold print-sm">
                                 {colSums[c] > 0
                                   ? colSums[c].toLocaleString()
                                   : 0}
