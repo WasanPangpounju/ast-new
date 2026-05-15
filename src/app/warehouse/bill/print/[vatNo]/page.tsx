@@ -3,7 +3,7 @@ import React, { useState, useEffect, use } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
-const ROW_H = 32;
+const ROW_H = 36;
 
 interface Roll {
   id: number;
