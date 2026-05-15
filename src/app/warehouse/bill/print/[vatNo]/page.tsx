@@ -111,7 +111,7 @@ export default function BillPrintPage({
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: "#9ca3af" }}>
+    <div className="bg-gray-400 print:bg-white print:p-0">
       <style>{`
         /* screen — fixed px */
         .bill-row { height: ${ROW_H}px; }
@@ -127,8 +127,7 @@ export default function BillPrintPage({
           box-sizing: border-box;
         }
 
-        /* footer — 9rem คงที่กว่า min-h-38 ที่ต่าง browser */
-        .bill-footer { min-height: 9rem; }
+        .bill-footer { }
 
         /* ปิด Safari auto font scaling */
         .a4-page * { -webkit-text-size-adjust: none; text-size-adjust: none; }
@@ -171,6 +170,15 @@ export default function BillPrintPage({
           }
           .a4-page:last-child { page-break-after: avoid; }
           .a4-page .bill-row { height: 25px !important; }
+
+          /* Table+Footer wrapper เต็มพื้นที่ที่เหลือ */
+          .a4-page > div:last-child {
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+          }
+          /* Footer เต็มพื้นที่ที่เหลือจากตาราง */
+          .a4-page .bill-footer { flex: 1 !important; }
         }
       `}</style>
 
@@ -207,7 +215,7 @@ export default function BillPrintPage({
       </div>
 
 
-      <div id="print-body" className="py-6 flex flex-col items-center gap-6">
+      <div id="print-body" className="pt-6 pb-0 flex flex-col items-center gap-6">
         {pages.map((pageRolls, pageIdx) => {
           const slots: (Roll | null)[] = Array(COLS * ROWS_PER_COL).fill(null);
           pageRolls.forEach((r, i) => {
@@ -266,10 +274,9 @@ export default function BillPrintPage({
                 </div>
 
                 {/* Table + Footer */}
-                <div className="flex flex-col flex-1 overflow-hidden">
-                  {/* Table — flex-1 เต็มพื้นที่ */}
-                  <div className="flex-1 overflow-hidden">
-                    <table className="bill-table w-full h-full border-collapse text-sm">
+                <div className=" flex flex-col h-full">                  {/* Table — flex-1 เต็มพื้นที่ */}
+                  <div className="overflow-hidden shrink-0">
+                    <table className="bill-table w-full border-collapse text-sm">
                       <thead>
                         <tr>
                           {Array.from({ length: COLS }, (_, c) => (
@@ -329,7 +336,7 @@ export default function BillPrintPage({
                   </div>
 
                   {/* Footer */}
-                  <div className="bill-footer border border-gray-400 flex mt-2">
+                  <div className="bill-footer flex-1 border border-gray-400 flex mt-2">
                     {/* Left: Sample */}
                     <div className="border-r border-gray-400 w-48 flex flex-col items-center justify-center py-2">
                       <p className="text-sm font-medium print-sm">
