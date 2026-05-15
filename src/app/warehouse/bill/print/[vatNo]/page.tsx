@@ -112,7 +112,12 @@ export default function BillPrintPage({
 
   return (
     <div className="bg-gray-400 print:bg-white print:p-0">
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
       <style>{`
+        /* TH Sarabun New = Sarabun บน Google Fonts */
+
         /* screen — fixed px */
         .bill-row { height: ${ROW_H}px; }
         .bill-table { table-layout: fixed; }
@@ -121,6 +126,7 @@ export default function BillPrintPage({
 
         /* a4-page screen — padding อยู่ใน CSS */
         .a4-page {
+          font-family: 'Sarabun', 'TH Sarabun New', sans-serif;
           width: 210mm;
           height: 300mm;
           padding: 10mm 12mm;
@@ -129,13 +135,13 @@ export default function BillPrintPage({
 
         .bill-footer { }
 
-        /* ปิด Safari auto font scaling + เพิ่มความหนาตัวอักษรทั้งหมด */
-        .a4-page * { -webkit-text-size-adjust: none; text-size-adjust: none; font-weight: 600; }
+        /* ปิด Safari auto font scaling */
+        .a4-page * { -webkit-text-size-adjust: none; text-size-adjust: none; }
 
-        /* สีเส้นตารางเดียวกันหมด ขนาดเท่าเดิม */
+        /* สีเส้นตารางเดียวกันหมด */
         .a4-page th, .a4-page td { border-color: #555 !important; }
-        .bill-footer { border-width: 2px !important; border-color: #555 !important; }
-        .bill-footer .border-r { border-right-width: 2px !important; border-color: #555 !important; }
+        .bill-footer { border-color: #555 !important; }
+        .bill-footer .border-r { border-color: #555 !important; }
 
         @media print {
           @page { size: A4 portrait; margin: 0mm; }
@@ -189,8 +195,18 @@ export default function BillPrintPage({
           .a4-page .text-base { font-size: 18px !important; }
           .a4-page .text-lg   { font-size: 20px !important; }
 
-          /* เพิ่มความหนาตัวอักษรทั้งหมด */
-          .a4-page * { font-weight: 600 !important; }
+          /* หัวเข็ม: ดำทั้งหมด, หนา, เส้นชัด */
+          .a4-page * {
+            color: #000 !important;
+            font-weight: 700 !important;
+            -webkit-font-smoothing: none;
+            text-shadow: none !important;
+            background: transparent !important;
+          }
+          .bill-footer,
+          .bill-footer .border-r {
+            border-color: #000 !important;
+          }
         }
       `}</style>
 
