@@ -259,7 +259,7 @@ export default function BillPrintPage({
               key={pageIdx}
               className={pageIdx < pages.length - 1 ? "page-break" : ""}
             >
-              <div className="a4-page bg-white shadow-xl print:shadow-none mx-auto flex flex-col">
+              <div className="a4-page bg-white shadow-xl print:shadow-none mx-auto flex flex-col mt-1">
                 {/* Header */}
                 <div className="flex justify-between items-baseline mb-2 shrink-0">
                   <span className="text-sm print-xs">
@@ -274,7 +274,7 @@ export default function BillPrintPage({
                 </div>
 
                 {/* Info — ไม่มีกรอบ */}
-                <div className="grid grid-cols-2 gap-8 mb-2 shrink-0 text-[15px] print-sm mt-20">
+                <div className="grid grid-cols-2 gap-8 mb-2 shrink-0 text-[15px] print-sm mt-10">
                   <div>
                     <span className="font-bold">ผู้สั่ง Order by :</span>
                     <span className="font-bold ml-1">
