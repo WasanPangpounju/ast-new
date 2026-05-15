@@ -178,7 +178,7 @@ export default function BillPrintPage({
             page-break-after: always;
           }
           .a4-page:last-child { page-break-after: avoid; }
-          .a4-page .bill-row { height: 25px !important; }
+          .a4-page .bill-row { height: 33px !important; }
 
           /* Table+Footer wrapper เต็มพื้นที่ที่เหลือ */
           .a4-page > div:last-child {
