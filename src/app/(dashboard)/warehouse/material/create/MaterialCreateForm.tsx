@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -120,10 +121,23 @@ const errB = "border-red-400";
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
+// field id → DOM id mapping for scroll-to-error
+const FIELD_IDS: Partial<Record<string, string>> = {
+  supplierName:     "f-supplierName",
+  yarnType:         "f-yarnType",
+  spool:            "f-spool",
+  yarnSum:          "f-yarnSum",
+  weightKgSum:      "f-weightKgSum",
+  weightKgPackage:  "f-weightKgPackage",
+  weightKgNet:      "f-weightKgNet",
+};
+
 interface Props { emp: string }
 
 export default function MaterialCreateForm({ emp }: Props) {
   const today = new Date().toISOString().slice(0, 10);
+  const router = useRouter();
+  const formRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState<FormState>(() => makeEmpty(today, emp));
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
@@ -162,10 +176,22 @@ export default function MaterialCreateForm({ emp }: Props) {
     if (!form.yarnType.trim())     e.yarnType     = "ระบุชนิดด้าย";
     const sp = parseInt(form.spool);
     if (!form.spool || isNaN(sp) || sp < 1) e.spool = "ต้องมากกว่า 0";
+    const yn = parseInt(form.yarnSum);
+    if (!form.yarnSum || isNaN(yn) || yn < 1) e.yarnSum = "ต้องมากกว่า 0";
     if (!(parseFloat(form.weightKgSum) > 0))     e.weightKgSum     = "ระบุน้ำหนักรวม";
     if (!(parseFloat(form.weightKgPackage) > 0))  e.weightKgPackage = "ระบุน้ำหนักบรรจุภัณฑ์";
     if (!(parseFloat(form.weightKgNet) > 0))      e.weightKgNet     = "น้ำหนักสุทธิต้องมากกว่า 0";
     setErrors(e);
+    // scroll to first error
+    if (Object.keys(e).length > 0) {
+      const firstKey = Object.keys(e)[0];
+      const domId = FIELD_IDS[firstKey];
+      if (domId) {
+        setTimeout(() => {
+          document.getElementById(domId)?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 50);
+      }
+    }
     return Object.keys(e).length === 0;
   }
 
@@ -208,8 +234,8 @@ export default function MaterialCreateForm({ emp }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "บันทึกไม่สำเร็จ");
       showToast("success", `บันทึกสำเร็จ (ID: ${data.ids?.[0]})`);
-      setForm(makeEmpty(today, emp));
       setErrors({});
+      setTimeout(() => router.push("/warehouse/material/history"), 1500);
     } catch (err: unknown) {
       showToast("error", "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)));
     } finally {
@@ -219,7 +245,7 @@ export default function MaterialCreateForm({ emp }: Props) {
 
   // ── render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="p-4 max-w-3xl">
+    <div className="p-4 max-w-3xl" ref={formRef}>
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 shadow-lg text-sm font-medium ${
           toast.type === "success" ? "bg-green-600 text-white" : "bg-red-600 text-white"
@@ -239,7 +265,7 @@ export default function MaterialCreateForm({ emp }: Props) {
         <SectionLabel>ข้อมูลการนำเข้า</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="ชื่อบริษัท" required error={errors.supplierName}>
-            <input value={form.supplierName}
+            <input id="f-supplierName" value={form.supplierName}
               onChange={(e) => patch({ supplierName: e.target.value })}
               placeholder="ชื่อบริษัท"
               className={`${inp} ${errors.supplierName ? errB : ""}`} />
@@ -258,7 +284,7 @@ export default function MaterialCreateForm({ emp }: Props) {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
           <Field label="ชนิดด้าย" required error={errors.yarnType}>
-            <input value={form.yarnType}
+            <input id="f-yarnType" value={form.yarnType}
               onChange={(e) => patch({ yarnType: e.target.value })}
               placeholder="เช่น CP 30/1, R 30"
               className={`${inp} ${errors.yarnType ? errB : ""}`} />
@@ -343,7 +369,7 @@ export default function MaterialCreateForm({ emp }: Props) {
             <label className="block text-xs font-medium text-gray-700 mb-1">
               จำนวนหลอดทั้งหมด (หลอด)
             </label>
-            <input type="number" min="1" value={form.spool}
+            <input id="f-spool" type="number" min="1" value={form.spool}
               onChange={(e) => onSpool(e.target.value)}
               placeholder="จำนวนหลอด"
               className={`${inp} ${errors.spool ? errB : ""}`} />
@@ -367,10 +393,11 @@ export default function MaterialCreateForm({ emp }: Props) {
           <label className="block text-xs font-medium text-gray-700 mb-1">
             จำนวนด้ายทั้งหมด (ลูก)<span className="text-red-500 ml-0.5">*</span>
           </label>
-          <input type="number" min="1" value={form.yarnSum}
+          <input id="f-yarnSum" type="number" min="1" value={form.yarnSum}
             onChange={(e) => onYarnSum(e.target.value)}
             placeholder="จำนวนด้าย"
-            className={`${inp} w-40 ${errors.spool ? errB : ""}`} />
+            className={`${inp} w-40 ${errors.yarnSum ? errB : ""}`} />
+          {errors.yarnSum && <p className="text-xs text-red-500 mt-0.5">{errors.yarnSum}</p>}
         </div>
 
         {/* ── น้ำหนัก ─────────────────────────────────────────────── */}
@@ -386,7 +413,7 @@ export default function MaterialCreateForm({ emp }: Props) {
                 placeholder="ปอนด์" className={inp} />
             </Field>
             <Field label="กิโลกรัม" required error={errors.weightKgSum}>
-              <input type="number" step="0.0001" value={form.weightKgSum}
+              <input id="f-weightKgSum" type="number" step="0.0001" value={form.weightKgSum}
                 onChange={(e) => onKgSum(e.target.value)}
                 placeholder="กิโลกรัม"
                 className={`${inp} ${errors.weightKgSum ? errB : ""}`} />
@@ -404,7 +431,7 @@ export default function MaterialCreateForm({ emp }: Props) {
                 placeholder="ปอนด์" className={inp} />
             </Field>
             <Field label="กิโลกรัม" required error={errors.weightKgPackage}>
-              <input type="number" step="0.0001" value={form.weightKgPackage}
+              <input id="f-weightKgPackage" type="number" step="0.0001" value={form.weightKgPackage}
                 onChange={(e) => onKgPkg(e.target.value)}
                 placeholder="กิโลกรัม"
                 className={`${inp} ${errors.weightKgPackage ? errB : ""}`} />
@@ -423,7 +450,7 @@ export default function MaterialCreateForm({ emp }: Props) {
               <input readOnly value={form.weightPNet} placeholder="—" className={ro} />
             </Field>
             <Field label="กิโลกรัม" error={errors.weightKgNet}>
-              <input readOnly value={form.weightKgNet} placeholder="—"
+              <input id="f-weightKgNet" readOnly value={form.weightKgNet} placeholder="—"
                 className={`${ro} ${errors.weightKgNet ? "border-red-300" : ""}`} />
             </Field>
           </div>
