@@ -1,0 +1,10 @@
+-- AlterTable
+ALTER TABLE "materials" ADD COLUMN     "averageKg" DOUBLE PRECISION,
+ADD COLUMN     "averageP" DOUBLE PRECISION,
+ADD COLUMN     "box" INTEGER,
+ADD COLUMN     "emp" TEXT,
+ADD COLUMN     "pallet" INTEGER,
+ADD COLUMN     "sack" INTEGER,
+ADD COLUMN     "weightPNet" DOUBLE PRECISION,
+ADD COLUMN     "weightPPackage" DOUBLE PRECISION,
+ADD COLUMN     "weightPSum" DOUBLE PRECISION;

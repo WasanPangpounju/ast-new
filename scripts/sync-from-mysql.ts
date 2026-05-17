@@ -76,28 +76,34 @@ async function main() {
   // ── 1. Pull ข้อมูลทั้งหมดจาก MySQL ก่อน ─────────────────────────────────
   console.log('📥 ดึงข้อมูลจาก MySQL...')
 
-  const [customers]:    any = await db.query('SELECT * FROM customers')
-  const [coordinators]: any = await db.query('SELECT * FROM coordinators')
-  const [suppliers]:    any = await db.query('SELECT * FROM suppliers')
-  const [orders]:       any = await db.query('SELECT * FROM ast_purchaseorders ORDER BY id ASC')
-  const [structs]:      any = await db.query('SELECT * FROM fabric_aststructures')
-  const [fabricAsts]:   any = await db.query('SELECT * FROM fabric_asts')
-  const [stocks]:       any = await db.query('SELECT * FROM stockfabrics ORDER BY id ASC')
-  const [fouts]:        any = await db.query('SELECT * FROM fabricouts ORDER BY id ASC')
+  const [customers]:     any = await db.query('SELECT * FROM customers')
+  const [coordinators]:  any = await db.query('SELECT * FROM coordinators')
+  const [suppliers]:     any = await db.query('SELECT * FROM suppliers')
+  const [orders]:        any = await db.query('SELECT * FROM ast_purchaseorders ORDER BY id ASC')
+  const [structs]:       any = await db.query('SELECT * FROM fabric_aststructures')
+  const [fabricAsts]:    any = await db.query('SELECT * FROM fabric_asts')
+  const [stocks]:        any = await db.query('SELECT * FROM stockfabrics ORDER BY id ASC')
+  const [fouts]:         any = await db.query('SELECT * FROM fabricouts ORDER BY id ASC')
+  const [empMaterials]:  any = await db.query('SELECT * FROM empmaterials')
+  const [materials]:     any = await db.query('SELECT * FROM materials ORDER BY id ASC')
+  const [materialStores]: any = await db.query('SELECT * FROM materialstores ORDER BY id ASC')
 
   // สร้าง map: order.id → purchaseOrder (string) สำหรับ FK resolve
   const idToPo = new Map<number, string>(
     orders.map((o: any) => [Number(o.id), String(o.purchaseOrder)])
   )
 
-  console.log(`  customers:    ${customers.length}`)
-  console.log(`  coordinators: ${coordinators.length}`)
-  console.log(`  suppliers:    ${suppliers.length}`)
-  console.log(`  orders:       ${orders.length}`)
-  console.log(`  structures:   ${structs.length}`)
-  console.log(`  fabricAsts:   ${fabricAsts.length}`)
-  console.log(`  stockFabrics: ${stocks.length}`)
-  console.log(`  fabricOuts:   ${fouts.length}`)
+  console.log(`  customers:      ${customers.length}`)
+  console.log(`  coordinators:   ${coordinators.length}`)
+  console.log(`  suppliers:      ${suppliers.length}`)
+  console.log(`  orders:         ${orders.length}`)
+  console.log(`  structures:     ${structs.length}`)
+  console.log(`  fabricAsts:     ${fabricAsts.length}`)
+  console.log(`  stockFabrics:   ${stocks.length}`)
+  console.log(`  fabricOuts:     ${fouts.length}`)
+  console.log(`  empMaterials:   ${empMaterials.length}`)
+  console.log(`  materials:      ${materials.length}`)
+  console.log(`  materialStores: ${materialStores.length}`)
   console.log('')
 
   if (DRY_RUN) {
@@ -107,23 +113,40 @@ async function main() {
     return
   }
 
-  // ── 2. TRUNCATE CASCADE — จัดการ FK ทุกตัวในครั้งเดียว ─────────────────
+  // ── 2. TRUNCATE — full หรือ targeted ขึ้นกับ --tables flag ───────────────
   console.log('🗑️  Truncating PostgreSQL tables...')
-  await prisma.$executeRawUnsafe(`
-    TRUNCATE TABLE
-      "orderdeadlines",
-      "ordershippeds",
-      "fabric_asts",
-      "fabric_aststructures",
-      "fabricouts",
-      "stockfabrics",
-      "fabricimports",
-      "ast_purchaseorders",
-      "coordinators",
-      "customers",
-      "suppliers"
-    CASCADE
-  `)
+  if (ONLY_TABLES.length === 0) {
+    // Full sync: truncate ทุกตาราง
+    await prisma.$executeRawUnsafe(`
+      TRUNCATE TABLE
+        "orderdeadlines",
+        "ordershippeds",
+        "fabric_asts",
+        "fabric_aststructures",
+        "fabricouts",
+        "stockfabrics",
+        "fabricimports",
+        "ast_purchaseorders",
+        "coordinators",
+        "customers",
+        "suppliers",
+        "materialrequisitions",
+        "materialcoordinators",
+        "materials"
+      CASCADE
+    `)
+  } else {
+    // Targeted sync: truncate เฉพาะตารางที่ sync — FK order: requisitions → coordinators → materials
+    const targeted: string[] = []
+    if (ONLY_TABLES.some(t => ['materialRequisitions', 'materials'].includes(t)))
+      targeted.push('"materialrequisitions"')
+    if (ONLY_TABLES.includes('materialCoordinators'))
+      targeted.push('"materialcoordinators"')
+    if (ONLY_TABLES.includes('materials'))
+      targeted.push('"materials"')
+    if (targeted.length > 0)
+      await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${targeted.join(', ')} CASCADE`)
+  }
   console.log('  ✓ Truncated\n')
 
   // ── 3. INSERT ────────────────────────────────────────────────────────────
@@ -318,6 +341,85 @@ async function main() {
     )
   }
 
+  if (should('materialCoordinators')) {
+    const coordData = empMaterials.map((r: any) => ({
+      id:         Number(r.id),
+      name:       r.name ?? '',
+      tel:        s(r.tel),
+      department: s(r.department),
+      createdAt:  r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt:  r.updated_at ? new Date(r.updated_at) : new Date(),
+      deletedAt:  r.deleted_at ? new Date(r.deleted_at) : null,
+    }))
+    await insertBatch('materialCoordinators', coordData, batch =>
+      prisma.materialCoordinator.createMany({ data: batch, skipDuplicates: true })
+    )
+  }
+
+  if (should('materials')) {
+    const materialData = materials.map((r: any) => ({
+      id:             Number(r.id),
+      lot:            r.lot ?? '',
+      spool:          i(r.spool) ?? 0,
+      yarnType:       r.yarnType ?? r.yarn_type ?? '',
+      supplierName:   r.supplierName ?? r.supplier_name ?? '',
+      weightKgNet:    f(r.weight_kg_net)     ?? 0,
+      weightKgSum:    f(r.weight_kg_sum)     ?? 0,
+      weightKgPackage:f(r.weight_kg_package) ?? 0,
+      pallet:         i(r.pallet)            ?? null,
+      box:            i(r.box)               ?? null,
+      sack:           i(r.sack)              ?? null,
+      weightPNet:     f(r.weight_p_net)      ?? null,
+      weightPSum:     f(r.weight_p_sum)      ?? null,
+      weightPPackage: f(r.weight_p_package)  ?? null,
+      averageKg:      f(r.average_kg)        ?? null,
+      averageP:       f(r.average_p)         ?? null,
+      emp:            s(r.emp),
+      importStatus:   r.importStatus ?? r.import_status ?? 'completed',
+      note:           s(r.note),
+      createdAt:      r.created_at ? new Date(r.created_at) : new Date(),
+      updatedAt:      r.updated_at ? new Date(r.updated_at) : new Date(),
+      deletedAt:      r.deleted_at ? new Date(r.deleted_at) : null,
+    }))
+    await insertBatch('materials', materialData, batch =>
+      prisma.material.createMany({ data: batch, skipDuplicates: true })
+    )
+  }
+
+  if (should('materialRequisitions')) {
+    // materialstores ไม่มี materialId ตรงๆ — ใช้ lot+yarnType+supplierName match best-effort
+    // materialId เป็น nullable ดังนั้น row ที่ match ไม่ได้ก็ import ได้ (materialId = null)
+    const matLookup = new Map<string, number>()
+    for (const m of materials) {
+      const key = `${m.lot ?? ''}|${m.yarnType ?? ''}|${m.supplierName ?? ''}`
+      matLookup.set(key, Number(m.id))
+    }
+
+    let matched = 0, unmatched = 0
+    const reqData = materialStores.map((r: any) => {
+      const key = `${r.lot ?? ''}|${r.yarnType ?? ''}|${r.supplierName ?? ''}`
+      const mid = matLookup.get(key) ?? null
+      if (mid) matched++; else unmatched++
+      const base = {
+        id:             Number(r.id),
+        withdrawId:     r.withdrawId ?? '',
+        department:     r.department ?? '',
+        spool:          i(r.spool) ?? 0,
+        weightWithdrawn:f(r.weight_kg_net) ?? 0,
+        note:           null as string | null,
+        createdAt:      r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt:      r.updated_at ? new Date(r.updated_at) : new Date(),
+        deletedAt:      null as Date | null,
+      }
+      // Prisma v7 createMany ไม่รับ null สำหรับ nullable FK — ต้อง omit field แทน
+      return mid !== null ? { ...base, materialId: mid } : base
+    })
+    console.log(`  materialRequisitions: ${matched} matched, ${unmatched} unmatched (materialId=null)`)
+    await insertBatch('materialRequisitions', reqData, batch =>
+      prisma.materialRequisition.createMany({ data: batch, skipDuplicates: true })
+    )
+  }
+
   // ── 4. Reset PostgreSQL sequences ──────────────────────────────────────────
   // จำเป็นเมื่อ import id โดยตรงจาก MySQL — sequence ยังไม่รู้ว่า max id ไปถึงไหน
   // ถ้าไม่ reset จะเกิด "Unique constraint failed on id" ทุกครั้งที่ insert record ใหม่
@@ -333,7 +435,10 @@ async function main() {
     { table: 'fabricouts',         col: 'id' },
     { table: 'orderdeadlines',     col: 'id' },
     { table: 'ordershippeds',      col: 'id' },
-    { table: 'fabricimports',      col: 'id' },
+    { table: 'fabricimports',        col: 'id' },
+    { table: 'materials',            col: 'id' },
+    { table: 'materialrequisitions', col: 'id' },
+    { table: 'materialcoordinators', col: 'id' },
   ]
   for (const { table, col } of tables) {
     await prisma.$executeRawUnsafe(`
@@ -347,7 +452,7 @@ async function main() {
 
   // ── 5. Summary ──────────────────────────────────────────────────────────
   console.log('\n📊 สรุปข้อมูลใน PostgreSQL หลัง sync:')
-  const [c, co, su, o, fs, fa, sf, fo] = await Promise.all([
+  const [c, co, su, o, fs, fa, sf, fo, mat, matReq] = await Promise.all([
     prisma.customer.count(),
     prisma.coordinator.count(),
     prisma.supplier.count(),
@@ -356,16 +461,20 @@ async function main() {
     prisma.fabricAst.count(),
     prisma.stockFabric.count(),
     prisma.fabricOut.count(),
+    prisma.material.count(),
+    prisma.materialRequisition.count(),
   ])
   console.log(`
-  Customers:       ${c}
-  Coordinators:    ${co}
-  Suppliers:       ${su}
-  Purchase Orders: ${o}
-  Fab Structures:  ${fs}
-  Fab Asts:        ${fa}
-  Stock Fabrics:   ${sf}
-  Fabric Outs:     ${fo}
+  Customers:            ${c}
+  Coordinators:         ${co}
+  Suppliers:            ${su}
+  Purchase Orders:      ${o}
+  Fab Structures:       ${fs}
+  Fab Asts:             ${fa}
+  Stock Fabrics:        ${sf}
+  Fabric Outs:          ${fo}
+  Materials:            ${mat}
+  Material Requisitions:${matReq}
   `)
 
   await db.end()
