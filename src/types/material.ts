@@ -3,6 +3,7 @@ export interface MaterialEntryItem {
   spool: number
   yarnType: string
   supplierName: string
+  importStatus?: string
   weightKgNet: number
   weightKgSum: number
   weightKgPackage: number

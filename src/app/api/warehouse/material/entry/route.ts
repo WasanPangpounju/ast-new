@@ -8,6 +8,7 @@ const itemSchema = z.object({
   spool: z.number().int().positive(),
   yarnType: z.string().min(1),
   supplierName: z.string().min(1),
+  importStatus: z.string().optional(),
   weightKgNet: z.number().positive(),
   weightKgSum: z.number().positive(),
   weightKgPackage: z.number().positive(),
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const created = await prisma.material.createManyAndReturn({
-      data: items.map(item => ({ ...item, importStatus: 'completed' })),
+      data: items.map(item => ({ ...item })),
     })
     return Response.json({ success: true, count: created.length, ids: created.map(r => r.id) })
   } catch (err: unknown) {

@@ -41,7 +41,8 @@
       "Bash(Select-String -Pattern \"MYSQL\")",
       "PowerShell(Get-NetTCPConnection *)",
       "Bash(npx next *)",
-      "Bash(PGPASSWORD=password psql -U postgres -d ast_new -h localhost -c \"\\\\d materials\")"
+      "Bash(PGPASSWORD=password psql -U postgres -d ast_new -h localhost -c \"\\\\d materials\")",
+      "Read(//c/Users/Friendly Dev/**)"
     ]
   }
 }
