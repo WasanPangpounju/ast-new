@@ -3,6 +3,8 @@ import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 import type { Prisma } from '@/generated/prisma/client/client'
 
+const LBS_PER_KG = 2.2046
+
 const requisitionSchema = z.object({
   materialId: z.number().int().optional(),
   withdrawId: z.string().min(1).optional(),
@@ -103,7 +105,10 @@ export async function GET(request: NextRequest) {
     ])
 
     return Response.json({
-      data,
+      data: data.map((row) => ({
+        ...row,
+        weightWithdrawnP: row.weightWithdrawn * LBS_PER_KG,
+      })),
       total,
       page,
       totalPages: Math.ceil(total / limit),
