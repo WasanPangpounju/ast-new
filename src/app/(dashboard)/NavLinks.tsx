@@ -107,6 +107,7 @@ const navItems: NavItem[] = [
     children: [
       { href: "/warehouse/material/create", label: "นำเข้าวัตถุดิบ" },
       { href: "/warehouse/material/history", label: "ประวัติการนำเข้า" },
+      { href: "/warehouse/material/requisition", label: "เบิกวัตถุดิบ" },
     ],
   },
 ];

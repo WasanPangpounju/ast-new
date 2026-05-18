@@ -5,7 +5,7 @@ import type { Prisma } from '@/generated/prisma/client/client'
 
 const requisitionSchema = z.object({
   materialId: z.number().int().optional(),
-  withdrawId: z.string().min(1),
+  withdrawId: z.string().min(1).optional(),
   department: z.string().min(1),
   spool: z.number().int().positive(),
   weightWithdrawn: z.number().positive(),
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   try {
     const data = await prisma.materialRequisition.create({
       data: {
-        withdrawId,
+        withdrawId: withdrawId ?? crypto.randomUUID(),
         department,
         spool,
         weightWithdrawn,
@@ -111,6 +111,30 @@ export async function GET(request: NextRequest) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[material/requisition GET] error:', msg)
+    return Response.json({ error: msg }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const idParam = request.nextUrl.searchParams.get('id')
+  const id = idParam ? parseInt(idParam, 10) : NaN
+  if (isNaN(id)) {
+    return Response.json({ error: 'Invalid id' }, { status: 400 })
+  }
+
+  try {
+    const existing = await prisma.materialRequisition.findUnique({ where: { id } })
+    if (!existing || existing.deletedAt !== null) {
+      return Response.json({ error: 'Not found' }, { status: 404 })
+    }
+    await prisma.materialRequisition.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    })
+    return Response.json({ success: true })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[material/requisition DELETE] error:', msg)
     return Response.json({ error: msg }, { status: 500 })
   }
 }
