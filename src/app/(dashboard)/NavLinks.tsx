@@ -90,6 +90,25 @@ const navItems: NavItem[] = [
       },
     ],
   },
+  {
+    label: "ระบบวัตถุดิบ",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        fill="currentColor"
+        viewBox="0 0 16 16"
+      >
+        <path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 11.5V4a1 1 0 0 1-1-1zm2 3v7.5A1.5 1.5 0 0 0 3.5 13h9a1.5 1.5 0 0 0 1.5-1.5V4zm13-1V1H1v2z"/>
+        <path d="M5 7.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/>
+      </svg>
+    ),
+    children: [
+      { href: "/warehouse/material/create", label: "นำเข้าวัตถุดิบ" },
+      { href: "/warehouse/material/history", label: "ประวัติการนำเข้า" },
+    ],
+  },
 ];
 
 export default function NavLinks() {

@@ -35,7 +35,14 @@
       "Bash(Select-Object FullName, Length)",
       "Bash(Get-ChildItem -Path . -Force)",
       "Bash(Select-Object Name)",
-      "PowerShell(head *)"
+      "PowerShell(head *)",
+      "Bash(Get-ChildItem *)",
+      "Bash(Get-Content .env)",
+      "Bash(Select-String -Pattern \"MYSQL\")",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(npx next *)",
+      "Bash(PGPASSWORD=password psql -U postgres -d ast_new -h localhost -c \"\\\\d materials\")",
+      "Read(//c/Users/Friendly Dev/**)"
     ]
   }
 }

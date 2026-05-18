@@ -23,11 +23,7 @@ echo "⚙️ Generating Prisma client..."
 npx prisma generate
 
 echo ""
-echo "🔁 Syncing data from MySQL (Laravel) → PostgreSQL..."
-echo "   (SSH tunnel ต้องเปิดอยู่ก่อน: ssh -L 3307:127.0.0.1:3306 root@128.199.238.141 -N)"
-echo ""
-npx tsx scripts/sync-from-mysql.ts
-
+echo "✅ Update complete!"
 echo ""
 
 # ถ้า npm run dev กำลังรันอยู่ ให้ kill แล้วรันใหม่

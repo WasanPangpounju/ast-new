@@ -68,7 +68,6 @@ model Supplier {
   deletedAt DateTime? @map("deleted_at")
 
   packages  Package[]
-  materials Material[]
 
   @@map("suppliers")
 }
@@ -393,24 +392,39 @@ model Production {
 // ─── MATERIALS ───────────────────────────────────────
 
 model Material {
-  id           Int      @id @default(autoincrement())
-  supplierId   Int?
-  supplierName String?
-  emp          String?
-  yarnType     String?
-  lot          String?
-  pallet       Int?
-  box          Int?
-  spool        Int?
-  weightTotal  Float?
-  weightNet    Float?
-  importStatus String?
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  // รับเส้นด้ายเข้าคลัง (แทน table `materials` ใน MySQL เดิม)
+  id              Int       @id @default(autoincrement())
+  lot             String
+  spool           Int
+  yarnType        String
+  supplierName    String
+  weightKgNet     Float
+  weightKgSum     Float
+  weightKgPackage Float
 
-  supplier Supplier? @relation(fields: [supplierId], references: [id])
+  // บรรจุภัณฑ์
+  pallet          Int?      // จำนวน pallet
+  box             Int?      // จำนวน box
+  sack            Int?      // จำนวน sack
 
-  @@index([supplierId])
+  // น้ำหนัก pounds (เก็บไว้เพื่อ traceability จากระบบเดิม)
+  weightPNet      Float?    // น้ำหนัก pounds ต่อ spool
+  weightPSum      Float?    // น้ำหนัก pounds รวม
+  weightPPackage  Float?    // น้ำหนัก pounds รวมทั้งหีบห่อ
+  averageKg       Float?    // เฉลี่ย kg ต่อ spool
+  averageP        Float?    // เฉลี่ย pounds ต่อ spool
+
+  // พนักงานรับผิดชอบ
+  emp             String?   // ชื่อพนักงานที่รับเข้า (จาก MySQL column `emp`)
+
+  importStatus    String    @default("pending")
+  note            String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  requisitions    MaterialRequisition[]
+
   @@map("materials")
 }
 
@@ -436,6 +450,37 @@ model MaterialOutside {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("material_outsides")
+}
+
+model MaterialRequisition {
+  // เบิกเส้นด้ายออกใช้งาน (แทน table `materialstores` ใน MySQL เดิม)
+  id              Int       @id @default(autoincrement())
+  withdrawId      String
+  // nullable: legacy rows จาก MySQL ไม่มี FK กลับ materials
+  materialId      Int?
+  material        Material? @relation(fields: [materialId], references: [id])
+  department      String
+  spool           Int
+  weightWithdrawn Float
+  note            String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@map("materialrequisitions")
+}
+
+model MaterialCoordinator {
+  // พนักงานที่รับผิดชอบวัตถุดิบ (แทน table `empmaterials` ใน MySQL เดิม)
+  id         Int       @id @default(autoincrement())
+  name       String
+  tel        String?
+  department String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  deletedAt  DateTime?
+
+  @@map("materialcoordinators")
 }
 
 // ─── PACKAGES ────────────────────────────────────────
