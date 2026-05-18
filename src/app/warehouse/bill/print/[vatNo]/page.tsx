@@ -133,8 +133,8 @@ export default function BillPrintPage({
 
         .bill-footer { }
 
-        /* ปิด Safari auto font scaling */
-        .a4-page * { -webkit-text-size-adjust: none; text-size-adjust: none; }
+        /* ปิด Safari auto font scaling + สีดำเหมือน print */
+        .a4-page * { -webkit-text-size-adjust: none; text-size-adjust: none; color: #000; }
 
         /* สีเส้นตารางเดียวกันหมด */
         .a4-page th, .a4-page td { border-color: #555 !important; }
@@ -281,17 +281,17 @@ export default function BillPrintPage({
                       {first.customerName ?? "-"}
                     </span>
                   </div>
-                  <div>
+                  <div className="text-right">
                     <span className="font-bold">ผู้รับ Received by :</span>
                     <span className="font-bold ml-1">{receiverName}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-2  gap-8 mb-2 shrink-0 text-[15px] print-sm">
+                <div className="grid grid-cols-2  gap-8 mb-2 shrink-0 text-[15px] print-sm flex-end">
                   <div>
                     <span className="font-bold">รหัสผ้า Code :</span>
                     <span className="font-bold ml-1">{fabricCode}</span>
                   </div>
-                  <div>
+                  <div className="text-right">
                     <span className="font-bold">วันที่ Date :</span>
                     <span className="font-bold ml-1">
                       {fmtDate(first.createDate)}
@@ -379,16 +379,10 @@ export default function BillPrintPage({
                           {totalFold}
                         </span>
                         <span className="text-sm print-sm">พับ</span>
-                        <span className="text-xs text-gray-500 print-xs">
-                          Total Pieces
-                        </span>
                         <span className="text-[20px] font-bold ml-2 print-big">
                           {totalYard.toLocaleString()}
                         </span>
                         <span className="text-sm print-sm">หลา</span>
-                        <span className="text-xs text-gray-500 print-xs">
-                          Yards
-                        </span>
                       </div>
                       <div>
                         <p className="text-xs font-medium print-xs">
