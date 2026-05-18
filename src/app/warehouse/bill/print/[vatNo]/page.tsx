@@ -86,6 +86,15 @@ export default function BillPrintPage({
     ? first.altPurchaseOrder
     : (first.receiveName ?? "-");
 
+  const trimCompanyName = (name: string | null): string => {
+    if (!name) return "-";
+    return name
+      .replace(/^บริษัท\s*/u, "")
+      .replace(/\s*จำกัด.*/u, "")
+      .replace(/\s*\(.*?\)\s*/gu, "")
+      .trim() || "-";
+  };
+
   const handleDownloadPDF = async () => {
     const el = document.getElementById("print-body");
     if (!el) return;
@@ -133,8 +142,8 @@ export default function BillPrintPage({
 
         .bill-footer { }
 
-        /* ปิด Safari auto font scaling */
-        .a4-page * { -webkit-text-size-adjust: none; text-size-adjust: none; }
+        /* ปิด Safari auto font scaling + สีดำเหมือน print */
+        .a4-page * { -webkit-text-size-adjust: none; text-size-adjust: none; color: #000; }
 
         /* สีเส้นตารางเดียวกันหมด */
         .a4-page th, .a4-page td { border-color: #555 !important; }
@@ -274,26 +283,24 @@ export default function BillPrintPage({
                 </div>
 
                 {/* Info — ไม่มีกรอบ */}
-                <div className="grid grid-cols-2 gap-8 mb-2 shrink-0 text-[15px] print-sm mt-10">
+                <div className="flex items-baseline justify-between mb-2 shrink-0 text-[15px] print-sm mt-10">
                   <div>
                     <span className="font-bold">ผู้สั่ง Order by :</span>
-                    <span className="font-bold ml-1">
-                      {first.customerName ?? "-"}
-                    </span>
+                    <span className="font-bold ml-1 whitespace-nowrap">{trimCompanyName(first.customerName)}</span>
                   </div>
-                  <div>
+                  <div className="shrink-0 ml-8 text-right">
                     <span className="font-bold">ผู้รับ Received by :</span>
-                    <span className="font-bold ml-1">{receiverName}</span>
+                    <span className="font-bold ml-1 whitespace-nowrap">{trimCompanyName(receiverName)}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-2  gap-8 mb-2 shrink-0 text-[15px] print-sm">
-                  <div>
+                <div className="flex justify-between mb-2 shrink-0 text-[15px] print-sm">
+                  <div className="flex-1 min-w-0">
                     <span className="font-bold">รหัสผ้า Code :</span>
-                    <span className="font-bold ml-1">{fabricCode}</span>
+                    <span className="font-bold ml-1 whitespace-nowrap">{fabricCode}</span>
                   </div>
-                  <div>
+                  <div className="shrink-0 text-right ml-4">
                     <span className="font-bold">วันที่ Date :</span>
-                    <span className="font-bold ml-1">
+                    <span className="font-bold ml-1 whitespace-nowrap">
                       {fmtDate(first.createDate)}
                     </span>
                   </div>
@@ -379,16 +386,10 @@ export default function BillPrintPage({
                           {totalFold}
                         </span>
                         <span className="text-sm print-sm">พับ</span>
-                        <span className="text-xs text-gray-500 print-xs">
-                          Total Pieces
-                        </span>
                         <span className="text-[20px] font-bold ml-2 print-big">
                           {totalYard.toLocaleString()}
                         </span>
                         <span className="text-sm print-sm">หลา</span>
-                        <span className="text-xs text-gray-500 print-xs">
-                          Yards
-                        </span>
                       </div>
                       <div>
                         <p className="text-xs font-medium print-xs">

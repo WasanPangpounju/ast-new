@@ -181,8 +181,8 @@ export default function PurchaseOrderPrintPage({ params }: { params: Promise<{ i
           </div>
         )}
 
-        <div className="text-center my-4">
-          <h2 className="text-xl font-bold border-b-2 border-gray-800 pb-1 inline-block px-8">ใบสั่งขาย</h2>
+        <div className="text-center my-4 border-b-2">
+          <h2 className="text-xl font-bold  border-gray-800 pb-1 inline-block px-8">ใบสั่งขาย</h2>
         </div>
 
         {/* Info section */}
