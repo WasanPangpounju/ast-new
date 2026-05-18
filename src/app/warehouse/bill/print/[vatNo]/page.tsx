@@ -86,6 +86,15 @@ export default function BillPrintPage({
     ? first.altPurchaseOrder
     : (first.receiveName ?? "-");
 
+  const trimCompanyName = (name: string | null): string => {
+    if (!name) return "-";
+    return name
+      .replace(/^บริษัท\s*/u, "")
+      .replace(/\s*จำกัด.*/u, "")
+      .replace(/\s*\(.*?\)\s*/gu, "")
+      .trim() || "-";
+  };
+
   const handleDownloadPDF = async () => {
     const el = document.getElementById("print-body");
     if (!el) return;
@@ -274,26 +283,24 @@ export default function BillPrintPage({
                 </div>
 
                 {/* Info — ไม่มีกรอบ */}
-                <div className="grid grid-cols-2 gap-8 mb-2 shrink-0 text-[15px] print-sm mt-10">
+                <div className="flex items-baseline justify-between mb-2 shrink-0 text-[15px] print-sm mt-10">
                   <div>
                     <span className="font-bold">ผู้สั่ง Order by :</span>
-                    <span className="font-bold ml-1">
-                      {first.customerName ?? "-"}
-                    </span>
+                    <span className="font-bold ml-1 whitespace-nowrap">{trimCompanyName(first.customerName)}</span>
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 ml-8 text-right">
                     <span className="font-bold">ผู้รับ Received by :</span>
-                    <span className="font-bold ml-1">{receiverName}</span>
+                    <span className="font-bold ml-1 whitespace-nowrap">{trimCompanyName(receiverName)}</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-2  gap-8 mb-2 shrink-0 text-[15px] print-sm flex-end">
-                  <div>
+                <div className="flex justify-between mb-2 shrink-0 text-[15px] print-sm">
+                  <div className="flex-1 min-w-0">
                     <span className="font-bold">รหัสผ้า Code :</span>
-                    <span className="font-bold ml-1">{fabricCode}</span>
+                    <span className="font-bold ml-1 whitespace-nowrap">{fabricCode}</span>
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 text-right ml-4">
                     <span className="font-bold">วันที่ Date :</span>
-                    <span className="font-bold ml-1">
+                    <span className="font-bold ml-1 whitespace-nowrap">
                       {fmtDate(first.createDate)}
                     </span>
                   </div>

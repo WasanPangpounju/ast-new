@@ -223,8 +223,6 @@ export default function SalesOrdersReviewPage() {
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-36">สถานะปัจจุบัน</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-44">เปลี่ยนสถานะ</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-52">เอกสาร</th>
-                <th className="hidden lg:table-cell text-center px-3 py-2.5 font-medium text-gray-600 w-44">เปลี่ยนสถานะ</th>
-                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-16">ดู</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">

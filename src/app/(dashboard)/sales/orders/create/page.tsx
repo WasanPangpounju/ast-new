@@ -422,7 +422,7 @@ export default function CreateOrderPage() {
       </div>
 
       {/* ── Content ──────────────────────────────────────────────────────────── */}
-      <div className="p-3 max-w-4xl">
+      <div className="p-3 w-full">
         <form onSubmit={handleSubmit}>
           {toast && (
             <div className="text-xs text-green-700 bg-green-50 border border-green-300 rounded px-3 py-2 mb-3">{toast}</div>
