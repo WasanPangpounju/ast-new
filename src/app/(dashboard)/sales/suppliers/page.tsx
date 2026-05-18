@@ -382,7 +382,7 @@ export default function SalesSuppliersPage() {
                         {s.tel ?? "-"}
                       </td>
                       <td className="px-3 py-2.5">
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                        <span className="text-xs py-0.5 rounded-full bg-gray-100 text-gray-700">
                           {s.type ?? "-"}
                         </span>
                       </td>
