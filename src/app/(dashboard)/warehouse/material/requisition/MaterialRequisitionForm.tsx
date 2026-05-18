@@ -9,6 +9,7 @@ interface FormState {
   supplierName: string;
   yarnType: string;
   spool: string;
+  weightWithdrawnP: string;
   weightWithdrawn: string;
   withdrawDate: string;
   note: string;
@@ -26,6 +27,11 @@ interface PendingItem {
   note: string;
 }
 
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+const LBS_PER_KG = 2.2046;
+const fmt3 = (n: number) => (n > 0 ? n.toFixed(3) : "");
+
 // ─── localStorage helpers ───────────────────────────────────────────────────────
 
 const EMP_KEY = "material-emp-list";
@@ -41,6 +47,11 @@ function saveEmpToList(name: string): boolean {
   list.push(trimmed);
   localStorage.setItem(EMP_KEY, JSON.stringify(list));
   return true;
+}
+function removeEmpFromList(name: string): string[] {
+  const list = getEmpList().filter((n) => n !== name);
+  localStorage.setItem(EMP_KEY, JSON.stringify(list));
+  return list;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -141,7 +152,7 @@ function AutocompleteInput({
 interface Props { emp: string; }
 
 function makeEmpty(t: string, emp: string): FormState {
-  return { department: "ห้องสืบผ้า", emp, supplierName: "", yarnType: "", spool: "", weightWithdrawn: "", withdrawDate: t, note: "" };
+  return { department: "ห้องสืบผ้า", emp, supplierName: "", yarnType: "", spool: "", weightWithdrawnP: "", weightWithdrawn: "", withdrawDate: t, note: "" };
 }
 
 export default function MaterialRequisitionForm({ emp }: Props) {
@@ -201,6 +212,17 @@ export default function MaterialRequisitionForm({ emp }: Props) {
     }, 300);
   }
 
+  // ── Weight converters ───────────────────────────────────────────────────────
+
+  function onWeightP(v: string) {
+    const p = parseFloat(v) || 0;
+    patch({ weightWithdrawnP: v, weightWithdrawn: p > 0 ? fmt3(p / LBS_PER_KG) : "" });
+  }
+  function onWeightKg(v: string) {
+    const k = parseFloat(v) || 0;
+    patch({ weightWithdrawn: v, weightWithdrawnP: k > 0 ? fmt3(k * LBS_PER_KG) : "" });
+  }
+
   // ── Validation ──────────────────────────────────────────────────────────────
 
   function validate(): boolean {
@@ -230,7 +252,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
       withdrawDate: form.withdrawDate,
       note: form.note,
     }]);
-    setForm((prev) => ({ ...prev, supplierName: "", yarnType: "", spool: "", weightWithdrawn: "", note: "" }));
+    setForm((prev) => ({ ...prev, supplierName: "", yarnType: "", spool: "", weightWithdrawnP: "", weightWithdrawn: "", note: "" }));
     setErrors({});
     setSupOptions([]);
     setYarnOptions([]);
@@ -317,15 +339,11 @@ export default function MaterialRequisitionForm({ emp }: Props) {
           <Field label="พนักงาน">
             <div className="flex gap-1.5">
               <input
-                list="emp-datalist"
                 value={form.emp}
                 onChange={(e) => patch({ emp: e.target.value })}
                 placeholder="ชื่อพนักงาน"
                 className={inp}
               />
-              <datalist id="emp-datalist">
-                {empList.map((name) => <option key={name} value={name} />)}
-              </datalist>
               <button type="button"
                 onClick={() => {
                   if (saveEmpToList(form.emp)) {
@@ -337,6 +355,22 @@ export default function MaterialRequisitionForm({ emp }: Props) {
                 + บันทึกชื่อ
               </button>
             </div>
+            {empList.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {empList.map((name) => (
+                  <span key={name}
+                    onClick={() => patch({ emp: name })}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-100 border border-gray-200 rounded text-gray-700 cursor-pointer hover:bg-blue-50 hover:border-blue-200 select-none">
+                    {name}
+                    <button type="button"
+                      onClick={(e) => { e.stopPropagation(); setEmpList(removeEmpFromList(name)); }}
+                      className="text-gray-400 hover:text-red-500 font-medium leading-none">
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </Field>
 
           <Field label="วันที่">
@@ -378,12 +412,28 @@ export default function MaterialRequisitionForm({ emp }: Props) {
               className={`${inp} ${errors.spool ? errB : ""}`} />
           </Field>
 
-          <Field label="น้ำหนักที่เบิก (kg)" required error={errors.weightWithdrawn}>
-            <input type="number" min="0.001" step="0.001" value={form.weightWithdrawn}
-              onChange={(e) => patch({ weightWithdrawn: e.target.value })}
-              placeholder="กิโลกรัม"
-              className={`${inp} ${errors.weightWithdrawn ? errB : ""}`} />
-          </Field>
+          <div className="sm:col-span-2">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              น้ำหนักที่เบิก<span className="text-red-500 ml-0.5">*</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">ปอนด์</label>
+                <input type="number" min="0.001" step="0.001" value={form.weightWithdrawnP}
+                  onChange={(e) => onWeightP(e.target.value)}
+                  placeholder="ปอนด์"
+                  className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">กิโลกรัม</label>
+                <input type="number" min="0.001" step="0.001" value={form.weightWithdrawn}
+                  onChange={(e) => onWeightKg(e.target.value)}
+                  placeholder="กิโลกรัม"
+                  className={`${inp} ${errors.weightWithdrawn ? errB : ""}`} />
+              </div>
+            </div>
+            {errors.weightWithdrawn && <p className="text-xs text-red-500 mt-0.5">{errors.weightWithdrawn}</p>}
+          </div>
 
           <Field label="หมายเหตุ">
             <input value={form.note}
