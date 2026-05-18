@@ -8,6 +8,7 @@ interface FormState {
   emp: string;
   supplierName: string;
   yarnType: string;
+  lot: string;
   spool: string;
   weightWithdrawnP: string;
   weightWithdrawn: string;
@@ -21,6 +22,7 @@ interface PendingItem {
   emp: string;
   supplierName: string;
   yarnType: string;
+  lot: string;
   spool: number;
   weightWithdrawn: number;
   withdrawDate: string;
@@ -152,7 +154,7 @@ function AutocompleteInput({
 interface Props { emp: string; }
 
 function makeEmpty(t: string, emp: string): FormState {
-  return { department: "ห้องสืบผ้า", emp, supplierName: "", yarnType: "", spool: "", weightWithdrawnP: "", weightWithdrawn: "", withdrawDate: t, note: "" };
+  return { department: "ห้องสืบผ้า", emp, supplierName: "", yarnType: "", lot: "", spool: "", weightWithdrawnP: "", weightWithdrawn: "", withdrawDate: t, note: "" };
 }
 
 export default function MaterialRequisitionForm({ emp }: Props) {
@@ -163,10 +165,12 @@ export default function MaterialRequisitionForm({ emp }: Props) {
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
   const [empList, setEmpList] = useState<string[]>([]);
-  const [supOptions, setSupOptions] = useState<string[]>([]);
+  const [supOptions, setSupOptions]   = useState<string[]>([]);
   const [yarnOptions, setYarnOptions] = useState<string[]>([]);
-  const supTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [lotOptions, setLotOptions]   = useState<string[]>([]);
+  const supTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const yarnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lotTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formRef = useRef(form);
 
   useEffect(() => { formRef.current = form; }, [form]);
@@ -198,6 +202,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
 
   function onYarnTypeChange(v: string) {
     patch({ yarnType: v });
+    if (!v.trim()) setLotOptions([]);
     if (yarnTimer.current) clearTimeout(yarnTimer.current);
     yarnTimer.current = setTimeout(async () => {
       try {
@@ -209,6 +214,25 @@ export default function MaterialRequisitionForm({ emp }: Props) {
         const data = await res.json();
         setYarnOptions(data.data ?? []);
       } catch { setYarnOptions([]); }
+    }, 300);
+  }
+
+  function fetchLots(yarnType: string, supplierName: string, q = "") {
+    if (!yarnType.trim()) { setLotOptions([]); return; }
+    const p = new URLSearchParams({ yarnType });
+    if (supplierName) p.set("supplierName", supplierName);
+    if (q) p.set("q", q);
+    fetch(`/api/warehouse/material/lots?${p}`)
+      .then((r) => r.json())
+      .then((d) => setLotOptions(d.data ?? []))
+      .catch(() => setLotOptions([]));
+  }
+
+  function onLotChange(v: string) {
+    patch({ lot: v });
+    if (lotTimer.current) clearTimeout(lotTimer.current);
+    lotTimer.current = setTimeout(() => {
+      fetchLots(formRef.current.yarnType, formRef.current.supplierName, v);
     }, 300);
   }
 
@@ -247,15 +271,17 @@ export default function MaterialRequisitionForm({ emp }: Props) {
       emp: form.emp,
       supplierName: form.supplierName,
       yarnType: form.yarnType,
+      lot: form.lot,
       spool: parseInt(form.spool),
       weightWithdrawn: parseFloat(form.weightWithdrawn),
       withdrawDate: form.withdrawDate,
       note: form.note,
     }]);
-    setForm((prev) => ({ ...prev, supplierName: "", yarnType: "", spool: "", weightWithdrawnP: "", weightWithdrawn: "", note: "" }));
+    setForm((prev) => ({ ...prev, supplierName: "", yarnType: "", lot: "", spool: "", weightWithdrawnP: "", weightWithdrawn: "", note: "" }));
     setErrors({});
     setSupOptions([]);
     setYarnOptions([]);
+    setLotOptions([]);
   }
 
   // ── Save all pending to DB ──────────────────────────────────────────────────
@@ -398,10 +424,21 @@ export default function MaterialRequisitionForm({ emp }: Props) {
             <AutocompleteInput
               value={form.yarnType}
               onChange={onYarnTypeChange}
-              onSelect={(v) => { patch({ yarnType: v }); setYarnOptions([]); }}
+              onSelect={(v) => { patch({ yarnType: v }); setYarnOptions([]); fetchLots(v, formRef.current.supplierName, formRef.current.lot); }}
               options={yarnOptions}
               placeholder="เช่น CP 30/1, R 30"
               inputClassName={`${inp} ${errors.yarnType ? errB : ""}`}
+            />
+          </Field>
+
+          <Field label="Lot">
+            <AutocompleteInput
+              value={form.lot}
+              onChange={onLotChange}
+              onSelect={(v) => { patch({ lot: v }); setLotOptions([]); }}
+              options={lotOptions}
+              placeholder="ล็อตที่ (พิมพ์หรือเลือกจากรายการ)"
+              inputClassName={inp}
             />
           </Field>
 
@@ -456,7 +493,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
             ลบรายการล่าสุด
           </button>
           <button type="button"
-            onClick={() => { setForm(makeEmpty(initDate, emp)); setErrors({}); setSupOptions([]); setYarnOptions([]); }}
+            onClick={() => { setForm(makeEmpty(initDate, emp)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); }}
             className="px-4 py-2 text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors">
             เคลียร์ข้อมูล
           </button>
