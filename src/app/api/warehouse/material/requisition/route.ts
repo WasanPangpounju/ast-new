@@ -6,12 +6,17 @@ import type { Prisma } from '@/generated/prisma/client/client'
 const LBS_PER_KG = 2.2046
 
 const requisitionSchema = z.object({
-  materialId: z.number().int().optional(),
-  withdrawId: z.string().min(1).optional(),
-  department: z.string().min(1),
-  spool: z.number().int().positive(),
+  materialId:   z.number().int().optional(),
+  withdrawId:   z.string().min(1).optional(),
+  department:   z.string().min(1),
+  emp:          z.string().optional(),
+  spool:        z.number().int().positive(),
   weightWithdrawn: z.number().positive(),
-  note: z.string().optional(),
+  note:         z.string().optional(),
+  // ใช้ lookup materialId — ไม่เก็บลง column โดยตรง
+  supplierName: z.string().optional(),
+  yarnType:     z.string().optional(),
+  lot:          z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -27,10 +32,25 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { materialId, withdrawId, department, spool, weightWithdrawn, note } = parsed.data
+  const { materialId, withdrawId, department, emp, spool, weightWithdrawn, note,
+          supplierName, yarnType, lot } = parsed.data
 
-  if (materialId != null) {
-    const material = await prisma.material.findUnique({ where: { id: materialId } })
+  // ถ้า materialId ไม่ได้ส่งมา ให้ลอง lookup จาก supplierName + yarnType + lot
+  let resolvedMaterialId = materialId ?? null
+  if (resolvedMaterialId == null && (supplierName || yarnType)) {
+    const found = await prisma.material.findFirst({
+      where: {
+        deletedAt: null,
+        ...(supplierName ? { supplierName } : {}),
+        ...(yarnType    ? { yarnType }    : {}),
+        ...(lot         ? { lot }         : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    })
+    if (found) resolvedMaterialId = found.id
+  } else if (resolvedMaterialId != null) {
+    const material = await prisma.material.findUnique({ where: { id: resolvedMaterialId } })
     if (!material || material.deletedAt !== null) {
       return Response.json({ error: 'Material not found' }, { status: 404 })
     }
@@ -41,10 +61,11 @@ export async function POST(request: NextRequest) {
       data: {
         withdrawId: withdrawId ?? crypto.randomUUID(),
         department,
+        emp:        emp || null,
         spool,
         weightWithdrawn,
         note,
-        ...(materialId != null && { materialId }),
+        ...(resolvedMaterialId != null && { materialId: resolvedMaterialId }),
       },
     })
     return Response.json({ success: true, data })
@@ -116,6 +137,46 @@ export async function GET(request: NextRequest) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[material/requisition GET] error:', msg)
+    return Response.json({ error: msg }, { status: 500 })
+  }
+}
+
+const patchSchema = z.object({
+  department:      z.string().min(1).optional(),
+  emp:             z.string().nullable().optional(),
+  spool:           z.number().int().positive().optional(),
+  weightWithdrawn: z.number().positive().optional(),
+  note:            z.string().nullable().optional(),
+})
+
+export async function PATCH(request: NextRequest) {
+  const idParam = request.nextUrl.searchParams.get('id')
+  const id = idParam ? parseInt(idParam, 10) : NaN
+  if (isNaN(id)) return Response.json({ error: 'Invalid id' }, { status: 400 })
+
+  let body: unknown
+  try { body = await request.json() } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const parsed = patchSchema.safeParse(body)
+  if (!parsed.success) {
+    return Response.json({ error: parsed.error.flatten() }, { status: 400 })
+  }
+
+  try {
+    const existing = await prisma.materialRequisition.findUnique({ where: { id } })
+    if (!existing || existing.deletedAt !== null) {
+      return Response.json({ error: 'Not found' }, { status: 404 })
+    }
+    const updated = await prisma.materialRequisition.update({
+      where: { id },
+      data: parsed.data,
+    })
+    return Response.json({ success: true, data: updated })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[material/requisition PATCH] error:', msg)
     return Response.json({ error: msg }, { status: 500 })
   }
 }

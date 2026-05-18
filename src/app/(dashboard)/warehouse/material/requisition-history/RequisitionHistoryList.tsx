@@ -9,6 +9,7 @@ interface Requisition {
   id: number;
   withdrawId: string;
   department: string;
+  emp: string | null;
   spool: number;
   weightWithdrawn: number;
   weightWithdrawnP: number;
@@ -28,7 +29,16 @@ interface RequisitionResponse {
   totalPages: number;
 }
 
-type Tab = "detail" | "delete";
+type Tab = "detail" | "edit" | "delete";
+
+interface EditState {
+  department: string;
+  emp: string;
+  spool: string;
+  weightWithdrawnP: string;
+  weightWithdrawn: string;
+  note: string;
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -47,6 +57,19 @@ function numFmt(n: number | null | undefined, dec = 2) {
 }
 
 const LIMIT = 20;
+const LBS_PER_KG = 2.2046;
+const fmt3 = (n: number) => (n > 0 ? n.toFixed(3) : "");
+
+function toEditState(r: Requisition): EditState {
+  return {
+    department:       r.department,
+    emp:              r.emp ?? "",
+    spool:            String(r.spool),
+    weightWithdrawnP: fmt3(r.weightWithdrawnP),
+    weightWithdrawn:  String(r.weightWithdrawn),
+    note:             r.note ?? "",
+  };
+}
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -78,6 +101,9 @@ export default function RequisitionHistoryList() {
   const [activeTab, setActiveTab] = useState<Tab>("detail");
   const [deleting, setDeleting]   = useState(false);
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
+  const [editState, setEditState]   = useState<EditState | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editMsg, setEditMsg]       = useState<{ ok: boolean; text: string } | null>(null);
 
   // ── list query ──────────────────────────────────────────────────────────────
   const { data, isFetching, isError } = useQuery<RequisitionResponse>({
@@ -117,10 +143,20 @@ export default function RequisitionHistoryList() {
     setSelected(row);
     setActiveTab("detail");
     setDeleteMsg(null);
+    setEditState(toEditState(row));
+    setEditMsg(null);
   }
   function closeModal() {
     setSelected(null);
     setDeleteMsg(null);
+    setEditState(null);
+    setEditMsg(null);
+  }
+  function switchTab(t: Tab) {
+    setActiveTab(t);
+    setDeleteMsg(null);
+    setEditMsg(null);
+    if (t === "edit" && selected) setEditState(toEditState(selected));
   }
 
   async function handleDelete() {
@@ -137,6 +173,62 @@ export default function RequisitionHistoryList() {
       setDeleteMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
     } finally {
       setDeleting(false);
+    }
+  }
+
+  // ── Edit handlers ───────────────────────────────────────────────────────────
+
+  function patchEdit(changes: Partial<EditState>) {
+    setEditState((s) => s ? { ...s, ...changes } : s);
+  }
+  function onEditWeightP(v: string) {
+    const p = parseFloat(v) || 0;
+    patchEdit({ weightWithdrawnP: v, weightWithdrawn: p > 0 ? fmt3(p / LBS_PER_KG) : "" });
+  }
+  function onEditWeightKg(v: string) {
+    const k = parseFloat(v) || 0;
+    patchEdit({ weightWithdrawn: v, weightWithdrawnP: k > 0 ? fmt3(k * LBS_PER_KG) : "" });
+  }
+
+  async function handleSaveEdit() {
+    if (!selected || !editState) return;
+    const sp = parseInt(editState.spool);
+    const w  = parseFloat(editState.weightWithdrawn);
+    if (!editState.department || isNaN(sp) || sp < 1 || isNaN(w) || w <= 0) {
+      setEditMsg({ ok: false, text: "กรุณากรอกข้อมูลให้ครบถ้วน" });
+      return;
+    }
+    setEditSaving(true);
+    setEditMsg(null);
+    try {
+      const res = await fetch(`/api/warehouse/material/requisition?id=${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          department:      editState.department,
+          emp:             editState.emp.trim() || null,
+          spool:           sp,
+          weightWithdrawn: w,
+          note:            editState.note.trim() || null,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "บันทึกไม่สำเร็จ");
+      setEditMsg({ ok: true, text: "บันทึกสำเร็จ" });
+      setSelected((prev) => prev ? {
+        ...prev,
+        department:       editState.department,
+        emp:              editState.emp.trim() || null,
+        spool:            sp,
+        weightWithdrawn:  w,
+        weightWithdrawnP: w * LBS_PER_KG,
+        note:             editState.note.trim() || null,
+      } : null);
+      qc.invalidateQueries({ queryKey: ["material-requisition"] });
+    } catch (err: unknown) {
+      setEditMsg({ ok: false, text: err instanceof Error ? err.message : "เกิดข้อผิดพลาด" });
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -219,8 +311,7 @@ export default function RequisitionHistoryList() {
                   <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.createdAt)}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[100px] truncate">{row.department}</td>
-                  {/* emp: MaterialRequisition schema ไม่มี field นี้ */}
-                  <td className="px-3 py-2 text-gray-400">—</td>
+                  <td className="px-3 py-2 text-gray-700 max-w-[100px] truncate">{row.emp ?? "-"}</td>
                   <td className="px-3 py-2 text-gray-800 max-w-[120px] truncate" title={row.material?.yarnType ?? ""}>
                     {row.material?.yarnType ?? "-"}
                   </td>
@@ -287,10 +378,11 @@ export default function RequisitionHistoryList() {
             <div className="flex border-b border-gray-200 shrink-0">
               {([
                 { key: "detail", label: "ดูรายละเอียด" },
+                { key: "edit",   label: "แก้ไข" },
                 { key: "delete", label: "ลบ" },
               ] as { key: Tab; label: string }[]).map(({ key, label }) => (
                 <button key={key} type="button"
-                  onClick={() => { setActiveTab(key); setDeleteMsg(null); }}
+                  onClick={() => switchTab(key)}
                   className={`flex-1 py-2 text-xs font-medium transition-colors ${
                     activeTab === key
                       ? key === "delete"
@@ -309,8 +401,7 @@ export default function RequisitionHistoryList() {
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">ข้อมูลทั่วไป</p>
                 <DRow label="วันที่เบิก"    value={fmtDate(selected.createdAt)} />
                 <DRow label="แผนก"    value={selected.department} />
-                {/* emp: MaterialRequisition schema ไม่มี field นี้ */}
-                <DRow label="พนักงาน" value={null} />
+                <DRow label="พนักงาน" value={selected.emp} />
                 <DRow label="ชนิดด้าย" value={selected.material?.yarnType} />
                 <DRow label="ชื่อบริษัท"    value={selected.material?.supplierName} />
                 <DRow label="Lot"           value={selected.material?.lot} />
@@ -323,6 +414,98 @@ export default function RequisitionHistoryList() {
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-2">อื่นๆ</p>
                 <DRow label="หมายเหตุ" value={selected.note} />
               </div>
+            )}
+
+            {/* ── Tab: แก้ไข ───────────────────────────────────────── */}
+            {activeTab === "edit" && editState && (
+              <>
+                <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+
+                  {/* context อ่านอย่างเดียว */}
+                  {(selected?.material?.yarnType || selected?.material?.supplierName) && (
+                    <div className="bg-gray-50 border border-gray-100 px-3 py-2 text-xs text-gray-500 space-y-0.5">
+                      {selected.material?.yarnType    && <p>ชนิดด้าย: <span className="font-medium text-gray-700">{selected.material.yarnType}</span></p>}
+                      {selected.material?.supplierName && <p>บริษัท: <span className="font-medium text-gray-700">{selected.material.supplierName}</span></p>}
+                    </div>
+                  )}
+
+                  {/* เบิกวัตถุดิบใช้ที่ */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      เบิกวัตถุดิบใช้ที่<span className="text-red-500 ml-0.5">*</span>
+                    </label>
+                    <select value={editState.department} onChange={(e) => patchEdit({ department: e.target.value })}
+                      className={`${inp} bg-white`}>
+                      <option value="ห้องสืบผ้า">ห้องสืบผ้า</option>
+                      <option value="ห้องทอผ้า">ห้องทอผ้า</option>
+                    </select>
+                  </div>
+
+                  {/* พนักงาน */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">พนักงาน</label>
+                    <input value={editState.emp}
+                      onChange={(e) => patchEdit({ emp: e.target.value })}
+                      placeholder="ชื่อพนักงาน"
+                      className={inp} />
+                  </div>
+
+                  {/* จำนวน (ลูก) */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      จำนวน (ลูก)<span className="text-red-500 ml-0.5">*</span>
+                    </label>
+                    <input type="number" min="1" value={editState.spool}
+                      onChange={(e) => patchEdit({ spool: e.target.value })}
+                      placeholder="จำนวน" className={inp} />
+                  </div>
+
+                  {/* น้ำหนักที่เบิก */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      น้ำหนักที่เบิก<span className="text-red-500 ml-0.5">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-3 mt-1">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">ปอนด์</label>
+                        <input type="number" step="0.001" value={editState.weightWithdrawnP}
+                          onChange={(e) => onEditWeightP(e.target.value)}
+                          placeholder="ปอนด์" className={inp} />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">กิโลกรัม</label>
+                        <input type="number" step="0.001" value={editState.weightWithdrawn}
+                          onChange={(e) => onEditWeightKg(e.target.value)}
+                          placeholder="กิโลกรัม" className={inp} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* หมายเหตุ */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">หมายเหตุ</label>
+                    <input value={editState.note}
+                      onChange={(e) => patchEdit({ note: e.target.value })}
+                      placeholder="หมายเหตุ (ถ้ามี)" className={inp} />
+                  </div>
+
+                  {editMsg && (
+                    <p className={`text-xs px-3 py-2 ${editMsg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+                      {editMsg.text}
+                    </p>
+                  )}
+                </div>
+                <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
+                  <button type="button" onClick={closeModal}
+                    className="px-4 py-1.5 text-xs border border-gray-300 hover:bg-gray-50 text-gray-600">
+                    ยกเลิก
+                  </button>
+                  <button type="button" onClick={handleSaveEdit} disabled={editSaving}
+                    className="px-5 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium">
+                    {editSaving ? "กำลังบันทึก..." : "บันทึก"}
+                  </button>
+                </div>
+              </>
             )}
 
             {/* ── Tab: ลบ ──────────────────────────────────────────── */}

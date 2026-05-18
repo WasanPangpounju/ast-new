@@ -460,6 +460,7 @@ model MaterialRequisition {
   materialId      Int?
   material        Material? @relation(fields: [materialId], references: [id])
   department      String
+  emp             String?
   spool           Int
   weightWithdrawn Float
   note            String?

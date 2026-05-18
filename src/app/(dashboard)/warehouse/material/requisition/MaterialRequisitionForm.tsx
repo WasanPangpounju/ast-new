@@ -298,10 +298,14 @@ export default function MaterialRequisitionForm({ emp }: Props) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            department: item.department,
-            spool: item.spool,
+            department:      item.department,
+            emp:             item.emp          || undefined,
+            spool:           item.spool,
             weightWithdrawn: item.weightWithdrawn,
-            note: item.note || undefined,
+            note:            item.note         || undefined,
+            supplierName:    item.supplierName || undefined,
+            yarnType:        item.yarnType     || undefined,
+            lot:             item.lot          || undefined,
           }),
         });
         if (!res.ok) throw new Error();
