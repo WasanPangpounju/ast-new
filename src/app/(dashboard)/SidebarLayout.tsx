@@ -22,10 +22,10 @@ export default function SidebarLayout({ userName }: Props) {
     <>
       {/* Mobile topbar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between bg-slate-800 px-4 py-3 text-white">
-        <span className="text-sm font-bold truncate">ASIA TEXTILE CO., LTD.</span>
-        <button type="button" onClick={() => setOpen(v => !v)} aria-label="toggle menu">
-          {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        <button type="button" onClick={() => setOpen(true)} aria-label="open menu">
+          <Menu className="w-5 h-5" />
         </button>
+        <span className="text-sm font-bold truncate">ASIA TEXTILE CO., LTD.</span>
       </div>
 
       {/* Overlay */}
@@ -46,8 +46,13 @@ export default function SidebarLayout({ userName }: Props) {
           <h1 className="text-sm font-bold text-white leading-tight">ASIA TEXTILE CO., LTD.</h1>
           <p className="text-xs text-slate-400 mt-1">{userName}</p>
         </div>
-        {/* Mobile: spacer สำหรับ topbar */}
-        <div className="h-14 md:hidden" />
+        {/* Mobile: close button */}
+        <div className="h-14 md:hidden flex items-center justify-end px-3">
+          <button type="button" onClick={() => setOpen(false)} aria-label="close menu"
+            className="text-slate-400 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
         <nav className="flex-1 p-2 overflow-y-auto" onClick={() => setOpen(false)}>
           <NavLinks />
         </nav>

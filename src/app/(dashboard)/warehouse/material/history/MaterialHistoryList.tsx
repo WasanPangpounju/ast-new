@@ -81,7 +81,7 @@ type EditState = ReturnType<typeof toEditState>;
 
 function DRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex gap-2 py-1.5 border-b border-gray-50 last:border-0">
+    <div className="flex gap-2 py-1.5">
       <span className="text-xs text-gray-500 w-36 shrink-0">{label}</span>
       <span className="text-xs text-gray-800 font-medium">{value || "-"}</span>
     </div>
@@ -275,7 +275,7 @@ export default function MaterialHistoryList() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
+              <tr className="bg-gray-50">
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-10">#</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">วันที่</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">Lot</th>
@@ -287,7 +287,7 @@ export default function MaterialHistoryList() {
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-16"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody>
               {isFetching && rows.length === 0 ? (
                 <tr><td colSpan={9} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
@@ -326,7 +326,7 @@ export default function MaterialHistoryList() {
 
         {/* Pagination */}
         {totalPages >= 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between px-4 py-3 bg-gray-50">
             <p className="text-xs text-gray-500">
               {total === 0 ? "ไม่มีข้อมูล" : `แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} รายการ`}
               {isFetching && <span className="ml-2 text-blue-500">กำลังโหลด...</span>}
@@ -353,7 +353,7 @@ export default function MaterialHistoryList() {
           <div className="relative bg-white shadow-xl w-full max-w-lg mx-4 overflow-hidden max-h-[90vh] flex flex-col">
 
             {/* Modal header */}
-            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
+            <div className="px-5 py-3 flex items-center justify-between shrink-0">
               <div>
                 <h2 className="font-semibold text-gray-900 text-sm">จัดการวัตถุดิบ</h2>
                 <p className="text-xs text-gray-400">ID: {selected.id} · {selected.yarnType}</p>
@@ -363,7 +363,7 @@ export default function MaterialHistoryList() {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-gray-200 shrink-0">
+            <div className="flex shrink-0">
               {([
                 { key: "detail", label: "ดูรายละเอียด" },
                 { key: "edit",   label: "แก้ไข" },
@@ -455,7 +455,7 @@ export default function MaterialHistoryList() {
                     </p>
                   )}
                 </div>
-                <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
+                <div className="px-5 py-3 flex justify-end gap-2 shrink-0">
                   <button type="button" onClick={closeModal}
                     className="px-4 py-1.5 text-xs border border-gray-300 hover:bg-gray-50 text-gray-600">
                     ยกเลิก
@@ -489,7 +489,7 @@ export default function MaterialHistoryList() {
                     <p className="text-xs text-red-500 mt-3">{actionMsg.text}</p>
                   )}
                 </div>
-                <div className="px-5 py-3 border-t border-gray-100 flex gap-2 justify-center shrink-0">
+                <div className="px-5 py-3 flex gap-2 justify-center shrink-0">
                   <button type="button" onClick={closeModal}
                     className="px-5 py-1.5 text-xs border border-gray-300 hover:bg-gray-50 text-gray-600">
                     ยกเลิก

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { Calendar } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ function nextKey() { return ++keySeq; }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-5 pb-2 border-t border-gray-100 first:pt-0 first:border-t-0">
+    <div className="text-sm font-semibold text-gray-500 uppercase tracking-wide pt-5 pb-2">
       {children}
     </div>
   );
@@ -124,7 +125,7 @@ function AutocompleteInput({
           {options.map((opt) => (
             <li key={opt}
               onMouseDown={(e) => { e.preventDefault(); onSelect(opt); setShow(false); }}
-              className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer">
+              className="px-5 py-5 text-xl hover:bg-blue-50 cursor-pointer">
               {opt}
             </li>
           ))}
@@ -382,7 +383,7 @@ export default function MaterialOutsideForm() {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-4 max-w-3xl">
+    <div className="p-4 max-w-full">
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 shadow-lg text-sm font-medium ${
           toast.type === "success" ? "bg-green-600 text-white" : "bg-red-600 text-white"
@@ -440,9 +441,13 @@ export default function MaterialOutsideForm() {
           </Field>
 
           <Field label="วันที่">
-            <input type="date" value={form.withdrawDate}
-              onChange={(e) => patch({ withdrawDate: e.target.value })}
-              className={inp} />
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+              <input type="date" value={form.withdrawDate}
+                onChange={(e) => patch({ withdrawDate: e.target.value })}
+                title="วันที่เบิก"
+                className={`${inp} pl-9 [&::-webkit-calendar-picker-indicator]:hidden`} />
+            </div>
           </Field>
         </div>
 
@@ -556,7 +561,7 @@ export default function MaterialOutsideForm() {
             <div className="overflow-x-auto mb-4">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
+                  <tr className="bg-gray-50">
                     <th className="px-3 py-2.5 text-center text-gray-500 font-medium w-8">#</th>
                     <th className="px-3 py-2.5 text-left text-gray-500 font-medium">ชนิดด้าย</th>
                     <th className="px-3 py-2.5 text-left text-gray-500 font-medium">บริษัท</th>
@@ -567,7 +572,7 @@ export default function MaterialOutsideForm() {
                     <th className="px-3 py-2.5 w-12"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody>
                   {pendingItems.map((item, i) => (
                     <tr key={item.key} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                       <td className="px-3 py-2 text-center text-gray-400">{i + 1}</td>
@@ -592,7 +597,7 @@ export default function MaterialOutsideForm() {
               </table>
             </div>
 
-            <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+            <div className="flex items-center justify-between pt-4">
               <p className="text-xs text-gray-500">
                 รอบันทึก <span className="font-semibold text-gray-800">{pendingItems.length}</span> รายการ
               </p>

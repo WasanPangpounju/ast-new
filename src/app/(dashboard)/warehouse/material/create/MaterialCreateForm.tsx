@@ -92,7 +92,7 @@ function makeEmpty(today: string, emp: string): FormState {
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-5 pb-2 border-t border-gray-100 first:pt-0 first:border-t-0">
+    <div className="text-sm font-semibold text-gray-500 uppercase tracking-wide pt-5 pb-2">
       {children}
     </div>
   );
@@ -245,7 +245,7 @@ export default function MaterialCreateForm({ emp }: Props) {
 
   // ── render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="p-4 max-w-3xl" ref={formRef}>
+    <div className="p-4" ref={formRef}>
       {toast && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-3 shadow-lg text-sm font-medium ${
           toast.type === "success" ? "bg-green-600 text-white" : "bg-red-600 text-white"
@@ -341,7 +341,7 @@ export default function MaterialCreateForm({ emp }: Props) {
               onChange={(e) => patch({ sack: e.target.value })}
               placeholder="จำนวน" className={inp} />
           </div>
-          <div>
+          <div className="w-28">
             <label className="block text-xs font-medium text-gray-700 mb-1">ประเภท</label>
             <select value={form.sackType}
               onChange={(e) => patch({ sackType: e.target.value })}
@@ -457,7 +457,7 @@ export default function MaterialCreateForm({ emp }: Props) {
         </div>
 
         {/* 10. น้ำหนักเฉลี่ยต่อลูก (calculated) */}
-        <div className="mb-1 mt-4">
+        <div className="mb-1 mt-4 py-2">
           <p className="text-xs font-medium text-gray-600 mb-2">
             น้ำหนักเฉลี่ยต่อลูก
             <span className="text-gray-400 font-normal ml-1">(คำนวณอัตโนมัติ: สุทธิ ÷ จำนวนลูก)</span>
@@ -474,7 +474,7 @@ export default function MaterialCreateForm({ emp }: Props) {
 
         {/* 11. ส่งคืนบรรจุภัณฑ์ */}
         <SectionLabel>ส่งคืนบรรจุภัณฑ์</SectionLabel>
-        <div className="flex flex-wrap gap-5">
+        <div className="flex flex-wrap gap-5 py-2">
           {(
             [
               { key: "returnPallet",   label: "พาเลท" },
@@ -505,7 +505,7 @@ export default function MaterialCreateForm({ emp }: Props) {
           className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
 
         {/* ── Buttons ─────────────────────────────────────────────── */}
-        <div className="flex items-center justify-end gap-3 pt-5 border-t border-gray-100 mt-5">
+        <div className="flex items-center justify-end gap-3 pt-5 mt-5">
           <button type="button"
             onClick={() => { setForm(makeEmpty(today, emp)); setErrors({}); }}
             className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600 transition-colors">
