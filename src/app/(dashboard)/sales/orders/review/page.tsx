@@ -5,21 +5,17 @@ import { useRouter } from 'next/navigation'
 interface Order {
   id: number
   purchaseOrder: string
-  vat: string
   customerName: string | null
+  fabricId: string | null
+  fabricPattern: string | null
+  fabricStructure: string | null
   priceYard: number | null
   orderSumYard: number | null
   status: string | null
   createDate: string
+  fabricAst: { fabricW: string | null } | null
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  'อนุมัติให้ผลิต': 'bg-green-100 text-green-700',
-  'รอดำเนินการ': 'bg-yellow-100 text-yellow-700',
-  'เสร็จสิ้น': 'bg-blue-100 text-blue-700',
-  'ยกเลิก': 'bg-red-100 text-red-700',
-  'no data': 'bg-gray-100 text-gray-500',
-}
 
 const STATUSES = ['รอดำเนินการ', 'อนุมัติให้ผลิต', 'เสร็จสิ้น', 'ยกเลิก', 'no data']
 const FILTER_STATUSES = ['', ...STATUSES]
@@ -214,21 +210,18 @@ export default function SalesOrdersReviewPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs">
-                <th className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-10">ลำดับ</th>
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-28">เลขที่ใบสั่งขาย</th>
-                <th className="hidden sm:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-14">ประเภท</th>
-                <th className="text-left px-3 py-2.5 font-medium text-gray-600">ลูกค้า</th>
-                <th className="hidden md:table-cell text-right px-3 py-2.5 font-medium text-gray-600 w-20">ราคา/หลา</th>
-                <th className="hidden md:table-cell text-left px-3 py-2.5 font-medium text-gray-600 w-24">วันที่</th>
-                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-36">สถานะปัจจุบัน</th>
-                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-44">เปลี่ยนสถานะ</th>
-                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-52">เอกสาร</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-24">วันที่</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-32">เลขที่ใบสั่งขาย</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600">รายการ</th>
+                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-44">สถานะ</th>
+                <th className="text-right px-3 py-2.5 font-medium text-gray-600 w-20">ราคา/หลา</th>
+                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-44">เอกสาร</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-gray-400">
+                  <td colSpan={6} className="text-center py-12 text-gray-400">
                     <div className="flex flex-col items-center gap-2">
                       <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                       กำลังโหลด...
@@ -237,41 +230,39 @@ export default function SalesOrdersReviewPage() {
                 </tr>
               ) : orders.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td>
+                  <td colSpan={6} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td>
                 </tr>
-              ) : orders.map((o, i) => {
-                const s = o.status ?? 'no data'
+              ) : orders.map((o) => {
+                const fabricLine = [
+                  o.fabricStructure,
+                  o.fabricAst?.fabricW ? `${o.fabricAst.fabricW}"` : null,
+                  o.fabricPattern,
+                ].filter(Boolean).join(' / ')
                 return (
                   <tr key={o.id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="hidden sm:table-cell px-3 py-2.5 text-xs text-gray-500">{(page - 1) * 20 + i + 1}</td>
+                    <td className="px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{fmtDate(o.createDate)}</td>
                     <td className="px-3 py-2.5">
-                      <span className="font-mono text-blue-600 font-medium text-xs">{o.purchaseOrder}</span>
+                      <div className="font-mono text-blue-600 font-medium text-xs">{o.purchaseOrder}</div>
                     </td>
-                    <td className="hidden sm:table-cell px-3 py-2.5">
-                      <span className={`text-xs px-1.5 py-0.5 rounded font-mono font-medium ${
-                        o.vat === 'SOX' ? 'bg-purple-100 text-purple-700' :
-                        o.vat === 'SOB' ? 'bg-orange-100 text-orange-700' :
-                        'bg-blue-100 text-blue-700'}`}>{o.vat}</span>
+                    <td className="px-3 py-2.5">
+                      <div className="text-xs font-medium text-gray-900">{o.customerName ?? '-'}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">
+                        {[o.fabricId, o.orderSumYard ? `${o.orderSumYard.toLocaleString()} หลา` : null].filter(Boolean).join(' · ')}
+                      </div>
+                      {fabricLine && <div className="text-[11px] text-gray-400 mt-0.5 truncate max-w-xs">{fabricLine}</div>}
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-gray-800 max-w-55 truncate">{o.customerName ?? '-'}</td>
-                    <td className="hidden md:table-cell px-3 py-2.5 text-right text-xs text-gray-700">
-                      {o.priceYard ? o.priceYard.toLocaleString() : '-'}
-                    </td>
-                    <td className="hidden md:table-cell px-3 py-2.5 text-xs text-gray-500 whitespace-nowrap">{fmtDate(o.createDate)}</td>
                     <td className="px-3 py-2.5 text-center">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[s] ?? 'bg-gray-100 text-gray-500'}`}>
-                        {s}
-                      </span>
-                    </td>
-                    <td className="hidden lg:table-cell px-3 py-2.5 text-center">
                       <select
                         value={o.status ?? 'no data'}
                         disabled={updatingId === o.id}
                         onChange={e => changeStatus(o, e.target.value)}
-                        className="text-xs border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 bg-white"
+                        className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 bg-white"
                       >
                         {STATUSES.map(st => <option key={st} value={st}>{st}</option>)}
                       </select>
+                    </td>
+                    <td className="px-3 py-2.5 text-right text-xs text-gray-700">
+                      {o.priceYard ? o.priceYard.toLocaleString() : '-'}
                     </td>
                     <td className="px-3 py-2.5 text-center">
                       <div className="flex items-center justify-center gap-1 flex-wrap">
