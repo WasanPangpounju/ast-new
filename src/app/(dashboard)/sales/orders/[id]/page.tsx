@@ -146,7 +146,7 @@ export default function OrderDetailPage({
         <div className="flex items-start justify-between gap-4">
           <div>
             <button
-              onClick={() => router.back()}
+              onClick={() => router.push("/sales/orders/review")}
               className="text-xs text-gray-500 hover:text-gray-700 mb-2 flex items-center gap-1"
             >
               <svg

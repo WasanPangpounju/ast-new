@@ -43,7 +43,9 @@
       "Bash(npx next *)",
       "Bash(PGPASSWORD=password psql -U postgres -d ast_new -h localhost -c \"\\\\d materials\")",
       "Read(//c/Users/Friendly Dev/**)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(Sort-Object Name)",
+      "Bash(Select-Object -Last 5)"
     ]
   }
 }

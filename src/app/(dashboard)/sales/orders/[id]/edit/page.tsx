@@ -344,13 +344,32 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
     setDeadlines((prev) => prev.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
   }
 
-  function validate(): boolean {
-    if (!fabricStructure.trim()) { setFabricStructureError(true); return false; }
-    return true;
+  function validate(): string {
+    const missing: string[] = [];
+    if (!customerName.trim()) missing.push("ชื่อลูกค้า");
+    if (!coordinator.trim()) missing.push("ผู้ประสานงาน");
+    if (!fabricId.trim()) missing.push("รหัสผ้า");
+    if (!fabricPattern.trim()) missing.push("ลายผ้า");
+    if (!fabricStructure.trim()) {
+      setFabricStructureError(true);
+      missing.push("โครงสร้างผ้า");
+    } else {
+      setFabricStructureError(false);
+    }
+    if (!fabricW.trim()) missing.push("หน้าผ้า (นิ้ว)");
+    if (!warpYarn1.trim()) missing.push("ชนิดด้ายยืน 1");
+    if (!weftYarn1.trim()) missing.push("ชนิดด้ายพุ่ง 1");
+    if (!orderSumYard.trim()) missing.push("จำนวนออเดอร์ (หลา)");
+    if (fabricSPY.trim() === "") missing.push("การสืบ");
+    if (!priceYard.trim() && !priceM.trim()) missing.push("ราคาต่อหน่วย (บาท/หลา)");
+    if (missing.length > 0)
+      return `กรุณากรอกข้อมูล: ${missing.join(", ")}`;
+    return "";
   }
 
   async function handleOpenStructure() {
-    if (!validate()) return;
+    const errMsg = validate();
+    if (errMsg) { setError(errMsg); return; }
     setSaving(true);
     setError("");
     try {
@@ -388,7 +407,8 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
+    const errMsg = validate();
+    if (errMsg) { setError(errMsg); return; }
     setSaving(true);
     setError("");
     try {
