@@ -308,7 +308,6 @@ export default function CreateOrderPage() {
   const [secOpen, setSecOpen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState("");
   const [fabricStructureError, setFabricStructureError] = useState(false);
   const [orderNo, setOrderNo] = useState("");
   const [orderNoEdited, setOrderNoEdited] = useState(false);
@@ -511,41 +510,63 @@ export default function CreateOrderPage() {
     });
   }
 
-  function validate(): boolean {
+  function validate(): string {
+    const missing: string[] = [];
+    if (!customerName.trim()) missing.push("ชื่อลูกค้า");
+    if (!coordinator.trim()) missing.push("ผู้ประสานงาน");
+    if (!fabricId.trim()) missing.push("รหัสผ้า");
+    if (!fabricPattern.trim()) missing.push("ลายผ้า");
     if (!fabricStructure.trim()) {
       setFabricStructureError(true);
-      return false;
+      missing.push("โครงสร้างผ้า");
+    } else {
+      setFabricStructureError(false);
     }
-    return true;
+    if (!fabricW.trim()) missing.push("หน้าผ้า (นิ้ว)");
+    if (!warpYarn1.trim()) missing.push("ชนิดด้ายยืน 1");
+    if (!weftYarn1.trim()) missing.push("ชนิดด้ายพุ่ง 1");
+    if (!orderSumYard.trim()) missing.push("จำนวนออเดอร์ (หลา)");
+    if (fabricSPY.trim() === "") missing.push("การสืบ");
+    if (!priceYard.trim() && !priceM.trim()) missing.push("ราคาต่อหน่วย (บาท/หลา)");
+    if (missing.length > 0)
+      return `กรุณากรอกข้อมูล: ${missing.join(", ")}`;
+    return "";
   }
 
-  // ปุ่ม 💾 ใบสั่งขาย — บันทึก SO + สร้าง BillOfStructure + toast + อยู่หน้าเดิม
+  // ปุ่ม ใบสั่งขาย — validate → บันทึก SO → redirect ไปหน้าตรวจสอบใบสั่งขาย
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!validate()) return;
+    const errMsg = validate();
+    if (errMsg) {
+      setError(errMsg);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
       const res = await fetch("/api/sales/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: buildFormBody({ createStructure: true }),
+        body: buildFormBody(),
       });
       const d = await res.json();
       if (!res.ok) {
         setError(d.error ?? "เกิดข้อผิดพลาด");
         return;
       }
-      setToast("บันทึกสำเร็จ");
-      setTimeout(() => setToast(""), 3000);
+      router.push("/sales/orders/review");
     } finally {
       setSaving(false);
     }
   }
 
-  // ปุ่ม 🏭 ใบโครงสร้าง — บันทึก SO + เปิดฟอร์มใบโครงสร้าง
+  // ปุ่ม ใบโครงสร้าง — validate → บันทึก SO → สร้างใบโครงสร้างจากข้อมูล SO → redirect
   async function handleOpenStructure() {
-    if (!validate()) return;
+    const errMsg = validate();
+    if (errMsg) {
+      setError(errMsg);
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -559,7 +580,6 @@ export default function CreateOrderPage() {
         setError(soData.error ?? "เกิดข้อผิดพลาด");
         return;
       }
-
       await fetch(`/api/sales/orders/${soData.order.id}/open-structure`, {
         method: "POST",
       });
@@ -578,11 +598,6 @@ export default function CreateOrderPage() {
       {/* ── Content ──────────────────────────────────────────────────────────── */}
       <div className="p-3 w-full">
         <form onSubmit={handleSubmit}>
-          {toast && (
-            <div className="text-xs text-green-700 bg-green-50 border border-green-300 rounded px-3 py-2 mb-3">
-              {toast}
-            </div>
-          )}
           {error && (
             <div className="text-xs text-red-600 bg-red-50 border border-red-300 rounded px-3 py-2 mb-3">
               {error}
