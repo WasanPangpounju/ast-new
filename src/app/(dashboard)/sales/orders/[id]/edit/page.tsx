@@ -174,6 +174,7 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
   // Read-only header info
   const [purchaseOrder, setPurchaseOrder] = useState("");
   const [vat, setVat] = useState("SO");
+  const [billNo, setBillNo] = useState("");
 
   // Editable fields
   const [customerName, setCustomerName] = useState("");
@@ -257,6 +258,7 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
 
         setPurchaseOrder(o.purchaseOrder ?? "");
         setVat(o.vat ?? "SO");
+        setBillNo(o.billNo != null ? String(o.billNo) : "");
         setCustomerName(o.customerName ?? "");
         setCustomerSearch(o.customerName ?? "");
         setCoordinator(o.emp ?? "");
@@ -347,6 +349,43 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
     return true;
   }
 
+  async function handleOpenStructure() {
+    if (!validate()) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/sales/orders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          billNo: billNo || undefined,
+          customerName, coordinator, fabricId, fabricPattern, fabricStructure,
+          fabricW, yarnHCount, phewNumber, phewW, stackType,
+          warpYarn1, warpComp1, warpCount1, warpRatio1,
+          warpYarn2, warpComp2, warpCount2, warpRatio2,
+          weftYarn1, weftComp1, weftCount1, weftRatio1,
+          weftYarn2, weftComp2, weftCount2, weftRatio2,
+          weftYarn3, weftComp3, weftCount3, weftRatio3,
+          weftYarn4, weftComp4, weftCount4, weftRatio4,
+          orderSumYard, fabricSPY,
+          priceYard, priceM, discountP, discountYard, commission,
+          machineNumber, surcharge, po,
+          note, productionNote, payment,
+          deadlines,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        setError(d.error ?? "เกิดข้อผิดพลาด");
+        return;
+      }
+      await fetch(`/api/sales/orders/${id}/open-structure`, { method: "POST" });
+      router.push(`/sales/orders/${id}/structure`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
@@ -357,6 +396,7 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          billNo: billNo || undefined,
           customerName, coordinator, fabricId, fabricPattern, fabricStructure,
           fabricW, yarnHCount, phewNumber, phewW, stackType,
           warpYarn1, warpComp1, warpCount1, warpRatio1,
@@ -424,8 +464,12 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
 
             {secOpen && (
               <div className="p-5 space-y-4">
-                {/* Header: purchaseOrder + vat (read-only) */}
-                <div className="grid grid-cols-2 gap-4">
+                {/* Header: No. + purchaseOrder + vat (read-only) */}
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label text="No." />
+                    <Input value={billNo} onChange={setBillNo} placeholder="No." type="number" />
+                  </div>
                   <div>
                     <Label text="เลขที่ใบสั่งขาย" />
                     <Input value={purchaseOrder} readOnly gray />
@@ -751,6 +795,13 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
                   <button type="submit" disabled={saving}
                     className="flex items-center gap-1.5 px-7 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700 disabled:opacity-60">
                     {saving ? "กำลังบันทึก..." : "บันทึก"}
+                  </button>
+                  <button type="button" disabled={saving} onClick={handleOpenStructure}
+                    className="flex items-center gap-1.5 px-7 py-2 bg-teal-700 text-white text-sm rounded font-medium hover:bg-teal-800 disabled:opacity-60">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" className="bi bi-grid" viewBox="0 0 16 16">
+                      <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5z"/>
+                    </svg>
+                    ใบโครงสร้าง
                   </button>
                 </div>
               </div>

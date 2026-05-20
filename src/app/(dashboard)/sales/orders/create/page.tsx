@@ -314,6 +314,7 @@ export default function CreateOrderPage() {
   const [orderNoEdited, setOrderNoEdited] = useState(false);
   const [orderNoLoading, setOrderNoLoading] = useState(false);
   const [billNo, setBillNo] = useState("");
+  const [billNoEdited, setBillNoEdited] = useState(false);
 
   // Header
   const [createDate, setCreateDate] = useState(TODAY);
@@ -404,11 +405,11 @@ export default function CreateOrderPage() {
       .then((r) => r.json())
       .then((d) => {
         if (d.purchaseOrder && !orderNoEdited) setOrderNo(d.purchaseOrder);
-        if (d.billNo) setBillNo(d.billNo.toString());
+        if (d.billNo && !billNoEdited) setBillNo(d.billNo.toString());
       })
       .catch(() => {})
       .finally(() => setOrderNoLoading(false));
-  }, [vat, orderNoEdited]);
+  }, [vat, orderNoEdited, billNoEdited]);
 
   // Customer autocomplete
   useEffect(() => {
@@ -456,6 +457,7 @@ export default function CreateOrderPage() {
     return JSON.stringify({
       vat,
       purchaseOrder: orderNo || undefined,
+      billNo: billNo || undefined,
       createDate,
       customerName,
       coordinator,
@@ -638,9 +640,13 @@ export default function CreateOrderPage() {
                     <Label text="No." />
                     <Input
                       value={billNo}
-                      readOnly
-                      gray
-                      placeholder="กำลังโหลด..."
+                      onChange={(v) => {
+                        setBillNo(v);
+                        if (v === "") setBillNoEdited(false);
+                        else setBillNoEdited(true);
+                      }}
+                      placeholder={orderNoLoading ? "กำลังโหลด..." : "No."}
+                      type="number"
                     />
                   </div>
                   <div>

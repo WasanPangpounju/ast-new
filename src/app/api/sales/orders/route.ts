@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
     note, productionNote, payment,
     deadlines,
     createStructure,
+    billNo,
   } = body
 
   if (!vat || !['SO', 'SOX', 'SOB'].includes(vat))
@@ -129,6 +130,7 @@ export async function POST(request: NextRequest) {
         discountP: discountP ? parseFloat(discountP) : null,
         discountYard: discountYard ? parseFloat(discountYard) : null,
         commission: commission ? parseFloat(commission) : null,
+        billNo: billNo ? parseInt(billNo, 10) : null,
         machineNumber: machineNumber?.trim() ?? null,
         surcharge: surcharge?.trim() ?? null,
         po: po?.trim() ?? null,
