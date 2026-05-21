@@ -426,6 +426,7 @@ model Material {
 
   requisitions    MaterialRequisition[]
   outsides        MaterialOutside[]
+  returns         MaterialReturn[]
 
   @@map("materials")
 }
@@ -463,11 +464,38 @@ model MaterialOutside {
   materialId      Int?
   material        Material? @relation(fields: [materialId], references: [id])
   note            String?
+  returnPallet    Boolean   @default(false)
+  returnBox       Boolean   @default(false)
+  returnSack      Boolean   @default(false)
+  returnSpool     Boolean   @default(false)
+  returnPaperBar  Boolean   @default(false)
+  recipient       String?
+  usageNote       String?
+  paymentComment  String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
   @@map("material_outsides")
+}
+
+model MaterialReturn {
+  id           Int       @id @default(autoincrement())
+  returnId     String
+  lot          String?
+  yarnType     String
+  supplierName String?
+  spool        Int
+  weightReturn Float
+  materialId   Int?
+  material     Material? @relation(fields: [materialId], references: [id])
+  note         String?
+  returnDate   DateTime  @default(now())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  @@map("material_returns")
 }
 
 model MaterialRequisition {

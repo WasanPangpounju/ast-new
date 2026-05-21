@@ -6,20 +6,28 @@ import type { Prisma } from '@/generated/prisma/client/client'
 const LBS_PER_KG = 2.2046
 
 const outsideSchema = z.object({
-  withdrawId:     z.string().min(1).optional(),
-  lot:            z.string().optional(),
-  yarnType:       z.string().min(1),
-  supplierName:   z.string().optional(),
-  spool:          z.number().int().positive(),
+  withdrawId:      z.string().min(1).optional(),
+  lot:             z.string().optional(),
+  yarnType:        z.string().min(1),
+  supplierName:    z.string().optional(),
+  spool:           z.number().int().positive(),
   weightWithdrawn: z.number().positive(),
-  weightPSum:     z.number().optional(),
-  weightKgSum:    z.number().optional(),
-  weightPPackage: z.number().optional(),
+  weightPSum:      z.number().optional(),
+  weightKgSum:     z.number().optional(),
+  weightPPackage:  z.number().optional(),
   weightKgPackage: z.number().optional(),
-  averageP:       z.number().optional(),
-  averageKg:      z.number().optional(),
-  materialId:     z.number().int().optional(),
-  note:           z.string().optional(),
+  averageP:        z.number().optional(),
+  averageKg:       z.number().optional(),
+  materialId:      z.number().int().optional(),
+  note:            z.string().optional(),
+  returnPallet:    z.boolean().optional(),
+  returnBox:       z.boolean().optional(),
+  returnSack:      z.boolean().optional(),
+  returnSpool:     z.boolean().optional(),
+  returnPaperBar:  z.boolean().optional(),
+  recipient:       z.string().optional(),
+  usageNote:       z.string().optional(),
+  paymentComment:  z.string().optional(),
 })
 
 export async function POST(request: NextRequest) {
@@ -37,7 +45,9 @@ export async function POST(request: NextRequest) {
 
   const { withdrawId, lot, yarnType, supplierName, spool, weightWithdrawn,
           weightPSum, weightKgSum, weightPPackage, weightKgPackage,
-          averageP, averageKg, materialId, note } = parsed.data
+          averageP, averageKg, materialId, note,
+          returnPallet, returnBox, returnSack, returnSpool, returnPaperBar,
+          recipient, usageNote, paymentComment } = parsed.data
 
   let resolvedMaterialId = materialId ?? null
   if (resolvedMaterialId == null && (supplierName || yarnType)) {
@@ -75,6 +85,14 @@ export async function POST(request: NextRequest) {
         averageP:        averageP        ?? null,
         averageKg:       averageKg       ?? null,
         note:            note            || null,
+        returnPallet:    returnPallet    ?? false,
+        returnBox:       returnBox       ?? false,
+        returnSack:      returnSack      ?? false,
+        returnSpool:     returnSpool     ?? false,
+        returnPaperBar:  returnPaperBar  ?? false,
+        recipient:       recipient       || null,
+        usageNote:       usageNote       || null,
+        paymentComment:  paymentComment  || null,
         ...(resolvedMaterialId != null && { materialId: resolvedMaterialId }),
       },
     })

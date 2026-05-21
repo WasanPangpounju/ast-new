@@ -1,41 +1,56 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
-import { Calendar } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface FormState {
-  supplierName:   string;
-  yarnType:       string;
-  lot:            string;
-  spool:          string;
-  weightPSum:     string;
-  weightKgSum:    string;
-  weightPPackage: string;
+  supplierName:    string;
+  yarnType:        string;
+  lot:             string;
+  spool:           string;
+  weightPSum:      string;
+  weightKgSum:     string;
+  weightPPackage:  string;
   weightKgPackage: string;
   weightWithdrawnP: string;
   weightWithdrawn:  string;
-  averageP:  string;
-  averageKg: string;
-  note:      string;
-  withdrawDate: string;
+  averageP:        string;
+  averageKg:       string;
+  note:            string;
+  withdrawDate:    string;
+  returnPallet:    boolean;
+  returnBox:       boolean;
+  returnSack:      boolean;
+  returnSpool:     boolean;
+  returnPaperBar:  boolean;
+  recipient:       string;
+  usageNote:       string;
+  paymentComment:  string;
 }
 
 interface PendingItem {
-  key:            number;
-  supplierName:   string;
-  yarnType:       string;
-  lot:            string;
-  spool:          number;
-  weightPSum:     number;
-  weightKgSum:    number;
-  weightPPackage: number;
+  key:             number;
+  supplierName:    string;
+  yarnType:        string;
+  lot:             string;
+  spool:           number;
+  weightPSum:      number;
+  weightKgSum:     number;
+  weightPPackage:  number;
   weightKgPackage: number;
   weightWithdrawn: number;
-  averageP:  number;
-  averageKg: number;
-  note:      string;
-  withdrawDate: string;
+  averageP:        number;
+  averageKg:       number;
+  note:            string;
+  withdrawDate:    string;
+  returnPallet:    boolean;
+  returnBox:       boolean;
+  returnSack:      boolean;
+  returnSpool:     boolean;
+  returnPaperBar:  boolean;
+  recipient:       string;
+  usageNote:       string;
+  paymentComment:  string;
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -60,10 +75,11 @@ function nextKey() { return ++keySeq; }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, color = "blue" }: { children: React.ReactNode; color?: "blue" | "amber" }) {
   return (
-    <div className="text-sm font-semibold text-gray-500 uppercase tracking-wide pt-5 pb-2">
-      {children}
+    <div className={`flex items-center gap-2 pt-6 pb-3`}>
+      <span className={`w-1 h-4 rounded-full ${color === "amber" ? "bg-amber-400" : "bg-blue-500"}`} />
+      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">{children}</span>
     </div>
   );
 }
@@ -82,8 +98,9 @@ function Field({ label, required, error, children }: {
   );
 }
 
-const inp = "w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
-const errB = "border-red-400";
+const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-400 transition-colors";
+const ro  = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500";
+const errB = "border-red-400 focus:ring-red-400";
 
 // ─── Autocomplete ───────────────────────────────────────────────────────────────
 
@@ -121,11 +138,11 @@ function AutocompleteInput({
         autoComplete="off"
       />
       {show && options.length > 0 && (
-        <ul className="absolute z-10 left-0 right-0 bg-white border border-gray-200 shadow-sm max-h-48 overflow-y-auto mt-0.5">
+        <ul className="absolute z-10 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto mt-1">
           {options.map((opt) => (
             <li key={opt}
               onMouseDown={(e) => { e.preventDefault(); onSelect(opt); setShow(false); }}
-              className="px-5 py-5 text-xl hover:bg-blue-50 cursor-pointer">
+              className="px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 cursor-pointer first:rounded-t-lg last:rounded-b-lg transition-colors">
               {opt}
             </li>
           ))}
@@ -145,6 +162,9 @@ function makeEmpty(t: string): FormState {
     weightWithdrawnP: "", weightWithdrawn: "",
     averageP: "", averageKg: "",
     note: "", withdrawDate: t,
+    returnPallet: false, returnBox: false, returnSack: false,
+    returnSpool: false, returnPaperBar: false,
+    recipient: "", usageNote: "", paymentComment: "",
   };
 }
 
@@ -323,6 +343,14 @@ export default function MaterialOutsideForm() {
       averageKg:       parseFloat(form.averageKg) || 0,
       note:            form.note,
       withdrawDate:    form.withdrawDate,
+      returnPallet:    form.returnPallet,
+      returnBox:       form.returnBox,
+      returnSack:      form.returnSack,
+      returnSpool:     form.returnSpool,
+      returnPaperBar:  form.returnPaperBar,
+      recipient:       form.recipient,
+      usageNote:       form.usageNote,
+      paymentComment:  form.paymentComment,
     }]);
     setForm((prev) => ({
       ...makeEmpty(prev.withdrawDate),
@@ -357,6 +385,14 @@ export default function MaterialOutsideForm() {
             averageP:        item.averageP        || undefined,
             averageKg:       item.averageKg       || undefined,
             note:            item.note            || undefined,
+            returnPallet:    item.returnPallet,
+            returnBox:       item.returnBox,
+            returnSack:      item.returnSack,
+            returnSpool:     item.returnSpool,
+            returnPaperBar:  item.returnPaperBar,
+            recipient:       item.recipient       || undefined,
+            usageNote:       item.usageNote       || undefined,
+            paymentComment:  item.paymentComment  || undefined,
           }),
         });
         if (!res.ok) throw new Error();
@@ -397,7 +433,7 @@ export default function MaterialOutsideForm() {
         <p className="text-xs text-gray-500">บันทึกการเบิกเส้นด้ายออกใช้งานภายนอก</p>
       </div>
 
-      <div className="bg-white border border-gray-200 shadow-sm p-5">
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
 
         {/* ── วัตถุดิบ ──────────────────────────────────────────────── */}
         <SectionLabel>วัตถุดิบ</SectionLabel>
@@ -441,98 +477,90 @@ export default function MaterialOutsideForm() {
           </Field>
 
           <Field label="วันที่">
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-              <input type="date" value={form.withdrawDate}
-                onChange={(e) => patch({ withdrawDate: e.target.value })}
-                title="วันที่เบิก"
-                className={`${inp} pl-9 [&::-webkit-calendar-picker-indicator]:hidden`} />
-            </div>
+            <input type="date" value={form.withdrawDate}
+              onChange={(e) => patch({ withdrawDate: e.target.value })}
+              title="วันที่เบิก"
+              className={inp} />
           </Field>
         </div>
 
-        {/* ── น้ำหนักรวม ────────────────────────────────────────────── */}
-        <SectionLabel>น้ำหนักรวม (ปอนด์ ↔ กก. อัตโนมัติ)</SectionLabel>
-        <div className="grid grid-cols-2 gap-3">
+        {/* ── น้ำหนัก ───────────────────────────────────────────────── */}
+        <SectionLabel>น้ำหนัก</SectionLabel>
+        <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+          {/* รวม */}
           <div>
-            <label className="block text-xs text-gray-500 mb-1">น้ำหนักรวม (lbs)</label>
-            <input type="number" min="0.001" step="0.001" value={form.weightPSum}
-              onChange={(e) => onWeightPSum(e.target.value)}
-              placeholder="ปอนด์"
-              className={inp} />
+            <p className="text-xs font-medium text-gray-500 mb-2">น้ำหนักรวม <span className="font-normal">(lbs ↔ kg อัตโนมัติ)</span></p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">lbs</label>
+                <input type="number" min="0.001" step="0.001" value={form.weightPSum}
+                  onChange={(e) => onWeightPSum(e.target.value)} placeholder="ปอนด์" className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">kg</label>
+                <input type="number" min="0.001" step="0.001" value={form.weightKgSum}
+                  onChange={(e) => onWeightKgSum(e.target.value)} placeholder="กิโลกรัม" className={inp} />
+              </div>
+            </div>
           </div>
+          {/* บรรจุภัณฑ์ */}
           <div>
-            <label className="block text-xs text-gray-500 mb-1">น้ำหนักรวม (kg)</label>
-            <input type="number" min="0.001" step="0.001" value={form.weightKgSum}
-              onChange={(e) => onWeightKgSum(e.target.value)}
-              placeholder="กิโลกรัม"
-              className={inp} />
+            <p className="text-xs font-medium text-gray-500 mb-2">น้ำหนักบรรจุภัณฑ์ <span className="font-normal">(lbs ↔ kg อัตโนมัติ)</span></p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">lbs</label>
+                <input type="number" min="0" step="0.001" value={form.weightPPackage}
+                  onChange={(e) => onWeightPPackage(e.target.value)} placeholder="ปอนด์" className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">kg</label>
+                <input type="number" min="0" step="0.001" value={form.weightKgPackage}
+                  onChange={(e) => onWeightKgPackage(e.target.value)} placeholder="กิโลกรัม" className={inp} />
+              </div>
+            </div>
           </div>
-        </div>
-
-        {/* ── น้ำหนักบรรจุภัณฑ์ ─────────────────────────────────────── */}
-        <SectionLabel>น้ำหนักบรรจุภัณฑ์ (ปอนด์ ↔ กก. อัตโนมัติ)</SectionLabel>
-        <div className="grid grid-cols-2 gap-3">
+          {/* สุทธิ */}
           <div>
-            <label className="block text-xs text-gray-500 mb-1">บรรจุภัณฑ์ (lbs)</label>
-            <input type="number" min="0" step="0.001" value={form.weightPPackage}
-              onChange={(e) => onWeightPPackage(e.target.value)}
-              placeholder="ปอนด์"
-              className={inp} />
+            <p className="text-xs font-medium text-gray-500 mb-2">น้ำหนักสุทธิ <span className="font-normal">(รวม − บรรจุภัณฑ์)</span></p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">lbs</label>
+                <input type="number" min="0.001" step="0.001" value={form.weightWithdrawnP}
+                  onChange={(e) => {
+                    const p = parseFloat(e.target.value) || 0;
+                    patch({ weightWithdrawnP: e.target.value, weightWithdrawn: p > 0 ? fmt3(p / LBS_PER_KG) : "" });
+                  }}
+                  placeholder="ปอนด์" className={inp} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">kg <span className="text-red-500">*</span></label>
+                <input type="number" min="0.001" step="0.001" value={form.weightWithdrawn}
+                  onChange={(e) => {
+                    const k = parseFloat(e.target.value) || 0;
+                    patch({ weightWithdrawn: e.target.value, weightWithdrawnP: k > 0 ? fmt3(k * LBS_PER_KG) : "" });
+                  }}
+                  placeholder="กิโลกรัม" className={`${inp} ${errors.weightWithdrawn ? errB : ""}`} />
+              </div>
+            </div>
+            {errors.weightWithdrawn && <p className="text-xs text-red-500 mt-1">{errors.weightWithdrawn}</p>}
           </div>
+          {/* เฉลี่ย */}
           <div>
-            <label className="block text-xs text-gray-500 mb-1">บรรจุภัณฑ์ (kg)</label>
-            <input type="number" min="0" step="0.001" value={form.weightKgPackage}
-              onChange={(e) => onWeightKgPackage(e.target.value)}
-              placeholder="กิโลกรัม"
-              className={inp} />
-          </div>
-        </div>
-
-        {/* ── น้ำหนักสุทธิ (คำนวณอัตโนมัติ) ───────────────────────── */}
-        <SectionLabel>น้ำหนักสุทธิ = รวม − บรรจุภัณฑ์ (คำนวณอัตโนมัติ)</SectionLabel>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">สุทธิ (lbs)</label>
-            <input type="number" min="0.001" step="0.001" value={form.weightWithdrawnP}
-              onChange={(e) => {
-                const p = parseFloat(e.target.value) || 0;
-                patch({ weightWithdrawnP: e.target.value, weightWithdrawn: p > 0 ? fmt3(p / LBS_PER_KG) : "" });
-              }}
-              placeholder="ปอนด์"
-              className={inp} />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">สุทธิ (kg) *</label>
-            <input type="number" min="0.001" step="0.001" value={form.weightWithdrawn}
-              onChange={(e) => {
-                const k = parseFloat(e.target.value) || 0;
-                patch({ weightWithdrawn: e.target.value, weightWithdrawnP: k > 0 ? fmt3(k * LBS_PER_KG) : "" });
-              }}
-              placeholder="กิโลกรัม"
-              className={`${inp} ${errors.weightWithdrawn ? errB : ""}`} />
-          </div>
-        </div>
-        {errors.weightWithdrawn && <p className="text-xs text-red-500 mt-1">{errors.weightWithdrawn}</p>}
-
-        {/* ── น้ำหนักเฉลี่ย ──────────────────────────────────────────── */}
-        <SectionLabel>น้ำหนักเฉลี่ย / ลูก (คำนวณอัตโนมัติ)</SectionLabel>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">เฉลี่ย (lbs/ลูก)</label>
-            <input type="number" step="0.001" value={form.averageP} readOnly
-              placeholder="-"
-              className={`${inp} bg-gray-50 text-gray-500`} />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">เฉลี่ย (kg/ลูก)</label>
-            <input type="number" step="0.001" value={form.averageKg} readOnly
-              placeholder="-"
-              className={`${inp} bg-gray-50 text-gray-500`} />
+            <p className="text-xs font-medium text-gray-500 mb-2">น้ำหนักเฉลี่ย / ลูก <span className="font-normal">(คำนวณอัตโนมัติ)</span></p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">lbs/ลูก</label>
+                <input type="number" step="0.001" value={form.averageP} readOnly placeholder="-" className={ro} />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">kg/ลูก</label>
+                <input type="number" step="0.001" value={form.averageKg} readOnly placeholder="-" className={ro} />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* ── หมายเหตุ + ส่วนควบคุม ──────────────────────────────────── */}
+        {/* ── หมายเหตุ ─────────────────────────────────────────────── */}
         <SectionLabel>อื่นๆ</SectionLabel>
         <Field label="หมายเหตุ">
           <input value={form.note}
@@ -541,53 +569,101 @@ export default function MaterialOutsideForm() {
             className={inp} />
         </Field>
 
-        <SectionLabel>ส่วนควบคุม</SectionLabel>
-        <div className="flex flex-wrap gap-3">
+        {/* ── ส่งคืนบรรจุภัณฑ์ ─────────────────────────────────────── */}
+        <SectionLabel color="amber">ส่งคืนบรรจุภัณฑ์</SectionLabel>
+        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 space-y-4">
+          <div className="flex flex-wrap gap-3">
+            {([
+              { key: "returnPallet",   label: "พาเลท" },
+              { key: "returnBox",      label: "กล่อง" },
+              { key: "returnSack",     label: "กระสอบ" },
+              { key: "returnSpool",    label: "หลอด" },
+              { key: "returnPaperBar", label: "กระดาษกั้น" },
+            ] as { key: keyof FormState; label: string }[]).map(({ key, label }) => (
+              <label key={key}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm cursor-pointer select-none transition-colors ${
+                  form[key] ? "bg-amber-400 border-amber-400 text-white font-medium" : "bg-white border-gray-200 text-gray-600 hover:border-amber-300"
+                }`}>
+                <input
+                  type="checkbox"
+                  checked={form[key] as boolean}
+                  onChange={(e) => patch({ [key]: e.target.checked })}
+                  className="sr-only"
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="ผู้รับวัตถุดิบ">
+              <input value={form.recipient}
+                onChange={(e) => patch({ recipient: e.target.value })}
+                placeholder="ผู้รับวัตถุดิบ"
+                className={inp} />
+            </Field>
+            <Field label="การนำไปใช้">
+              <textarea value={form.usageNote}
+                onChange={(e) => patch({ usageNote: e.target.value })}
+                rows={2} placeholder="การนำไปใช้"
+                className={`${inp} resize-none`} />
+            </Field>
+            <Field label="หมายเหตุการเงิน">
+              <textarea value={form.paymentComment}
+                onChange={(e) => patch({ paymentComment: e.target.value })}
+                rows={2} placeholder="หมายเหตุการเงิน"
+                className={`${inp} resize-none`} />
+            </Field>
+          </div>
+        </div>
+
+        {/* ── ส่วนควบคุม ──────────────────────────────────────────── */}
+        <div className="flex flex-wrap gap-3 pt-6">
           <button type="button" onClick={handleAddPending}
-            className="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors">
+            className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm">
             + เพิ่มรายการใหม่
           </button>
           <button type="button"
             onClick={() => { setForm(makeEmpty(initDate)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); }}
-            className="px-4 py-2 text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors">
+            className="px-4 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
             เคลียร์ข้อมูล
           </button>
         </div>
 
         {/* ── รายการที่รอบันทึก ──────────────────────────────────────── */}
         {pendingItems.length > 0 && (
-          <>
-            <SectionLabel>รายการที่รอบันทึก</SectionLabel>
-            <div className="overflow-x-auto mb-4">
-              <table className="w-full text-xs">
+          <div className="mt-6 bg-blue-50 border border-blue-100 rounded-xl p-4">
+            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-3">
+              รายการที่รอบันทึก ({pendingItems.length})
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-blue-100">
+              <table className="w-full text-xs bg-white">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-3 py-2.5 text-center text-gray-500 font-medium w-8">#</th>
-                    <th className="px-3 py-2.5 text-left text-gray-500 font-medium">ชนิดด้าย</th>
-                    <th className="px-3 py-2.5 text-left text-gray-500 font-medium">บริษัท</th>
-                    <th className="px-3 py-2.5 text-left text-gray-500 font-medium">Lot</th>
-                    <th className="px-3 py-2.5 text-right text-gray-500 font-medium">ลูก</th>
-                    <th className="px-3 py-2.5 text-right text-gray-500 font-medium whitespace-nowrap">สุทธิ (kg)</th>
-                    <th className="px-3 py-2.5 text-left text-gray-500 font-medium">วันที่</th>
-                    <th className="px-3 py-2.5 w-12"></th>
+                  <tr className="bg-blue-100/60 text-blue-800">
+                    <th className="px-3 py-2.5 text-center font-medium w-8">#</th>
+                    <th className="px-3 py-2.5 text-left font-medium">ชนิดด้าย</th>
+                    <th className="px-3 py-2.5 text-left font-medium">บริษัท</th>
+                    <th className="px-3 py-2.5 text-left font-medium">Lot</th>
+                    <th className="px-3 py-2.5 text-right font-medium">ลูก</th>
+                    <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">สุทธิ (kg)</th>
+                    <th className="px-3 py-2.5 text-left font-medium">วันที่</th>
+                    <th className="px-3 py-2.5 w-12"><span className="sr-only">จัดการ</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {pendingItems.map((item, i) => (
-                    <tr key={item.key} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                    <tr key={item.key} className={`${i % 2 === 0 ? "bg-white" : "bg-blue-50/30"} hover:bg-blue-50/50 transition-colors`}>
                       <td className="px-3 py-2 text-center text-gray-400">{i + 1}</td>
-                      <td className="px-3 py-2 text-gray-800 max-w-[120px] truncate" title={item.yarnType}>{item.yarnType}</td>
-                      <td className="px-3 py-2 text-gray-700 max-w-[140px] truncate" title={item.supplierName}>{item.supplierName || "-"}</td>
+                      <td className="px-3 py-2 text-gray-800 font-medium max-w-30 truncate" title={item.yarnType}>{item.yarnType}</td>
+                      <td className="px-3 py-2 text-gray-600 max-w-35 truncate" title={item.supplierName}>{item.supplierName || "-"}</td>
                       <td className="px-3 py-2 text-gray-500">{item.lot || "-"}</td>
                       <td className="px-3 py-2 text-right font-medium text-gray-900">{item.spool.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right font-medium text-gray-900">
+                      <td className="px-3 py-2 text-right font-semibold text-blue-700">
                         {item.weightWithdrawn.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
                       </td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(item.withdrawDate)}</td>
                       <td className="px-3 py-2 text-center">
-                        <button type="button"
-                          onClick={() => handleDeleteRow(item.key)}
-                          className="px-2 py-0.5 text-xs text-red-500 border border-red-200 hover:bg-red-50">
+                        <button type="button" onClick={() => handleDeleteRow(item.key)}
+                          className="px-2 py-0.5 text-xs text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors">
                           ลบ
                         </button>
                       </td>
@@ -596,19 +672,19 @@ export default function MaterialOutsideForm() {
                 </tbody>
               </table>
             </div>
-
-            <div className="flex items-center justify-between pt-4">
+            <div className="flex items-center justify-between mt-3">
               <p className="text-xs text-gray-500">
-                รอบันทึก <span className="font-semibold text-gray-800">{pendingItems.length}</span> รายการ
+                รวม <span className="font-semibold text-gray-800">{pendingItems.length}</span> รายการ
               </p>
               <button type="button" onClick={handleSaveAll} disabled={saving}
-                className="px-6 py-2 text-sm bg-green-600 text-white hover:bg-green-700 font-medium disabled:opacity-50 transition-colors">
+                className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 transition-colors shadow-sm">
                 {saving ? "กำลังบันทึก..." : `บันทึก ${pendingItems.length} รายการ`}
               </button>
             </div>
-          </>
+          </div>
         )}
       </div>
+
     </div>
   );
 }
