@@ -113,6 +113,13 @@ const navItems: NavItem[] = [
       { href: "/warehouse/material/outside-history", label: "ประวัติเบิกภายนอก" },
     ],
   },
+  {
+    label: "ตั้งค่า",
+    icon: "⚙️",
+    children: [
+      { href: "/admin/users", label: "จัดการผู้ใช้" },
+    ],
+  },
 ];
 
 export default function NavLinks({ onClose }: { onClose?: () => void }) {
