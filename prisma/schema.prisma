@@ -7,7 +7,7 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─── AUTH ────────────────────────────────────────────
+// ─── AUTH new ────────────────────────────────────────────
 
 model User {
   id          Int              @id @default(autoincrement())
@@ -19,6 +19,7 @@ model User {
   updatedAt   DateTime         @updatedAt @map("updated_at")
   deletedAt   DateTime?        @map("deleted_at")
   permissions UserPermission[]
+
 
   @@map("users")
 }
