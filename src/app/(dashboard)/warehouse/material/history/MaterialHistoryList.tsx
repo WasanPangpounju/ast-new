@@ -35,7 +35,7 @@ interface EntryResponse {
   totalPages: number;
 }
 
-type Tab = "detail" | "edit" | "delete";
+type Tab = "detail" | "edit";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -110,6 +110,7 @@ export default function MaterialHistoryList() {
   const [editState, setEditState] = useState<EditState | null>(null);
   const [saving, setSaving]       = useState(false);
   const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // ── list query ──────────────────────────────────────────────────────────────
   const { data, isFetching, isError } = useQuery<EntryResponse>({
@@ -158,15 +159,18 @@ export default function MaterialHistoryList() {
     setActiveTab("detail");
     setEditState(toEditState(row));
     setActionMsg(null);
+    setConfirmDelete(false);
   }
   function closeModal() {
     setSelected(null);
     setEditState(null);
     setActionMsg(null);
+    setConfirmDelete(false);
   }
   function switchTab(t: Tab) {
     setActiveTab(t);
     setActionMsg(null);
+    setConfirmDelete(false);
     if (t === "edit" && detail) setEditState(toEditState(detail));
   }
 
@@ -367,14 +371,11 @@ export default function MaterialHistoryList() {
               {([
                 { key: "detail", label: "ดูรายละเอียด" },
                 { key: "edit",   label: "แก้ไข" },
-                { key: "delete", label: "ลบ" },
               ] as { key: Tab; label: string }[]).map(({ key, label }) => (
                 <button key={key} type="button" onClick={() => switchTab(key)}
                   className={`flex-1 py-2 text-xs font-medium transition-colors ${
                     activeTab === key
-                      ? key === "delete"
-                        ? "border-b-2 border-red-500 text-red-500"
-                        : "border-b-2 border-blue-600 text-blue-600"
+                      ? "border-b-2 border-blue-600 text-blue-600"
                       : "text-gray-500 hover:text-gray-700"
                   }`}>
                   {label}
@@ -384,6 +385,7 @@ export default function MaterialHistoryList() {
 
             {/* ── Tab: ดูรายละเอียด ─────────────────────────────────── */}
             {activeTab === "detail" && (
+              <>
               <div className="overflow-y-auto flex-1">
                 {detailLoading ? (
                   <div className="flex justify-center py-10 text-gray-400 text-xs">กำลังโหลด...</div>
@@ -416,6 +418,47 @@ export default function MaterialHistoryList() {
                   </div>
                 )}
               </div>
+              <div className="shrink-0 px-5 py-3 border-t border-gray-100 flex justify-center">
+                {!confirmDelete ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDelete(true)}
+                    className="px-4 py-1.5 text-xs border border-red-200 text-red-500 hover:bg-red-50 transition-colors flex items-center gap-1.5"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    ลบรายการนี้
+                  </button>
+                ) : (
+                  <div className="bg-red-50 border border-red-100 px-4 py-3">
+                    <p className="text-xs text-red-700 font-medium mb-0.5">ยืนยันการลบรายการนี้?</p>
+                    <p className="text-xs text-red-400 mb-3">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+                    {actionMsg && !actionMsg.ok && (
+                      <p className="text-xs text-red-500 mb-2">{actionMsg.text}</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDelete(false)}
+                        className="flex-1 py-1.5 text-xs border border-gray-300 hover:bg-white text-gray-600 transition-colors"
+                      >
+                        ยกเลิก
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDelete}
+                        disabled={saving}
+                        className="flex-1 py-1.5 text-xs bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 font-medium transition-colors"
+                      >
+                        {saving ? "กำลังลบ..." : "ยืนยันลบ"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              </>
             )}
 
             {/* ── Tab: แก้ไข ───────────────────────────────────────── */}
@@ -468,39 +511,6 @@ export default function MaterialHistoryList() {
               </>
             )}
 
-            {/* ── Tab: ลบ ──────────────────────────────────────────── */}
-            {activeTab === "delete" && (
-              <>
-                <div className="px-5 py-8 text-center flex-1">
-                  <div className="w-12 h-12 bg-red-100 flex items-center justify-center mx-auto mb-3">
-                    <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </div>
-                  <p className="text-sm font-medium text-gray-900 mb-1">ยืนยันการลบรายการ</p>
-                  <p className="text-xs text-gray-500 mb-0.5">
-                    <span className="font-medium text-gray-700">{selected.yarnType}</span>{" "}
-                    · Lot {selected.lot}
-                  </p>
-                  <p className="text-xs text-gray-500">{selected.supplierName}</p>
-                  <p className="text-xs text-gray-400 mt-2">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
-                  {actionMsg && (
-                    <p className="text-xs text-red-500 mt-3">{actionMsg.text}</p>
-                  )}
-                </div>
-                <div className="px-5 py-3 flex gap-2 justify-center shrink-0">
-                  <button type="button" onClick={closeModal}
-                    className="px-5 py-1.5 text-xs border border-gray-300 hover:bg-gray-50 text-gray-600">
-                    ยกเลิก
-                  </button>
-                  <button type="button" onClick={handleDelete} disabled={saving}
-                    className="px-5 py-1.5 text-xs bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 font-medium">
-                    {saving ? "กำลังลบ..." : "ยืนยันลบ"}
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         </div>
       )}
