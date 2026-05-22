@@ -7,7 +7,7 @@ datasource db {
   provider = "postgresql"
 }
 
-// ─── AUTH ────────────────────────────────────────────
+// ─── AUTH new 2 ────────────────────────────────────────────
 
 model User {
   id          Int              @id @default(autoincrement())
@@ -20,8 +20,23 @@ model User {
   deletedAt   DateTime?        @map("deleted_at")
   permissions UserPermission[]
 
+
   @@map("users")
 }
+
+model UserPermission {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  menuKey   String
+  canAccess Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, menuKey])
+  @@map("user_permissions")
+}
+
+// ─── MASTER DATA ─────────────────────────────────────
 
 model Employee {
   id         Int      @id @default(autoincrement())
@@ -66,6 +81,7 @@ model Supplier {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
+
   packages  Package[]
 
   @@map("suppliers")
@@ -90,48 +106,51 @@ model Coordinator {
   @@map("coordinators")
 }
 
+// ─── PURCHASE ORDERS ─────────────────────────────────
+
 model AstPurchaseOrder {
-  id                 Int                 @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   /// SO series type: 'SO' | 'SOX' | 'SOB'
-  vat                String
+  vat             String
   /// Formatted SO number e.g. "SO6804/12" — used as logical FK across tables
-  purchaseOrder      String              @unique
-  po                 String?
-  emp                String?
-  customerName       String?
-  fabricId           String?
-  fabricPattern      String?
-  fabricStructure    String?
-  orderSumYard       Float?
+  purchaseOrder   String    @unique
+  po              String?
+  emp             String?
+  customerName    String?
+  fabricId        String?
+  fabricPattern   String?
+  fabricStructure String?
+  orderSumYard    Float?
+  orderSumM       Float?    @map("order_sum_m")
+  fabricSPY       Float?    @map("fabric_spy")
+  fabricSpP       Float?    @map("fabric_sp_p")
+  priceYard       Float?    @map("price_yard")
+  priceM          Float?    @map("price_m")
+  discountP       Float?    @map("discount_p")
+  discountYard    Float?    @map("discount_yard")
+  commission      Float?
+  billNo          Int?      @map("bill_no")
+  machineNumber   String?   @map("machine_number")
+  surcharge       String?
+  note            String?
+  productionNote  String?   @map("production_note")
+  createDate      DateTime  @default(now()) @map("create_date")
   /// Denormalized copy of status — kept in sync with fabricAstStructure.yarnWRatio2
-  status             String?
-  deadline           String?
-  payment            String?
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @updatedAt @map("updated_at")
-  deletedAt          DateTime?           @map("deleted_at")
-  commission         Float?
-  createDate         DateTime            @default(now()) @map("create_date")
-  discountP          Float?              @map("discount_p")
-  discountYard       Float?              @map("discount_yard")
-  fabricSpP          Float?              @map("fabric_sp_p")
-  fabricSPY          Float?              @map("fabric_spy")
-  orderSumM          Float?              @map("order_sum_m")
-  priceM             Float?              @map("price_m")
-  priceYard          Float?              @map("price_yard")
-  machineNumber      String?             @map("machine_number")
-  note               String?
-  productionNote     String?             @map("production_note")
-  surcharge          String?
-  billNo             Int?                @map("bill_no")
-  billOfStructure    AstBillOfStructure?
+  status          String?
+  deadline        String?
+  payment         String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
   fabricAst          FabricAst?
   fabricAstStructure FabricAstStructure?
+  orderDeadlines     OrderDeadline[]
+  production         Production?
   fabricOuts         FabricOut[]
   inventories        Inventory[]
-  orderDeadlines     OrderDeadline[]
   orderShipped       OrderShipped?
-  production         Production?
+  billOfStructure    AstBillOfStructure?
 
   @@index([vat])
   @@index([customerName])
@@ -140,122 +159,131 @@ model AstPurchaseOrder {
 }
 
 model OrderDeadline {
-  id            Int              @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   /// References ast_purchaseorders.purchaseOrder string
   purchaseOrder String
   dt            DateTime?
   label         String?
-  createdAt     DateTime         @default(now()) @map("created_at")
-  updatedAt     DateTime         @updatedAt @map("updated_at")
-  pct           Float?
   qty           Float?
   unit          String?
-  order         AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
+  pct           Float?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
 
   @@index([purchaseOrder])
   @@map("orderdeadlines")
 }
 
 model OrderShipped {
-  id            Int              @id @default(autoincrement())
-  purchaseOrder String           @unique
+  id            Int       @id @default(autoincrement())
+  purchaseOrder String    @unique
   emp           String?
   shippedDate   DateTime?
   note          String?
-  createdAt     DateTime         @default(now()) @map("created_at")
-  updatedAt     DateTime         @updatedAt @map("updated_at")
-  order         AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
 
   @@map("ordershippeds")
 }
 
+// ─── FABRIC SPECS ─────────────────────────────────────
+
 model FabricAst {
-  id            Int              @id @default(autoincrement())
-  purchaseOrder String           @unique
+  id            Int      @id @default(autoincrement())
+  purchaseOrder String   @unique
   vat           String?
-  yarnHCount    String?          @map("yarn_h_count")
-  fabricW       String?          @map("fabric_w")
+  yarnHCount    String?  @map("yarn_h_count")
+  fabricW       String?  @map("fabric_w")
   phewNumber    String?
   phewW         String?
+  stackType     String?  @map("stack_type")
   payment       String?
-  createdAt     DateTime         @default(now()) @map("created_at")
-  updatedAt     DateTime         @updatedAt @map("updated_at")
-  stackType     String?          @map("stack_type")
-  order         AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
 
   @@index([purchaseOrder])
   @@map("fabric_asts")
 }
 
 model FabricAstStructure {
-  id            Int              @id @default(autoincrement())
-  purchaseOrder String           @unique
+  id            Int      @id @default(autoincrement())
+  purchaseOrder String   @unique
   yarnHType     String?
+  yarnHType2    String?  @map("yarn_h_type2")
+  subNameH1     String?  @map("sub_name_h1")
+  subNameH2     String?  @map("sub_name_h2")
   yarnWType     String?
+  yarnWType2    String?  @map("yarn_w_type2")
+  yarnWType3    String?  @map("yarn_w_type3")
+  yarnWType4    String?  @map("yarn_w_type4")
+  subNameW1     String?  @map("sub_name_w1")
+  subNameW2     String?  @map("sub_name_w2")
+  subNameW3     String?  @map("sub_name_w3")
+  subNameW4     String?  @map("sub_name_w4")
   /// ⚠ REPURPOSED AS ORDER STATUS FIELD
   /// Values: 'no data' | 'อนุมัติให้ผลิต' |
   yarnWRatio2   String?
   yarnHRatio1   String?
   yarnHRatio2   String?
   yarnWRatio1   String?
+  weftRatio2    String?  @map("weft_ratio2")
+  yarnWRatio3   String?  @map("yarn_w_ratio3")
+  yarnWRatio4   String?  @map("yarn_w_ratio4")
   yarnHCount1   String?
   yarnHCount2   String?
   yarnWCount1   String?
   yarnWCount2   String?
-  createdAt     DateTime         @default(now()) @map("created_at")
-  updatedAt     DateTime         @updatedAt @map("updated_at")
-  subNameH1     String?          @map("sub_name_h1")
-  subNameH2     String?          @map("sub_name_h2")
-  subNameW1     String?          @map("sub_name_w1")
-  subNameW2     String?          @map("sub_name_w2")
-  subNameW3     String?          @map("sub_name_w3")
-  subNameW4     String?          @map("sub_name_w4")
-  weftRatio2    String?          @map("weft_ratio2")
-  yarnHType2    String?          @map("yarn_h_type2")
-  yarnWCount3   String?          @map("yarn_w_count3")
-  yarnWCount4   String?          @map("yarn_w_count4")
-  yarnWRatio3   String?          @map("yarn_w_ratio3")
-  yarnWRatio4   String?          @map("yarn_w_ratio4")
-  yarnWType2    String?          @map("yarn_w_type2")
-  yarnWType3    String?          @map("yarn_w_type3")
-  yarnWType4    String?          @map("yarn_w_type4")
-  order         AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
+  yarnWCount3   String?  @map("yarn_w_count3")
+  yarnWCount4   String?  @map("yarn_w_count4")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
 
   @@index([purchaseOrder])
   @@index([yarnWRatio2])
   @@map("fabric_aststructures")
 }
 
+// ─── FABRIC OPERATIONS ───────────────────────────────
+
 model FabricOut {
-  id               Int               @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   /// Random base64 session token — groups all rolls in one delivery
-  refId            String
-  /// Global serial number across all fabricout records
-  no               String?
-  /// Invoice series: 'A' | 'B' | 'C'
-  vatType          String
-  /// Running invoice number per series, starting at 1001
-  vatNo            Int
-  /// Sequential roll number within this delivery (1, 2, 3…)
-  fold             Int
-  /// Yards in this specific roll
-  sumYard          Float
-  fabricStruct     String?
-  fabricPattern    String?
-  fabricW          String?
-  customerName     String?
-  receiveName      String?
-  orderId          Int?
-  createDate       DateTime          @default(now())
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
-  deletedAt        DateTime?         @map("deleted_at")
+  refId         String
   /// SO number string e.g. "SO5807/28" — direct match to ast_purchaseorders.purchaseOrder
-  purchaseOrder    String?
+  purchaseOrder String?
+  /// Global serial number across all fabricout records
+  no            String?
+  /// Invoice series: 'A' | 'B' | 'C'
+  vatType       String
+  /// Running invoice number per series, starting at 1001
+  vatNo         Int
+  /// Sequential roll number within this delivery (1, 2, 3…)
+  fold          Int
+  /// Yards in this specific roll
+  sumYard       Float
+  fabricStruct  String?
+  fabricPattern String?
+  fabricW       String?
+  customerName  String?
+  receiveName   String?
+  orderId       Int?
+  createDate    DateTime  @default(now())
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+  isDeposit        Boolean   @default(false)
   altFabricStruct  String?
   altPurchaseOrder String?
-  isDeposit        Boolean           @default(false)
-  order            AstPurchaseOrder? @relation(fields: [orderId], references: [id])
+
+  order AstPurchaseOrder? @relation(fields: [orderId], references: [id])
 
   @@index([refId])
   @@index([vatType, vatNo])
@@ -271,6 +299,7 @@ model StockFabric {
   fabricStruct  String?
   fabricPattern String?
   fabricW       String?
+  fabricCode    String?
   fold          Int?
   sumYard       Float?
   customer      String?
@@ -278,12 +307,11 @@ model StockFabric {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
   deletedAt     DateTime? @map("deleted_at")
-  fabricCode    String?
-  billRef       String?   @map("bill_ref")
-  dyeLot        String?   @map("dye_lot")
   isPurchased   Boolean   @default(false) @map("is_purchased")
-  pricePerYard  Float?    @map("price_per_yard")
   supplier      String?
+  billRef       String?   @map("bill_ref")
+  pricePerYard  Float?    @map("price_per_yard")
+  dyeLot        String?   @map("dye_lot")
 
   @@index([refId])
   @@index([fabricPattern])
@@ -333,8 +361,10 @@ model FabricOutDeposit {
   @@map("fabricoutdeposits")
 }
 
+// ─── INVENTORY ───────────────────────────────────────
+
 model Inventory {
-  id            Int               @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   refId         String
   emp           String?
   inventoryName String?
@@ -344,10 +374,11 @@ model Inventory {
   sumYard       Float?
   sumM          Float?
   fabricW       String?
-  createDate    DateTime          @default(now())
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
-  order         AstPurchaseOrder? @relation(fields: [orderId], references: [id])
+  createDate    DateTime @default(now())
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder? @relation(fields: [orderId], references: [id])
 
   @@index([refId])
   @@index([orderId])
@@ -355,8 +386,8 @@ model Inventory {
 }
 
 model Production {
-  id            Int              @id @default(autoincrement())
-  purchaseOrder String           @unique
+  id            Int      @id @default(autoincrement())
+  purchaseOrder String   @unique
   machineNumber String?
   no            String?
   fabricStruct  String?
@@ -365,40 +396,52 @@ model Production {
   yarnHType     String?
   yarnWType     String?
   pricing       Float?
-  createdAt     DateTime         @default(now()) @map("created_at")
-  updatedAt     DateTime         @updatedAt @map("updated_at")
-  order         AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  order AstPurchaseOrder @relation(fields: [purchaseOrder], references: [purchaseOrder])
 
   @@index([purchaseOrder])
   @@map("productions")
 }
 
+// ─── MATERIALS ───────────────────────────────────────
+
 model Material {
-  id              Int                   @id @default(autoincrement())
-  supplierName    String
-  yarnType        String
+  // รับเส้นด้ายเข้าคลัง (แทน table `materials` ใน MySQL เดิม)
+  id              Int       @id @default(autoincrement())
   lot             String
   spool           Int
-  importStatus    String                @default("pending")
-  createdAt       DateTime              @default(now())
-  deletedAt       DateTime?
-  note            String?
-  updatedAt       DateTime              @updatedAt
+  yarnType        String
+  supplierName    String
   weightKgNet     Float
-  weightKgPackage Float
   weightKgSum     Float
-  averageKg       Float?
-  averageP        Float?
-  box             Int?
-  emp             String?
-  pallet          Int?
-  sack            Int?
-  weightPNet      Float?
-  weightPPackage  Float?
-  weightPSum      Float?
+  weightKgPackage Float
+
+  // บรรจุภัณฑ์
+  pallet          Int?      // จำนวน pallet
+  box             Int?      // จำนวน box
+  sack            Int?      // จำนวน sack
+
+  // น้ำหนัก pounds (เก็บไว้เพื่อ traceability จากระบบเดิม)
+  weightPNet      Float?    // น้ำหนัก pounds ต่อ spool
+  weightPSum      Float?    // น้ำหนัก pounds รวม
+  weightPPackage  Float?    // น้ำหนัก pounds รวมทั้งหีบห่อ
+  averageKg       Float?    // เฉลี่ย kg ต่อ spool
+  averageP        Float?    // เฉลี่ย pounds ต่อ spool
+
+  // พนักงานรับผิดชอบ
+  emp             String?   // ชื่อพนักงานที่รับเข้า (จาก MySQL column `emp`)
+
+  importStatus    String    @default("pending")
+  note            String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  requisitions    MaterialRequisition[]
   outsides        MaterialOutside[]
   returns         MaterialReturn[]
-  requisitions    MaterialRequisition[]
 
   @@map("materials")
 }
@@ -421,32 +464,32 @@ model MaterialStore {
 
 model MaterialOutside {
   id              Int       @id @default(autoincrement())
-  averageKg       Float?
-  averageP        Float?
-  createdAt       DateTime  @default(now())
-  deletedAt       DateTime?
+  withdrawId      String
   lot             String?
-  materialId      Int?
-  note            String?
-  spool           Int
+  yarnType        String
   supplierName    String?
-  updatedAt       DateTime  @updatedAt
-  weightKgPackage Float?
+  spool           Int
+  weightWithdrawn Float
+  weightPSum      Float?
   weightKgSum     Float?
   weightPPackage  Float?
-  weightPSum      Float?
-  weightWithdrawn Float
-  withdrawId      String
-  yarnType        String
-  paymentComment  String?
-  recipient       String?
-  returnBox       Boolean   @default(false)
+  weightKgPackage Float?
+  averageP        Float?
+  averageKg       Float?
+  materialId      Int?
+  material        Material? @relation(fields: [materialId], references: [id])
+  note            String?
   returnPallet    Boolean   @default(false)
-  returnPaperBar  Boolean   @default(false)
+  returnBox       Boolean   @default(false)
   returnSack      Boolean   @default(false)
   returnSpool     Boolean   @default(false)
+  returnPaperBar  Boolean   @default(false)
+  recipient       String?
   usageNote       String?
-  material        Material? @relation(fields: [materialId], references: [id])
+  paymentComment  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
 
   @@map("material_outsides")
 }
@@ -460,34 +503,37 @@ model MaterialReturn {
   spool        Int
   weightReturn Float
   materialId   Int?
+  material     Material? @relation(fields: [materialId], references: [id])
   note         String?
   returnDate   DateTime  @default(now())
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
-  material     Material? @relation(fields: [materialId], references: [id])
 
   @@map("material_returns")
 }
 
 model MaterialRequisition {
+  // เบิกเส้นด้ายออกใช้งาน (แทน table `materialstores` ใน MySQL เดิม)
   id              Int       @id @default(autoincrement())
   withdrawId      String
+  // nullable: legacy rows จาก MySQL ไม่มี FK กลับ materials
   materialId      Int?
+  material        Material? @relation(fields: [materialId], references: [id])
   department      String
+  emp             String?
   spool           Int
   weightWithdrawn Float
   note            String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
-  emp             String?
-  material        Material? @relation(fields: [materialId], references: [id])
 
   @@map("materialrequisitions")
 }
 
 model MaterialCoordinator {
+  // พนักงานที่รับผิดชอบวัตถุดิบ (แทน table `empmaterials` ใน MySQL เดิม)
   id         Int       @id @default(autoincrement())
   name       String
   tel        String?
@@ -499,8 +545,10 @@ model MaterialCoordinator {
   @@map("materialcoordinators")
 }
 
+// ─── PACKAGES ────────────────────────────────────────
+
 model Package {
-  id            Int       @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   supplierId    Int?
   supplierName  String?
   emp           String?
@@ -509,9 +557,10 @@ model Package {
   box           Int?
   pallet        Int?
   packageStatus String?
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  supplier Supplier? @relation(fields: [supplierId], references: [id])
 
   @@index([supplierId])
   @@map("packages")
@@ -541,22 +590,26 @@ model PackageAst {
   @@map("packageasts")
 }
 
+// ─── BILL OF STRUCTURE ───────────────────────────────
+
 model AstBillOfStructure {
-  id              Int              @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   /// References AstPurchaseOrder.purchaseOrder
-  purchaseOrder   String           @unique
-  sourceOrderId   Int              @unique
+  purchaseOrder   String    @unique
+  sourceOrderId   Int       @unique
   vat             String?
   customerName    String?
   emp             String?
   fabricId        String?
   fabricPattern   String?
   fabricStructure String?
+  // Fabric specs (from FabricAst)
   yarnHCount      String?
   fabricW         String?
   phewNumber      String?
   phewW           String?
   stackType       String?
+  // Warp yarns
   warpYarn1       String?
   warpComp1       String?
   warpCount1      String?
@@ -565,6 +618,7 @@ model AstBillOfStructure {
   warpComp2       String?
   warpCount2      String?
   warpRatio2      String?
+  // Weft yarns
   weftYarn1       String?
   weftComp1       String?
   weftCount1      String?
@@ -581,25 +635,29 @@ model AstBillOfStructure {
   weftComp4       String?
   weftCount4      String?
   weftRatio4      String?
+  // Order quantities
   orderSumYard    Float?
   fabricSPY       Float?
-  priceYard       Float?           @map("price_yard")
-  priceM          Float?           @map("price_m")
-  discountP       Float?           @map("discount_p")
-  machineNumber   String?          @map("machine_number")
+  // Pricing
+  priceYard       Float?    @map("price_yard")
+  priceM          Float?    @map("price_m")
+  discountP       Float?    @map("discount_p")
+  // Other
+  machineNumber   String?   @map("machine_number")
   surcharge       String?
   commission      Float?
   po              String?
   note            String?
-  productionNote  String?          @map("production_note")
+  productionNote  String?   @map("production_note")
   payment         String?
-  createDate      DateTime         @default(now()) @map("create_date")
+  createDate      DateTime  @default(now()) @map("create_date")
   status          String?
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  deletedAt       DateTime?        @map("deleted_at")
-  sourceOrder     AstPurchaseOrder @relation(fields: [sourceOrderId], references: [id])
-  deadlines       BosDeadline[]
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  sourceOrder AstPurchaseOrder @relation(fields: [sourceOrderId], references: [id])
+  deadlines   BosDeadline[]
 
   @@index([purchaseOrder])
   @@index([sourceOrderId])
@@ -616,11 +674,14 @@ model BosDeadline {
   pct       Float?
   createdAt DateTime           @default(now()) @map("created_at")
   updatedAt DateTime           @updatedAt @map("updated_at")
-  bos       AstBillOfStructure @relation(fields: [bosId], references: [id])
+
+  bos AstBillOfStructure @relation(fields: [bosId], references: [id])
 
   @@index([bosId])
   @@map("bos_deadlines")
 }
+
+// ─── LEGACY (DO NOT USE FOR NEW FEATURES) ────────────
 
 /// @deprecated — superseded by AstPurchaseOrder (ast_purchaseorders)
 model LegacyPurchaseOrder {
