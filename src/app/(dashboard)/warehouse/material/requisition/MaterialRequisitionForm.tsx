@@ -73,10 +73,11 @@ function nextKey() { return ++keySeq; }
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, color = "blue" }: { children: React.ReactNode; color?: "blue" | "amber" }) {
   return (
-    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide pt-5 pb-2">
-      {children}
+    <div className="flex items-center gap-2 pt-6 pb-3">
+      <span className={`w-1 h-4 rounded-full ${color === "amber" ? "bg-amber-400" : "bg-blue-500"}`} />
+      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">{children}</span>
     </div>
   );
 }
@@ -354,7 +355,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
         <p className="text-xs text-gray-500">บันทึกการเบิกเส้นด้ายออกใช้งาน</p>
       </div>
 
-      <div className="bg-white border border-gray-200 shadow-sm p-5 ">
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
 
         {/* ── ข้อมูลการเบิก ─────────────────────────────────────────── */}
         <SectionLabel>ข้อมูลการเบิก</SectionLabel>

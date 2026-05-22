@@ -90,10 +90,11 @@ function makeEmpty(today: string, emp: string): FormState {
 
 // ─── Small helpers ──────────────────────────────────────────────────────────────
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function SectionLabel({ children, color = "blue" }: { children: React.ReactNode; color?: "blue" | "amber" }) {
   return (
-    <div className="text-sm font-semibold text-gray-500 uppercase tracking-wide pt-5 pb-2">
-      {children}
+    <div className="flex items-center gap-2 pt-6 pb-3">
+      <span className={`w-1 h-4 rounded-full ${color === "amber" ? "bg-amber-400" : "bg-blue-500"}`} />
+      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">{children}</span>
     </div>
   );
 }
@@ -259,7 +260,7 @@ export default function MaterialCreateForm({ emp }: Props) {
         <p className="text-xs text-gray-500">เพิ่มรายการวัตถุดิบ</p>
       </div>
 
-      <div className="bg-white border border-gray-200 shadow-sm p-5">
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">
 
         {/* ── ข้อมูลการนำเข้า ─────────────────────────────────────── */}
         <SectionLabel>ข้อมูลการนำเข้า</SectionLabel>
@@ -473,7 +474,7 @@ export default function MaterialCreateForm({ emp }: Props) {
         </div>
 
         {/* 11. ส่งคืนบรรจุภัณฑ์ */}
-        <SectionLabel>ส่งคืนบรรจุภัณฑ์</SectionLabel>
+        <SectionLabel color="amber">ส่งคืนบรรจุภัณฑ์</SectionLabel>
         <div className="flex flex-wrap gap-5 py-2">
           {(
             [
@@ -489,7 +490,7 @@ export default function MaterialCreateForm({ emp }: Props) {
                 type="checkbox"
                 checked={form[key] as boolean}
                 onChange={(e) => patch({ [key]: e.target.checked })}
-                className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="w-4 h-4 accent-amber-400 cursor-pointer"
               />
               {label}
             </label>
