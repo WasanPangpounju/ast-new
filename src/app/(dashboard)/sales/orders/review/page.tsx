@@ -104,6 +104,16 @@ export default function SalesOrdersReviewPage() {
     }
   }
 
+  function statusColor(status: string | null) {
+    switch (status) {
+      case 'รอดำเนินการ': return 'bg-yellow-50 text-yellow-800 border-yellow-300'
+      case 'อนุมัติให้ผลิต': return 'bg-green-50 text-green-800 border-green-300'
+      case 'เสร็จสิ้น': return 'bg-blue-50 text-blue-800 border-blue-300'
+      case 'ยกเลิก': return 'bg-red-50 text-red-800 border-red-300'
+      default: return 'bg-gray-50 text-gray-500 border-gray-300'
+    }
+  }
+
   function applyFilter() {
     setPage(1)
     setApplied({ q, status: statusFilter, month, year })
@@ -256,7 +266,7 @@ export default function SalesOrdersReviewPage() {
                         value={o.status ?? 'no data'}
                         disabled={updatingId === o.id}
                         onChange={e => changeStatus(o, e.target.value)}
-                        className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 bg-white"
+                        className={`text-xs border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 ${statusColor(o.status)}`}
                       >
                         {STATUSES.map(st => <option key={st} value={st}>{st}</option>)}
                       </select>

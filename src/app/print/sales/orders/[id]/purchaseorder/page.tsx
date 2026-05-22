@@ -158,7 +158,7 @@ export default function PurchaseOrderPrintPage({ params }: { params: Promise<{ i
       </div>
 
       {/* Document */}
-      <div className="max-w-[210mm] mx-auto p-8 bg-white" style={{ minHeight: '297mm' }}>
+      <div className="max-w-[210mm] mx-auto p-8 bg-white">
         {/* Header */}
         {order.vat !== 'SOB' ? (
           <div className="flex gap-4 mb-2">
