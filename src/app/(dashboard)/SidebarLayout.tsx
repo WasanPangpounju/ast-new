@@ -53,8 +53,8 @@ export default function SidebarLayout({ userName }: Props) {
             <X className="w-5 h-5" />
           </button>
         </div>
-        <nav className="flex-1 p-2 overflow-y-auto" onClick={() => setOpen(false)}>
-          <NavLinks />
+        <nav className="flex-1 p-2 overflow-y-auto">
+          <NavLinks onClose={() => setOpen(false)} />
         </nav>
         <div className="p-3 border-t border-slate-700">
           <a href="/api/auth/signout" className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:bg-slate-700 hover:text-white transition-colors w-full">

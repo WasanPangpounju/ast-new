@@ -115,7 +115,7 @@ const navItems: NavItem[] = [
   },
 ];
 
-export default function NavLinks() {
+export default function NavLinks({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const [open, setOpen] = useState<string | null>("ระบบคลังสินค้า");
 
@@ -170,6 +170,7 @@ export default function NavLinks() {
                     <Link
                       key={child.href}
                       href={child.href}
+                      onClick={onClose}
                       className={`block px-2 py-1.5 rounded-md text-xs transition-colors
                         ${
                           pathname === child.href
@@ -193,6 +194,7 @@ export default function NavLinks() {
           <Link
             key={item.href}
             href={item.href!}
+            onClick={onClose}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors
               ${isActive ? "bg-slate-700 text-white" : "text-slate-300 hover:bg-slate-700 hover:text-white"}`}
           >
