@@ -266,7 +266,7 @@ export default function SalesOrdersReviewPage() {
                         value={o.status ?? 'no data'}
                         disabled={updatingId === o.id}
                         onChange={e => changeStatus(o, e.target.value)}
-                        className={`text-xs border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 ${statusColor(o.status)}`}
+                        className={`text-xs border rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 appearance-none cursor-pointer ${statusColor(o.status)}`}
                       >
                         {STATUSES.map(st => <option key={st} value={st}>{st}</option>)}
                       </select>

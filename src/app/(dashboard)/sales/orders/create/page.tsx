@@ -305,7 +305,6 @@ function YarnRow({
 
 export default function CreateOrderPage() {
   const router = useRouter();
-  const [secOpen, setSecOpen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [fabricStructureError, setFabricStructureError] = useState(false);
@@ -606,41 +605,23 @@ export default function CreateOrderPage() {
 
           <div className="border border-gray-300 bg-white shadow-sm rounded">
             {/* ► Section header */}
-            <button
-              type="button"
-              onClick={() => setSecOpen((p) => !p)}
-              className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 border-b border-gray-300 text-sm font-semibold text-gray-800 hover:bg-gray-200 text-left rounded-t"
-            >
+            <div className="w-full flex items-center gap-2 px-3 py-2 bg-gray-100 border-b border-gray-300 text-sm font-semibold text-gray-800 text-left rounded-t">
               <span className="text-[10px]">
-                {secOpen ? (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    fill="currentColor"
-                    className="bi bi-caret-down-fill"
-                    viewBox="0 0 16 16"
-                  >
-                    <path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z" />
-                  </svg>
-                ) : (
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    fill="currentColor"
-                    className="bi bi-caret-right-fill"
-                    viewBox="0 0 16 16"
-                  >
-                    <path d="m12.14 8.753-5.482 4.796c-.646.566-1.658.106-1.658-.753V3.204a1 1 0 0 1 1.659-.753l5.48 4.796a1 1 0 0 1 0 1.506z" />
-                  </svg>
-                )}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="16"
+                  height="16"
+                  fill="currentColor"
+                  className="bi bi-caret-down-fill"
+                  viewBox="0 0 16 16"
+                >
+                  <path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z" />
+                </svg>
               </span>
               เพิ่มคำสั่งซื้อ
-            </button>
+            </div>
 
-            {secOpen && (
-              <div className="p-5 space-y-4">
+            <div className="p-5 space-y-4">
                 {/* Header: date + NO right-aligned */}
                 <div className="flex justify-end text-sm text-gray-600">
                   วันที่ {thaiDate}&nbsp;&nbsp;NO.
@@ -1390,7 +1371,6 @@ export default function CreateOrderPage() {
                   </button>
                 </div>
               </div>
-            )}
           </div>
         </form>
       </div>

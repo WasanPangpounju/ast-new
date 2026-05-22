@@ -24,14 +24,14 @@ interface Order {
 function StatusBadge({ status }: { status: string | null }) {
   const s = status ?? 'no data'
   const map: Record<string, string> = {
-    'อนุมัติให้ผลิต': 'bg-green-100 text-green-700',
-    'รอดำเนินการ': 'bg-yellow-100 text-yellow-700',
-    'เสร็จสิ้น': 'bg-blue-100 text-blue-700',
-    'ยกเลิก': 'bg-red-100 text-red-700',
-    'no data': 'bg-gray-100 text-gray-500',
+    'อนุมัติให้ผลิต': 'bg-green-100 text-green-700 border border-green-300',
+    'รอดำเนินการ': 'bg-yellow-100 text-yellow-700 border border-yellow-300',
+    'เสร็จสิ้น': 'bg-blue-100 text-blue-700 border border-blue-300',
+    'ยกเลิก': 'bg-red-100 text-red-700 border border-red-300',
+    'no data': 'bg-gray-100 text-gray-500 border border-gray-300',
   }
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[s] ?? 'bg-gray-100 text-gray-500'}`}>
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${map[s] ?? 'bg-gray-100 text-gray-500 border border-gray-300'}`}>
       {s}
     </span>
   )
