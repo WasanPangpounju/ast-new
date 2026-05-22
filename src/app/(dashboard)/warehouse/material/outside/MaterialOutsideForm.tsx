@@ -571,8 +571,8 @@ export default function MaterialOutsideForm() {
 
         {/* ── ส่งคืนบรรจุภัณฑ์ ─────────────────────────────────────── */}
         <SectionLabel color="amber">ส่งคืนบรรจุภัณฑ์</SectionLabel>
-        <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 space-y-4">
-          <div className="flex flex-wrap gap-3">
+        <div className="p-4 space-y-4">
+          <div className="flex gap-3 overflow-x-auto pb-1">
             {([
               { key: "returnPallet",   label: "พาเลท" },
               { key: "returnBox",      label: "กล่อง" },
@@ -580,21 +580,18 @@ export default function MaterialOutsideForm() {
               { key: "returnSpool",    label: "หลอด" },
               { key: "returnPaperBar", label: "กระดาษกั้น" },
             ] as { key: keyof FormState; label: string }[]).map(({ key, label }) => (
-              <label key={key}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm cursor-pointer select-none transition-colors ${
-                  form[key] ? "bg-amber-400 border-amber-400 text-white font-medium" : "bg-white border-gray-200 text-gray-600 hover:border-amber-300"
-                }`}>
+              <label key={key} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none shrink-0">
                 <input
                   type="checkbox"
                   checked={form[key] as boolean}
                   onChange={(e) => patch({ [key]: e.target.checked })}
-                  className="sr-only"
+                  className="w-4 h-4 accent-amber-400 cursor-pointer"
                 />
                 {label}
               </label>
             ))}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <Field label="ผู้รับวัตถุดิบ">
               <input value={form.recipient}
                 onChange={(e) => patch({ recipient: e.target.value })}
@@ -617,7 +614,7 @@ export default function MaterialOutsideForm() {
         </div>
 
         {/* ── ส่วนควบคุม ──────────────────────────────────────────── */}
-        <div className="flex flex-wrap gap-3 pt-6">
+        <div className="flex flex-wrap gap-3 pt-6 items-center justify-center">
           <button type="button" onClick={handleAddPending}
             className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm">
             + เพิ่มรายการใหม่
@@ -663,7 +660,11 @@ export default function MaterialOutsideForm() {
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(item.withdrawDate)}</td>
                       <td className="px-3 py-2 text-center">
                         <button type="button" onClick={() => handleDeleteRow(item.key)}
-                          className="px-2 py-0.5 text-xs text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors">
+                          className="px-2 py-0.5 text-xs text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors flex items-center gap-1 mx-auto">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                           ลบ
                         </button>
                       </td>
