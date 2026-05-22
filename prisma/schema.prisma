@@ -7,14 +7,18 @@ datasource db {
   provider = "postgresql"
 }
 
+// ─── AUTH ────────────────────────────────────────────
+
 model User {
-  id        Int       @id @default(autoincrement())
-  name      String
-  email     String    @unique
-  password  String
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id          Int              @id @default(autoincrement())
+  name        String
+  email       String           @unique
+  password    String
+  role        String           @default("user")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  deletedAt   DateTime?        @map("deleted_at")
+  permissions UserPermission[]
 
   @@map("users")
 }
