@@ -39,13 +39,22 @@ export async function GET(request: NextRequest) {
     const limit  = 20
     const offset = (page - 1) * limit
     const q        = searchParams.get('q')        ?? ''
+    const searchBy = searchParams.get('searchBy') ?? 'fabricCode'
     const customer = searchParams.get('customer') ?? ''
     const stockType = searchParams.get('stockType') ?? 'all'
+
+    const searchFieldMap: Record<string, string> = {
+      fabricCode:    '"fabricCode"',
+      fabricStruct:  '"fabricStruct"',
+      fabricPattern: '"fabricPattern"',
+      fabricW:       '"fabricW"',
+    }
+    const searchField = searchFieldMap[searchBy] ?? '"fabricCode"'
 
     const conditions: string[] = ['s.deleted_at IS NULL']
     if (stockType === 'produced')  conditions.push('s.is_purchased = false')
     if (stockType === 'purchased') conditions.push('s.is_purchased = true')
-    if (q)        conditions.push(`(s."fabricStruct" ILIKE '%${q.replace(/'/g, "''")}%' OR s."fabricPattern" ILIKE '%${q.replace(/'/g, "''")}%')`)
+    if (q)        conditions.push(`s.${searchField} ILIKE '%${q.replace(/'/g, "''")}%'`)
     if (customer) conditions.push(`COALESCE(s."customer", 'AST') ILIKE '%${customer.replace(/'/g, "''")}%'`)
     const whereClause = conditions.join(' AND ')
 
@@ -58,6 +67,7 @@ export async function GET(request: NextRequest) {
             s."fabricStruct",
             s."fabricPattern",
             s."fabricW",
+            s."fabricCode",
             MIN(${NS('s."fabricStruct"')})       AS n_struct,
             MIN(${NW('s."fabricW"')})            AS n_width,
             MIN(${NP('s."fabricPattern"')})      AS n_pattern,
@@ -67,10 +77,11 @@ export async function GET(request: NextRequest) {
             SUM(s."sumYard")::float              AS produced_yard
           FROM stockfabrics s
           WHERE ${whereClause}
-          GROUP BY COALESCE(s."customer", 'AST'), s."fabricStruct", s."fabricPattern", s."fabricW"
+          GROUP BY COALESCE(s."customer", 'AST'), s."fabricStruct", s."fabricPattern", s."fabricW", s."fabricCode"
         )
         SELECT
           s.customer,
+          s."fabricCode",
           s."fabricStruct",
           s."fabricPattern",
           s."fabricW",
@@ -112,7 +123,7 @@ export async function GET(request: NextRequest) {
         SELECT COUNT(*)::int AS cnt FROM (
           SELECT 1 FROM stockfabrics s
           WHERE ${whereClause}
-          GROUP BY COALESCE(s."customer", 'AST'), s."fabricStruct", s."fabricPattern", s."fabricW"
+          GROUP BY COALESCE(s."customer", 'AST'), s."fabricStruct", s."fabricPattern", s."fabricW", s."fabricCode"
         ) sub
       `) as Promise<any[]>,
     ])

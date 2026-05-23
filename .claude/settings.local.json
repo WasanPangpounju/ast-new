@@ -45,7 +45,9 @@
       "Read(//c/Users/Friendly Dev/**)",
       "Bash(git stash *)",
       "Bash(Sort-Object Name)",
-      "Bash(Select-Object -Last 5)"
+      "Bash(Select-Object -Last 5)",
+      "Bash(Select-Object -First 20)",
+      "Bash(Format-Table FullName)"
     ]
   }
 }

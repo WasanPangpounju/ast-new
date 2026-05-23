@@ -178,6 +178,7 @@ async function main() {
             fabricStruct: f.fabricStruct ?? null,
             fabricPattern: f.fabricPattern ?? null,
             fabricW: f.fabricW ?? null,
+            fabricCode: f.fabricId ?? null,
             fold: f.fold ? parseInt(f.fold) : null,
             sumYard: f.sumYard ? parseFloat(f.sumYard) : null,
             customer: f.customer ?? null,

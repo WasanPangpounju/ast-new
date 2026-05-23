@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 interface StockGroup {
   customer: string
+  fabricCode: string | null
   fabricStruct: string | null
   fabricPattern: string | null
   fabricW: string | null
@@ -19,28 +20,37 @@ export default function StockPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
+  const [searchBy, setSearchBy] = useState<'fabricCode' | 'fabricStruct' | 'fabricPattern' | 'fabricW'>('fabricCode')
   const [customer, setCustomer] = useState('')
   const [appliedQ, setAppliedQ] = useState('')
+  const [appliedSearchBy, setAppliedSearchBy] = useState<'fabricCode' | 'fabricStruct' | 'fabricPattern' | 'fabricW'>('fabricCode')
   const [appliedCustomer, setAppliedCustomer] = useState('')
   const [stockType, setStockType] = useState<'all' | 'produced' | 'purchased'>('all')
 
   const fetchStocks = useCallback(() => {
     setLoading(true)
     const p = new URLSearchParams({ page: String(page) })
-    if (appliedQ) p.set('q', appliedQ)
+    if (appliedQ) { p.set('q', appliedQ); p.set('searchBy', appliedSearchBy) }
     if (appliedCustomer) p.set('customer', appliedCustomer)
     if (stockType !== 'all') p.set('stockType', stockType)
     fetch(`/api/warehouse/stock?${p}`)
       .then(r => r.json())
       .then(d => { setStocks(d.stocks ?? []); setTotal(d.total ?? 0) })
       .finally(() => setLoading(false))
-  }, [page, appliedQ, appliedCustomer, stockType])
+  }, [page, appliedQ, appliedSearchBy, appliedCustomer, stockType])
 
   useEffect(() => { fetchStocks() }, [fetchStocks])
 
   const totalPages = Math.ceil(total / 20)
-  const handleSearch = () => { setPage(1); setAppliedQ(q); setAppliedCustomer(customer) }
+  const handleSearch = () => { setPage(1); setAppliedQ(q); setAppliedSearchBy(searchBy); setAppliedCustomer(customer) }
   const handleClear = () => { setQ(''); setCustomer(''); setAppliedQ(''); setAppliedCustomer(''); setStockType('all'); setPage(1) }
+
+  const searchByOptions = [
+    { value: 'fabricCode',    label: 'รหัสผ้า' },
+    { value: 'fabricStruct',  label: 'โครงสร้างผ้า' },
+    { value: 'fabricPattern', label: 'ลายผ้า' },
+    { value: 'fabricW',       label: 'หน้ากว้าง' },
+  ] as const
 
   const fmt = (n: number | null) => n == null ? '-' : Number(n).toLocaleString()
 
@@ -53,12 +63,22 @@ export default function StockPage() {
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <div>
-            <label className="block text-xs text-gray-500 mb-1">โครงสร้างผ้า / ลายผ้า</label>
-            <input value={q} onChange={e => setQ(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              placeholder="พิมพ์ค้นหา..."
-              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div className="md:col-span-2">
+            <label className="block text-xs text-gray-500 mb-1">ค้นหา</label>
+            <div className="flex">
+              <select
+                value={searchBy}
+                onChange={e => setSearchBy(e.target.value as typeof searchBy)}
+                className="border border-r-0 border-gray-300 rounded-l-lg px-2 py-1.5 text-sm bg-gray-50 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:z-10">
+                {searchByOptions.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+              <input value={q} onChange={e => setQ(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                placeholder="พิมพ์ค้นหา..."
+                className="flex-1 border border-gray-300 rounded-r-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">ลูกค้า</label>
@@ -67,7 +87,7 @@ export default function StockPage() {
               placeholder="ชื่อลูกค้า..."
               className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div className="flex items-end gap-2 md:col-span-2">
+          <div className="flex items-end gap-2">
             <button onClick={handleSearch}
               className="px-6 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">ค้นหา</button>
             <button onClick={handleClear}
@@ -91,6 +111,7 @@ export default function StockPage() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ลูกค้า</th>
+                <th className="text-left px-3 py-2.5 font-medium text-gray-600">รหัสผ้า</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">โครงสร้างผ้า</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ลายผ้า</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600">หน้ากว้าง</th>
@@ -99,7 +120,7 @@ export default function StockPage() {
                 <th className="text-center px-2 py-1 font-medium text-gray-600 bg-green-50 border-l border-green-200" colSpan={2}>คงเหลือ</th>
               </tr>
               <tr className="bg-gray-50 border-b border-gray-200 text-gray-500">
-                <th colSpan={4}></th>
+                <th colSpan={5}></th>
                 <th className="text-right px-2 py-1 bg-blue-50 font-normal">พับ</th>
                 <th className="text-right px-2 py-1 bg-blue-50 font-normal border-r border-blue-100">หลา</th>
                 <th className="text-right px-2 py-1 bg-orange-50 font-normal">พับ</th>
@@ -110,24 +131,25 @@ export default function StockPage() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={10} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={11} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"/>
                     กำลังโหลด...
                   </div>
                 </td></tr>
               ) : stocks.length === 0 ? (
-                <tr><td colSpan={10} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={11} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
               ) : stocks.map((s, i) => {
                 const remFold = (s.produced_fold ?? 0) - (s.used_fold ?? 0)
                 const remYard = Number(s.produced_yard ?? 0) - Number(s.used_yard ?? 0)
                 return (
                   <tr key={i} className="hover:bg-blue-50/30 transition-colors">
                     <td className="px-3 py-2 text-gray-700 font-medium">{s.customer}</td>
+                    <td className="px-3 py-2 text-gray-600">{s.fabricCode ?? '-'}</td>
                     <td className="px-3 py-2 text-gray-800 max-w-[160px] truncate">{s.fabricStruct ?? '-'}</td>
                     <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate">{s.fabricPattern ?? '-'}</td>
                     <td className="px-3 py-2 text-center text-gray-700">{s.fabricW ?? '-'}</td>
-                    <td className="px-2 py-2 text-right text-blue-700 bg-blue-50/50">{fmt(s.produced_fold)}</td>
+                    <td className="px-2 py-2 text-right text-blue-700 bg-blue-50/50">{fmt(s.lot_count)}</td>
                     <td className="px-2 py-2 text-right text-blue-800 font-medium bg-blue-50/50">{fmt(Math.round(Number(s.produced_yard)))}</td>
                     <td className="px-2 py-2 text-right text-orange-700 bg-orange-50/50">{s.used_fold > 0 ? fmt(s.used_fold) : '-'}</td>
                     <td className="px-2 py-2 text-right text-orange-800 bg-orange-50/50">{s.used_yard > 0 ? fmt(Math.round(Number(s.used_yard))) : '-'}</td>

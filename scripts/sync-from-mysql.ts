@@ -301,6 +301,7 @@ async function main() {
       fabricStruct:  s(f_.fabricStruct),
       fabricPattern: s(f_.fabricPattern),
       fabricW:       s(f_.fabricW),
+      fabricCode:    s(f_.fabricId),
       fold:          i(f_.fold),
       sumYard:       f(f_.sumYard),
       customer:      s(f_.customer),
