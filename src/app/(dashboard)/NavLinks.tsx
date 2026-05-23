@@ -3,11 +3,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
+type NavChild = { href: string; label: string; menuKey: string; labelIcon?: React.ReactNode };
 type NavItem = {
   href?: string;
   label: string;
   icon: React.ReactNode;
-  children?: { href: string; label: string; labelIcon?: React.ReactNode }[];
+  children?: NavChild[];
 };
 
 const navItems: NavItem[] = [
@@ -42,10 +43,10 @@ const navItems: NavItem[] = [
       </svg>
     ),
     children: [
-      { href: "/sales/customers", label: "ข้อมูลลูกค้า" },
-      { href: "/sales/suppliers", label: "ข้อมูลซัพพลายเออร์" },
-      { href: "/sales/orders/create", label: "ใบสั่งขาย" },
-      { href: "/sales/orders/review", label: "ตรวจสอบใบสั่งขาย" },
+      { href: "/sales/customers",     label: "ข้อมูลลูกค้า",          menuKey: "sales.customers" },
+      { href: "/sales/suppliers",     label: "ข้อมูลซัพพลายเออร์",    menuKey: "sales.suppliers" },
+      { href: "/sales/orders/create", label: "ใบสั่งขาย",             menuKey: "sales.orders-create" },
+      { href: "/sales/orders/review", label: "ตรวจสอบใบสั่งขาย",      menuKey: "sales.orders-review" },
     ],
   },
   {
@@ -63,19 +64,20 @@ const navItems: NavItem[] = [
       </svg>
     ),
     children: [
-      { href: "/warehouse/stock/create", label: "คีย์ผ้าเข้าสต็อก" },
-      { href: "/warehouse/stock/scan", label: "สแกนรูปคีย์ผ้าเข้าสต็อก" },
-      { href: "/warehouse/fabric-in/review", label: "ตรวจสอบคีย์ผ้า" },
-      { href: "/warehouse/stock/purchase", label: "คีย์ผ้าซื้อเข้า" },
-      { href: "/warehouse/stock/purchase/review", label: "ตรวจสอบผ้าซื้อเข้า" },
-      { href: "/warehouse/bill/create", label: "เปิดบิลผ้า" },
-      { href: "/warehouse/bill", label: "พิมพ์บิลส่งของ" },
-      { href: "/warehouse/orders", label: "ออร์เดอร์ลูกค้า" },
-      { href: "/warehouse/stock", label: "สต็อกผ้า" },
-      { href: "/warehouse/stock-deposit", label: "สต็อกผ้าฝากจัดเก็บ" },
+      { href: "/warehouse/stock/create",          label: "คีย์ผ้าเข้าสต็อก",        menuKey: "warehouse.fabric-in" },
+      { href: "/warehouse/stock/scan",            label: "สแกนรูปคีย์ผ้าเข้าสต็อก", menuKey: "warehouse.fabric-in-scan" },
+      { href: "/warehouse/fabric-in/review",      label: "ตรวจสอบคีย์ผ้า",          menuKey: "warehouse.fabric-review" },
+      { href: "/warehouse/stock/purchase",        label: "คีย์ผ้าซื้อเข้า",          menuKey: "warehouse.purchase" },
+      { href: "/warehouse/stock/purchase/review", label: "ตรวจสอบผ้าซื้อเข้า",       menuKey: "warehouse.purchase-review" },
+      { href: "/warehouse/bill/create",           label: "เปิดบิลผ้า",              menuKey: "warehouse.bill-create" },
+      { href: "/warehouse/bill",                  label: "พิมพ์บิลส่งของ",           menuKey: "warehouse.bill" },
+      { href: "/warehouse/orders",                label: "ออร์เดอร์ลูกค้า",          menuKey: "warehouse.orders" },
+      { href: "/warehouse/stock",                 label: "สต็อกผ้า",                menuKey: "warehouse.stock" },
+      { href: "/warehouse/stock-deposit",         label: "สต็อกผ้าฝากจัดเก็บ",      menuKey: "warehouse.stock-deposit" },
       {
         href: "/warehouse/reports",
         label: "รายงาน",
+        menuKey: "warehouse.reports",
         labelIcon: (
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -105,35 +107,45 @@ const navItems: NavItem[] = [
       </svg>
     ),
     children: [
-      { href: "/warehouse/material/create", label: "นำเข้าวัตถุดิบ" },
-      { href: "/warehouse/material/history", label: "ประวัติการนำเข้า" },
-      { href: "/warehouse/material/requisition", label: "เบิกวัตถุดิบภายใน" },
-      { href: "/warehouse/material/requisition-history", label: "ประวัติการเบิก" },
-      { href: "/warehouse/material/outside", label: "เบิกวัตถุดิบภายนอก" },
-      { href: "/warehouse/material/outside-history", label: "ประวัติเบิกภายนอก" },
+      { href: "/warehouse/material/create",               label: "นำเข้าวัตถุดิบ",           menuKey: "material.create" },
+      { href: "/warehouse/material/history",              label: "ประวัติการนำเข้า",         menuKey: "material.history" },
+      { href: "/warehouse/material/requisition",          label: "เบิกวัตถุดิบภายใน",        menuKey: "material.requisition" },
+      { href: "/warehouse/material/requisition-history",  label: "ประวัติการเบิก",           menuKey: "material.requisition-history" },
+      { href: "/warehouse/material/outside",              label: "เบิกวัตถุดิบภายนอก",       menuKey: "material.outside" },
+      { href: "/warehouse/material/outside-history",      label: "ประวัติเบิกภายนอก",        menuKey: "material.outside-history" },
     ],
   },
   {
     label: "ตั้งค่า",
     icon: "⚙️",
     children: [
-      { href: "/admin/users", label: "จัดการผู้ใช้" },
+      { href: "/admin/users", label: "จัดการผู้ใช้", menuKey: "admin.users" },
     ],
   },
 ];
 
-export default function NavLinks({ onClose }: { onClose?: () => void }) {
+export default function NavLinks({
+  onClose,
+  allowedMenuKeys,
+}: {
+  onClose?: () => void;
+  allowedMenuKeys: string[] | null;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState<string | null>("ระบบคลังสินค้า");
+
+  const allowed = (key: string) =>
+    allowedMenuKeys === null || allowedMenuKeys.includes(key);
 
   return (
     <div className="space-y-0.5">
       {navItems.map((item) => {
         if (item.children) {
+          const visibleChildren = item.children.filter((c) => allowed(c.menuKey));
+          if (visibleChildren.length === 0) return null;
+
           const isOpen = open === item.label;
-          const hasActive = item.children.some((c) =>
-            pathname.startsWith(c.href),
-          );
+          const hasActive = visibleChildren.some((c) => pathname.startsWith(c.href));
           return (
             <div key={item.label}>
               <button
@@ -173,7 +185,7 @@ export default function NavLinks({ onClose }: { onClose?: () => void }) {
               </button>
               {isOpen && (
                 <div className="ml-4 mt-0.5 space-y-0.5 border-l border-slate-700 pl-3">
-                  {item.children.map((child) => (
+                  {visibleChildren.map((child) => (
                     <Link
                       key={child.href}
                       href={child.href}

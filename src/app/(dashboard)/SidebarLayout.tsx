@@ -5,9 +5,10 @@ import NavLinks from './NavLinks'
 
 interface Props {
   userName?: string | null
+  allowedMenuKeys: string[] | null
 }
 
-export default function SidebarLayout({ userName }: Props) {
+export default function SidebarLayout({ userName, allowedMenuKeys }: Props) {
   const [open, setOpen] = useState(false)
 
   // ปิด sidebar เมื่อ resize ไป md+
@@ -54,7 +55,7 @@ export default function SidebarLayout({ userName }: Props) {
           </button>
         </div>
         <nav className="flex-1 p-2 overflow-y-auto">
-          <NavLinks onClose={() => setOpen(false)} />
+          <NavLinks onClose={() => setOpen(false)} allowedMenuKeys={allowedMenuKeys} />
         </nav>
         <div className="p-3 border-t border-slate-700">
           <a href="/api/auth/signout" className="flex items-center gap-2 px-3 py-2 text-xs text-slate-400 hover:bg-slate-700 hover:text-white transition-colors w-full">
