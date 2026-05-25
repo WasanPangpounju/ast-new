@@ -222,10 +222,10 @@ export default function SalesSuppliersPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">
+          <h1 className="text-3xl font-semibold text-gray-900">
             ข้อมูลซัพพลายเออร์
           </h1>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm text-gray-500">
             ทั้งหมด {total.toLocaleString()} ราย
           </p>
         </div>

@@ -19,7 +19,7 @@ export default function SidebarLayout({ userName, allowedMenuKeys }: Props) {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  return (
+  return ( 
     <>
       {/* Mobile topbar */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between bg-slate-800 px-4 py-3 text-white">

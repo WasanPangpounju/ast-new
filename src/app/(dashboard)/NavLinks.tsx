@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type NavChild = { href: string; label: string; menuKey: string; labelIcon?: React.ReactNode };
 type NavItem = {
@@ -132,7 +132,22 @@ export default function NavLinks({
   allowedMenuKeys: string[] | null;
 }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState<string | null>("ระบบคลังสินค้า");
+
+  const findActiveSection = (path: string) => {
+    for (const item of navItems) {
+      if (item.children?.some((c) => path === c.href || path.startsWith(c.href + "/"))) {
+        return item.label;
+      }
+    }
+    return null;
+  };
+
+  const [open, setOpen] = useState<string | null>(() => findActiveSection(pathname));
+
+  useEffect(() => {
+    const section = findActiveSection(pathname);
+    if (section) setOpen(section);
+  }, [pathname]);
 
   const allowed = (key: string) =>
     allowedMenuKeys === null || allowedMenuKeys.includes(key);
@@ -144,8 +159,19 @@ export default function NavLinks({
           const visibleChildren = item.children.filter((c) => allowed(c.menuKey));
           if (visibleChildren.length === 0) return null;
 
+          const isChildActive = (href: string) => {
+            if (pathname === href) return true;
+            const hasMoreSpecific = visibleChildren.some(
+              (c) =>
+                c.href !== href &&
+                c.href.startsWith(href) &&
+                (pathname === c.href || pathname.startsWith(c.href + "/"))
+            );
+            return !hasMoreSpecific && pathname.startsWith(href + "/");
+          };
+
           const isOpen = open === item.label;
-          const hasActive = visibleChildren.some((c) => pathname.startsWith(c.href));
+          const hasActive = visibleChildren.some((c) => isChildActive(c.href));
           return (
             <div key={item.label}>
               <button
@@ -192,7 +218,7 @@ export default function NavLinks({
                       onClick={onClose}
                       className={`block px-2 py-1.5 rounded-md text-xs transition-colors
                         ${
-                          pathname === child.href
+                          isChildActive(child.href)
                             ? "bg-blue-600 text-white"
                             : "text-slate-400 hover:bg-slate-700 hover:text-white"
                         }`}

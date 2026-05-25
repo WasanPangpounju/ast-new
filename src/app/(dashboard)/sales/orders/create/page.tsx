@@ -1211,7 +1211,7 @@ export default function CreateOrderPage() {
                           %
                         </th>
                         <th className="border border-gray-200 px-2 py-1.5 text-xs text-center font-medium text-gray-600 w-16">
-                          เพิ่ม/ลบ
+                          เพิ่ม / ลบ
                         </th>
                       </tr>
                     </thead>
@@ -1265,34 +1265,34 @@ export default function CreateOrderPage() {
                               className="w-full border-0 text-sm focus:outline-none bg-transparent"
                             />
                           </td>
-                          <td className="border border-gray-200 px-1 py-0.5 text-center">
-                            <div className="flex justify-center items-center gap-1">
+                          <td className="border border-gray-200 px-1 py-0.5 text-center ">
+                            {i === 0 ? (
                               <button
                                 type="button"
                                 onClick={() =>
                                   setDeadlines((prev) => [
-                                    ...prev,
                                     { dt: "", qty: "", unit: "หลา", pct: "" },
+                                    { ...prev[0] },
+                                    ...prev.slice(1),
                                   ])
                                 }
-                                className="w-5 h-5 flex items-center justify-center rounded bg-blue-100 text-blue-600 hover:bg-blue-200 text-sm font-bold leading-none"
+                                className="mx-auto w-5 h-5 flex items-center justify-center rounded bg-blue-100 text-blue-600 hover:bg-blue-200 text-sm font-bold leading-none"
                               >
                                 +
                               </button>
-                              {deadlines.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setDeadlines((prev) =>
-                                      prev.filter((_, idx) => idx !== i),
-                                    )
-                                  }
-                                  className="w-5 h-5 flex items-center justify-center rounded bg-red-100 text-red-500 hover:bg-red-200 text-sm font-bold leading-none"
-                                >
-                                  −
-                                </button>
-                              )}
-                            </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDeadlines((prev) =>
+                                    prev.filter((_, idx) => idx !== i),
+                                  )
+                                }
+                                className="mx-auto w-5 h-5 flex items-center justify-center rounded bg-red-100 text-red-500 hover:bg-red-200 text-sm font-bold leading-none"
+                              >
+                                −
+                              </button>
+                            )}
                           </td>
                         </tr>
                       ))}

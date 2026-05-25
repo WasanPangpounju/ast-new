@@ -166,8 +166,8 @@ export default function BillListPage() {
     <div className="p-4 w-full">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">พิมพ์บิลส่งของ</h1>
-          <p className="text-xs text-gray-500">ทั้งหมด {total.toLocaleString()} บิล</p>
+          <h1 className="text-3xl font-semibold text-gray-900">พิมพ์บิลส่งของ</h1>
+          <p className="text-sm text-gray-500">ทั้งหมด {total.toLocaleString()} บิล</p>
         </div>
       </div>
 
@@ -222,7 +222,7 @@ export default function BillListPage() {
                     <div className="font-medium text-gray-800">{b.customerName ?? "-"}</div>
                     {b.receiveName && <div className="text-gray-400">{b.receiveName}</div>}
                   </td>
-                  <td className="hidden md:table-cell px-3 py-2 text-gray-600 max-w-50 truncate">
+                  <td className="px-3 py-2 text-gray-600 max-w-50 truncate">
                     {b.altFabricStruct || b.fabricStruct || "-"}{" "}
                     {b.fabricW ? `${b.fabricW}''` : ""}{" "}
                     {b.fabricPattern ?? ""}

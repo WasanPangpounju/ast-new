@@ -218,7 +218,7 @@ export default function OrderDetailPage({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Customer info */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
             ข้อมูลลูกค้า
           </h2>
           {customer ? (

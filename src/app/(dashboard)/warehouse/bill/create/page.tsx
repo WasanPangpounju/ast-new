@@ -332,8 +332,8 @@ export default function BillCreatePage() {
     <div className="p-4 w-full">
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">เปิดบิลผ้า</h1>
-          <p className="text-xs text-gray-500">สร้างบิลส่งผ้าใหม่</p>
+          <h1 className="text-3xl font-semibold text-gray-900">เปิดบิลผ้า</h1>
+          <p className="text-sm text-gray-500">สร้างบิลส่งผ้าใหม่</p>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           {aiFilledFields.size > 0 && (
