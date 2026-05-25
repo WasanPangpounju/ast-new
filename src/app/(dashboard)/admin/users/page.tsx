@@ -292,6 +292,58 @@ function UserModal({ user, onClose, onSaved }: ModalProps) {
   );
 }
 
+function DeleteConfirmModal({
+  user,
+  deleting,
+  onConfirm,
+  onCancel,
+}: {
+  user: User;
+  deleting: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
+        <div className="p-5 border-b border-gray-200 flex items-center justify-between">
+          <h2 className="font-semibold text-gray-900 text-sm">ยืนยันการลบ</h2>
+        </div>
+        <div className="p-5">
+          <p className="text-sm text-gray-600">
+            ต้องการลบผู้ใช้{" "}
+            <span className="font-semibold text-gray-900">{user.name}</span>{" "}
+            ออกจากระบบ?
+          </p>
+          <p className="text-xs text-gray-400 mt-1">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+        </div>
+        <div className="p-5 border-t border-gray-200 flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600"
+          >
+            ยกเลิก
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={deleting}
+            className="px-4 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-60"
+          >
+            {deleting ? (
+              <span className="flex items-center gap-2">
+                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                กำลังลบ...
+              </span>
+            ) : (
+              "ลบผู้ใช้"
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -450,41 +502,20 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-center gap-1">
-                        {confirmDelete === user.id ? (
-                          <>
-                            <span className="text-xs text-gray-500 mr-1">
-                              ยืนยันลบ?
-                            </span>
-                            <button
-                              onClick={() => handleDelete(user.id)}
-                              disabled={deleting === user.id}
-                              className="bg-red-600 text-white rounded text-xs px-2 py-1 hover:bg-red-700 disabled:opacity-60"
-                            >
-                              {deleting === user.id ? "..." : "ยืนยัน"}
-                            </button>
-                            <button
-                              onClick={() => setConfirmDelete(null)}
-                              className="border border-gray-300 rounded text-xs px-2 py-1 hover:bg-gray-50 text-gray-600"
-                            >
-                              ยกเลิก
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => setModal({ open: true, user })}
-                              className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
-                            >
-                              แก้ไข
-                            </button>
-                            <button
-                              onClick={() => setConfirmDelete(user.id)}
-                              className="bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs px-2 py-1"
-                            >
-                              ลบ
-                            </button>
-                          </>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => setModal({ open: true, user })}
+                          className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                        >
+                          แก้ไข
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDelete(user.id)}
+                          className="bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs px-2 py-1"
+                        >
+                          ลบ
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -495,7 +526,7 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* Edit Modal */}
       {modal.open && (
         <UserModal
           user={modal.user}
@@ -504,6 +535,16 @@ export default function AdminUsersPage() {
             setModal({ open: false, user: null });
             fetchUsers();
           }}
+        />
+      )}
+
+      {/* Delete Confirm Modal */}
+      {confirmDelete !== null && (
+        <DeleteConfirmModal
+          user={users.find((u) => u.id === confirmDelete)!}
+          deleting={deleting === confirmDelete}
+          onConfirm={() => handleDelete(confirmDelete)}
+          onCancel={() => setConfirmDelete(null)}
         />
       )}
     </div>
