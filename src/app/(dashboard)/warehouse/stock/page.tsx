@@ -140,7 +140,7 @@ export default function StockPage() {
               ) : stocks.length === 0 ? (
                 <tr><td colSpan={11} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
               ) : stocks.map((s, i) => {
-                const remFold = (s.produced_fold ?? 0) - (s.used_fold ?? 0)
+                const remFold = (s.lot_count ?? 0) - (s.used_fold ?? 0)
                 const remYard = Number(s.produced_yard ?? 0) - Number(s.used_yard ?? 0)
                 return (
                   <tr key={i} className="hover:bg-blue-50/30 transition-colors">
@@ -153,8 +153,8 @@ export default function StockPage() {
                     <td className="px-2 py-2 text-right text-blue-800 font-medium bg-blue-50/50">{fmt(Math.round(Number(s.produced_yard)))}</td>
                     <td className="px-2 py-2 text-right text-orange-700 bg-orange-50/50">{s.used_fold > 0 ? fmt(s.used_fold) : '-'}</td>
                     <td className="px-2 py-2 text-right text-orange-800 bg-orange-50/50">{s.used_yard > 0 ? fmt(Math.round(Number(s.used_yard))) : '-'}</td>
-                    <td className="px-2 py-2 text-right font-medium bg-green-50/50" style={{ color: remFold >= 0 ? '#15803d' : '#dc2626' }}>{fmt(remFold)}</td>
-                    <td className="px-2 py-2 text-right font-bold bg-green-50/50" style={{ color: remYard >= 0 ? '#15803d' : '#dc2626' }}>{fmt(Math.round(remYard))}</td>
+                    <td className="px-2 py-2 text-right font-medium bg-green-50/50 text-green-700">{fmt(Math.max(0, remFold))}</td>
+                    <td className="px-2 py-2 text-right font-bold bg-green-50/50 text-green-700">{fmt(Math.max(0, Math.round(remYard)))}</td>
                   </tr>
                 )
               })}
