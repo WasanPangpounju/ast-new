@@ -202,3 +202,41 @@ export async function PUT(
 
   return Response.json({ ok: true })
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if (!session) return Response.json({ error: 'ไม่ได้รับอนุญาต' }, { status: 401 })
+
+  const { id } = await params
+  const order = await prisma.astPurchaseOrder.findFirst({
+    where: { id: Number(id), deletedAt: null },
+    include: { billOfStructure: { select: { id: true } } },
+  })
+  if (!order) return Response.json({ error: 'ไม่พบใบสั่งขาย' }, { status: 404 })
+
+  const po = order.purchaseOrder
+
+  await prisma.$transaction(async tx => {
+    await tx.orderDeadline.deleteMany({ where: { purchaseOrder: po } })
+    await tx.fabricAst.deleteMany({ where: { purchaseOrder: po } })
+    await tx.fabricAstStructure.deleteMany({ where: { purchaseOrder: po } })
+
+    if (order.billOfStructure) {
+      await tx.bosDeadline.deleteMany({ where: { bosId: order.billOfStructure.id } })
+      await tx.astBillOfStructure.update({
+        where: { id: order.billOfStructure.id },
+        data: { deletedAt: new Date() },
+      })
+    }
+
+    await tx.astPurchaseOrder.update({
+      where: { id: Number(id) },
+      data: { deletedAt: new Date() },
+    })
+  })
+
+  return Response.json({ ok: true })
+}

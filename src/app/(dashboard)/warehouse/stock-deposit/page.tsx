@@ -44,6 +44,73 @@ function fmtDate(d: string) {
   } catch { return '-' }
 }
 
+function YardGrid({
+  yards, setYard, inputRefs,
+}: {
+  yards: string[]
+  setYard: (i: number, v: string) => void
+  inputRefs: { current: (HTMLInputElement | null)[] }
+}) {
+  const nums = yards.map(v => parseFloat(v) || 0)
+  return (
+    <div className="overflow-x-auto border border-gray-200 rounded-lg mb-3">
+      <table className="text-xs border-collapse">
+        <thead>
+          <tr>
+            {Array.from({ length: GROUPS }, (_, g) => (
+              <th key={g} colSpan={2} className="border border-gray-400 px-2 py-1 text-center bg-gray-100 font-medium text-gray-600 min-w-[90px]">
+                ลำดับ&nbsp;&nbsp;หลา
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: ROWS }, (_, r) => (
+            <tr key={r} className={r % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+              {Array.from({ length: GROUPS }, (_, g) => {
+                const idx = g * ROWS + r
+                return (
+                  <td key={g} colSpan={2} className="border border-gray-200 p-0">
+                    <div className="flex items-center">
+                      <span className="text-gray-400 text-xs w-7 text-right pr-1 select-none flex-shrink-0">{idx + 1}</span>
+                      <input
+                        ref={el => { inputRefs.current[idx] = el }}
+                        type="number" min="0" step="0.5"
+                        value={yards[idx]}
+                        onChange={e => setYard(idx, e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            inputRefs.current[idx + 1]?.focus()
+                          }
+                        }}
+                        className="w-full text-right text-xs border-0 outline-none py-1 px-1 focus:bg-yellow-50"
+                      />
+                    </div>
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="bg-yellow-100 font-semibold border-t-2 border-gray-400">
+            {Array.from({ length: GROUPS }, (_, g) => {
+              const sum = nums.slice(g * ROWS, (g + 1) * ROWS).reduce((a, b) => a + b, 0)
+              return (
+                <td key={g} colSpan={2} className="border border-gray-400 px-2 py-1.5 text-center">
+                  <div className="text-xs text-gray-500">รวม:</div>
+                  <div className="text-sm font-bold text-gray-800">{sum > 0 ? sum.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-'}</div>
+                </td>
+              )
+            })}
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  )
+}
+
 export default function StockDepositPage() {
   const [bills, setBills] = useState<DepositBill[]>([])
   const [total, setTotal] = useState(0)
@@ -240,74 +307,6 @@ export default function StockDepositPage() {
     } catch (err: any) {
       alert('เกิดข้อผิดพลาด: ' + err.message)
     }
-  }
-
-  // ── Yard grid renderer (shared) ──
-  function YardGrid({
-    yards, setYard, inputRefs,
-  }: {
-    yards: string[]
-    setYard: (i: number, v: string) => void
-    inputRefs: React.MutableRefObject<(HTMLInputElement | null)[]>
-  }) {
-    const nums = yards.map(v => parseFloat(v) || 0)
-    return (
-      <div className="overflow-x-auto border border-gray-200 rounded-lg mb-3">
-        <table className="text-xs border-collapse">
-          <thead>
-            <tr>
-              {Array.from({ length: GROUPS }, (_, g) => (
-                <th key={g} colSpan={2} className="border border-gray-400 px-2 py-1 text-center bg-gray-100 font-medium text-gray-600 min-w-[90px]">
-                  ลำดับ&nbsp;&nbsp;หลา
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: ROWS }, (_, r) => (
-              <tr key={r} className={r % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                {Array.from({ length: GROUPS }, (_, g) => {
-                  const idx = g * ROWS + r
-                  return (
-                    <td key={g} colSpan={2} className="border border-gray-200 p-0">
-                      <div className="flex items-center">
-                        <span className="text-gray-400 text-xs w-7 text-right pr-1 select-none flex-shrink-0">{idx + 1}</span>
-                        <input
-                          ref={el => { inputRefs.current[idx] = el }}
-                          type="number" min="0" step="0.5"
-                          value={yards[idx]}
-                          onChange={e => setYard(idx, e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault()
-                              inputRefs.current[idx + 1]?.focus()
-                            }
-                          }}
-                          className="w-16 text-right text-xs border-0 outline-none py-1 px-1 focus:bg-yellow-50"
-                        />
-                      </div>
-                    </td>
-                  )
-                })}
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="bg-yellow-100 font-semibold border-t-2 border-gray-400">
-              {Array.from({ length: GROUPS }, (_, g) => {
-                const sum = nums.slice(g * ROWS, (g + 1) * ROWS).reduce((a, b) => a + b, 0)
-                return (
-                  <td key={g} colSpan={2} className="border border-gray-400 px-2 py-1.5 text-center">
-                    <div className="text-xs text-gray-500">รวม:</div>
-                    <div className="text-sm font-bold text-gray-800">{sum > 0 ? sum.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '-'}</div>
-                  </td>
-                )
-              })}
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    )
   }
 
   return (
