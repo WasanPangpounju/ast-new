@@ -22,7 +22,7 @@ const NORM_OUTS_CTE = `
       ${NW('"fabricW"')}      AS n_width,
       ${NP('"fabricPattern"')} AS n_pattern,
       COALESCE("customerName", '') AS n_customer,
-      SUM("fold")::int   AS out_fold,
+      COUNT(*)::int      AS out_fold,
       SUM("sumYard")::float AS out_yard
     FROM fabricouts
     WHERE deleted_at IS NULL
