@@ -145,10 +145,12 @@ export default function ScanFabricForm({ emp }: Props) {
     updateFabric(id, { lookupStatus: "loading", lookupOptions: [] });
     try {
       const res = await fetch(
-        `/api/warehouse/stock/fabric-lookup?q=${encodeURIComponent(code.trim())}`,
+        `/api/warehouse/stock/search?field=fabricCode&q=${encodeURIComponent(code.trim())}`,
       );
       const data = await res.json();
-      const results: FabricOption[] = data.results ?? [];
+      const results: FabricOption[] = (data.results ?? []).map(
+        (r: Omit<FabricOption, "customer">) => ({ ...r, customer: "" }),
+      );
 
       if (results.length === 0) {
         updateFabric(id, { lookupStatus: "not_found" });
