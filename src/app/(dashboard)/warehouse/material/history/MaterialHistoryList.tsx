@@ -236,8 +236,8 @@ export default function MaterialHistoryList() {
       {/* Header */}
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">ประวัติการนำเข้าวัตถุดิบ</h1>
-          <p className="text-xs text-gray-500">ทั้งหมด {total.toLocaleString()} รายการ</p>
+          <h1 className="text-3xl font-semibold text-gray-900">ประวัติการนำเข้าวัตถุดิบ</h1>
+          <p className="text-sm text-gray-500">ทั้งหมด {total.toLocaleString()} รายการ</p>
         </div>
         <Link href="/warehouse/material/create"
           className="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors whitespace-nowrap">

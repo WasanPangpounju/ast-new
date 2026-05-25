@@ -170,8 +170,8 @@ export default function StockReviewPage() {
   return (
     <div className="p-4 max-w-full">
       <div className="mb-4">
-        <h1 className="text-lg font-semibold text-gray-900">ตรวจสอบคีย์ผ้า</h1>
-        <p className="text-xs text-gray-500">ทั้งหมด {total.toLocaleString()} รายการ</p>
+        <h1 className="text-3xl font-semibold text-gray-900">ตรวจสอบคีย์ผ้า</h1>
+        <p className="text-sm text-gray-500">ทั้งหมด {total.toLocaleString()} รายการ</p>
       </div>
 
       {/* Search */}

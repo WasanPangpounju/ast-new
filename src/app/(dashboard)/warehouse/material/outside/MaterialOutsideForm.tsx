@@ -429,8 +429,8 @@ export default function MaterialOutsideForm() {
       )}
 
       <div className="mb-4">
-        <h1 className="text-lg font-semibold text-gray-900">เบิกวัตถุดิบออกภายนอก</h1>
-        <p className="text-xs text-gray-500">บันทึกการเบิกเส้นด้ายออกใช้งานภายนอก</p>
+        <h1 className="text-3xl font-semibold text-gray-900">เบิกวัตถุดิบออกภายนอก</h1>
+        <p className="text-sm text-gray-500">บันทึกการเบิกเส้นด้ายออกใช้งานภายนอก</p>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6">

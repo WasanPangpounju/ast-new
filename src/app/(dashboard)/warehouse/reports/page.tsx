@@ -860,7 +860,7 @@ export default function ReportsPage() {
 
   return (
     <div className="p-4 max-w-full">
-      <h1 className="flex items-center text-lg font-semibold text-gray-900 mb-4">
+      <h1 className="flex items-center text-3xl font-semibold text-gray-900 mb-4">
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="16"

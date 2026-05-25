@@ -57,8 +57,8 @@ export default function StockPage() {
   return (
     <div className="p-4 max-w-full">
       <div className="mb-4">
-        <h1 className="text-lg font-semibold text-gray-900">สต็อกผ้า</h1>
-        <p className="text-xs text-gray-500">ทั้งหมด {total.toLocaleString()} กลุ่ม</p>
+        <h1 className="text-3xl font-semibold text-gray-900">สต็อกผ้า</h1>
+        <p className="text-sm text-gray-500">ทั้งหมด {total.toLocaleString()} กลุ่ม</p>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">

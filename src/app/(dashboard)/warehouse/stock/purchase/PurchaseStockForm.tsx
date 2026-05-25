@@ -151,8 +151,8 @@ export default function PurchaseStockForm({ emp }: Props) {
   return (
     <div className="p-4 w-full">
       <div className="mb-4">
-        <h1 className="text-lg font-semibold text-gray-900">คีย์ผ้าซื้อเข้า</h1>
-        <p className="text-xs text-gray-500">บันทึกผ้าที่ซื้อจากผู้ขาย / โรงงานภายนอก</p>
+        <h1 className="text-3xl font-semibold text-gray-900">คีย์ผ้าซื้อเข้า</h1>
+        <p className="text-sm text-gray-500">บันทึกผ้าที่ซื้อจากผู้ขาย / โรงงานภายนอก</p>
       </div>
 
       <div className="bg-white border border-gray-200 shadow-sm p-4 mb-4 w-full">

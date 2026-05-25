@@ -250,10 +250,10 @@ export default function ScanFabricForm({ emp }: Props) {
     return (
       <div className="p-4 max-w-full">
         <div className="mb-4">
-          <h1 className="text-lg font-semibold text-gray-900">
+          <h1 className="text-3xl font-semibold text-gray-900">
             สแกนรูปคีย์ผ้าเข้าสต็อก
           </h1>
-          <p className="text-xs text-gray-500">
+          <p className="text-sm text-gray-500">
             อัปโหลดรูปใบบันทึกการทอผ้าเพื่ออ่านข้อมูลด้วย AI
           </p>
         </div>

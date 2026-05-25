@@ -223,10 +223,10 @@ export default function StockCreateForm({ emp }: Props) {
     <div className="p-4 max-w-full">
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-gray-900">
+          <h1 className="text-3xl font-semibold text-gray-900">
             คีย์ผ้าเข้าสต็อก
           </h1>
-          <p className="text-xs text-gray-500">บันทึกผ้าเข้าสต็อก</p>
+          <p className="text-sm text-gray-500">บันทึกผ้าเข้าสต็อก</p>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           {aiFilledFields.size > 0 && (
