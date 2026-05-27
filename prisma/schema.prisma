@@ -282,6 +282,10 @@ model FabricOut {
   isDeposit        Boolean   @default(false)
   altFabricStruct  String?
   altPurchaseOrder String?
+  stockCustomer       String?
+  stockFabricStruct   String?
+  stockFabricPattern  String?
+  stockFabricW        String?
 
   order AstPurchaseOrder? @relation(fields: [orderId], references: [id])
 
