@@ -616,7 +616,7 @@ export default function CreateOrderPage() {
             <div className="p-5 space-y-4">
               {/* Header: date + NO right-aligned */}
               <div className="flex justify-end text-sm text-gray-600">
-                วันที่ {dayjs(createDate).format("DD/MM/YYYY")}&nbsp;&nbsp;NO.
+                วันที่ {dayjs(TODAY).format("DD/MM/YYYY")}&nbsp;&nbsp;NO.
                 <span className="font-medium text-gray-900">
                   {billNo || "..."}
                 </span>
@@ -639,11 +639,22 @@ export default function CreateOrderPage() {
                 </div>
                 <div>
                   <Label text="วันที่" />
-                  <Input
-                    type="date"
-                    value={createDate}
-                    onChange={setCreateDate}
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      readOnly
+                      value={createDate ? `${dayjs(createDate).format("DD/MM/")}${dayjs(createDate).year() + 543}` : ""}
+                      placeholder="วว/ดด/ปปปป"
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <input
+                      type="date"
+                      value={createDate}
+                      onChange={(e) => setCreateDate(e.target.value)}
+                      aria-label="วันที่"
+                      className="absolute inset-0 opacity-0 w-full cursor-pointer"
+                    />
+                  </div>
                 </div>
               </div>
 

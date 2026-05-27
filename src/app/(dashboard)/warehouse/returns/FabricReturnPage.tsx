@@ -155,6 +155,7 @@ function ReturnModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
             <div>
               <label className="block text-xs text-gray-500 mb-1">วันที่ส่งคืน</label>
               <input type="date" value={form.returnDate} onChange={(e) => set("returnDate", e.target.value)}
+                lang="en"
                 className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
@@ -266,6 +267,7 @@ function EditModal({ record, onClose, onSaved }: { record: ReturnRecord; onClose
             <div>
               <label className="block text-xs text-gray-500 mb-1">วันที่ส่งคืน</label>
               <input type="date" value={form.returnDate} onChange={(e) => set("returnDate", e.target.value)}
+                lang="en"
                 className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
@@ -426,11 +428,13 @@ export default function FabricReturnPage() {
           <div>
             <label className="block text-xs text-gray-500 mb-1">วันที่เริ่มต้น</label>
             <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+              lang="en"
               className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">วันที่สิ้นสุด</label>
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+              lang="en"
               className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
@@ -478,7 +482,7 @@ export default function FabricReturnPage() {
                 records.map((r, idx) => (
                   <tr key={r.id} className="hover:bg-blue-50/30 transition-colors">
                     <td className="px-3 py-2 text-gray-400">{(page - 1) * PER_PAGE + idx + 1}</td>
-                    <td className="px-3 py-2 text-gray-700">{formatThaiDate(r.returnDate)}</td>
+                    <td className="px-3 py-2 text-gray-700">{formatThaiDate(new Date(r.returnDate))}</td>
                     <td className="px-3 py-2 font-medium text-gray-900">{r.supplierName}</td>
                     <td className="px-3 py-2 text-gray-700">{r.fabricCode}</td>
                     <td className="px-3 py-2 text-right text-gray-700">{r.qty.toLocaleString()} {r.unit}</td>

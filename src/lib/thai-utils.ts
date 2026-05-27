@@ -8,24 +8,24 @@ export type VatInvoiceType = 'A' | 'B' | 'C'
 
 /** Convert CE year to Buddhist Era year (CE + 543) */
 export function toBuddhistYear(ceYear: number): number {
-  return ceYear + 543
+  return ceYear 
 }
 
 /** Convert Buddhist Era year to CE year (BE - 543) */
 export function fromBuddhistYear(beYear: number): number {
-  return beYear - 543
+  return beYear 
 }
 
 /** Get compact year used in SO numbers: CE year - 1957 */
 export function toSoYear(ceYear: number): number {
-  return ceYear - 1957
+  return ceYear 
 }
 
 /** Format date as Thai display string DD/MM/YYYY (Buddhist year) */
 export function formatThaiDate(date: Date): string {
   const d = String(date.getDate()).padStart(2, '0')
   const m = String(date.getMonth() + 1).padStart(2, '0')
-  const y = toBuddhistYear(date.getFullYear())
+  const y = date.getFullYear()
   return `${d}/${m}/${y}`
 }
 
