@@ -15,14 +15,21 @@ const NW = (col: string) =>
 const NP = (col: string) =>
   `COALESCE(TRIM(REGEXP_REPLACE(COALESCE(${col}, ''), '\\s+', ' ', 'g')), '')`
 
+// Use stock* override fields (from old system) when set, otherwise fall back to direct fields.
+// This mirrors the old Laravel logic: stockFabricW overrides fabricW, etc.
+const EFF_STRUCT  = `CASE WHEN "stockFabricStruct"  IS NULL OR "stockFabricStruct"  = '' THEN "fabricStruct"  ELSE "stockFabricStruct"  END`
+const EFF_WIDTH   = `CASE WHEN "stockFabricW"       IS NULL OR "stockFabricW"       = '' THEN "fabricW"       ELSE "stockFabricW"       END`
+const EFF_PATTERN = `CASE WHEN "stockFabricPattern" IS NULL OR "stockFabricPattern" = '' THEN "fabricPattern" ELSE "stockFabricPattern" END`
+const EFF_CUSTOMER = `COALESCE(NULLIF(TRIM(CASE WHEN "stockCustomer" IS NULL OR "stockCustomer" = '' THEN "customerName" ELSE "stockCustomer" END), ''), 'AST')`
+
 const NORM_OUTS_CTE = `
   norm_outs AS (
     SELECT
-      ${NS('"fabricStruct"')} AS n_struct,
-      ${NW('"fabricW"')}      AS n_width,
-      ${NP('"fabricPattern"')} AS n_pattern,
-      COALESCE("customerName", '') AS n_customer,
-      COUNT(*)::int      AS out_fold,
+      ${NS(EFF_STRUCT)}   AS n_struct,
+      ${NW(EFF_WIDTH)}    AS n_width,
+      ${NP(EFF_PATTERN)}  AS n_pattern,
+      ${EFF_CUSTOMER}     AS n_customer,
+      COUNT(*)::int         AS out_fold,
       SUM("sumYard")::float AS out_yard
     FROM fabricouts
     WHERE deleted_at IS NULL

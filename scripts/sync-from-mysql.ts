@@ -114,18 +114,30 @@ async function main() {
   }
 
   // ── 2. TRUNCATE — full หรือ targeted ขึ้นกับ --tables flag ───────────────
+  // หมายเหตุ:
+  //   - orderdeadlines, ordershippeds, fabricimports, productions, inventories,
+  //     ast_bill_of_structures, material_outsides, material_returns, packages
+  //     เป็นตาราง PG-only (ไม่มีใน MySQL) → รักษาข้อมูล
+  //   - วิธี: drop FK จาก PG-only tables → TRUNCATE → re-add FK
+  //     เพราะ PostgreSQL ไม่อนุญาต TRUNCATE parent table ที่มี FK child อยู่นอก set
   console.log('🗑️  Truncating PostgreSQL tables...')
   if (ONLY_TABLES.length === 0) {
-    // Full sync: truncate ทุกตาราง
+    // Drop FK constraints that point from PG-only tables to tables we're truncating
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ast_bill_of_structures" DROP CONSTRAINT IF EXISTS "ast_bill_of_structures_sourceOrderId_fkey"`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "inventories"            DROP CONSTRAINT IF EXISTS "inventories_orderId_fkey"`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "orderdeadlines"         DROP CONSTRAINT IF EXISTS "orderdeadlines_purchaseOrder_fkey"`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ordershippeds"          DROP CONSTRAINT IF EXISTS "ordershippeds_purchaseOrder_fkey"`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "productions"            DROP CONSTRAINT IF EXISTS "productions_purchaseOrder_fkey"`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "material_outsides"      DROP CONSTRAINT IF EXISTS "material_outsides_materialId_fkey"`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "material_returns"       DROP CONSTRAINT IF EXISTS "material_returns_materialId_fkey"`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "packages"               DROP CONSTRAINT IF EXISTS "packages_supplierId_fkey"`)
+
     await prisma.$executeRawUnsafe(`
       TRUNCATE TABLE
-        "orderdeadlines",
-        "ordershippeds",
         "fabric_asts",
         "fabric_aststructures",
         "fabricouts",
         "stockfabrics",
-        "fabricimports",
         "ast_purchaseorders",
         "coordinators",
         "customers",
@@ -133,7 +145,6 @@ async function main() {
         "materialrequisitions",
         "materialcoordinators",
         "materials"
-      CASCADE
     `)
   } else {
     // Targeted sync: truncate เฉพาะตารางที่ sync — FK order: requisitions → coordinators → materials
@@ -327,14 +338,18 @@ async function main() {
         vatNo:         i(f_.vatNo) ?? 1001,
         fold:          i(f_.fold) ?? 1,
         sumYard:       f(f_.sumYard) ?? 0,
-        fabricStruct:  s(f_.fabricStruct),
-        fabricPattern: s(f_.fabricPattern),
-        fabricW:       s(f_.fabricW),
-        customerName:  s(f_.customerName),
-        receiveName:   s(f_.receiveName),
-        purchaseOrder: s(f_.purchase_order ?? f_.purchaseOrder),
-        orderId:       (rawOrderId && pgOrderIds.has(rawOrderId)) ? rawOrderId : null,
-        createDate:    d(f_.createDate ?? f_.create_date),
+        fabricStruct:       s(f_.fabricStruct),
+        fabricPattern:      s(f_.fabricPattern),
+        fabricW:            s(f_.fabricW),
+        customerName:       s(f_.customerName),
+        receiveName:        s(f_.receiveName),
+        purchaseOrder:      s(f_.purchase_order ?? f_.purchaseOrder),
+        orderId:            (rawOrderId && pgOrderIds.has(rawOrderId)) ? rawOrderId : null,
+        createDate:         d(f_.createDate ?? f_.create_date),
+        stockCustomer:      s(f_.stockCustomer),
+        stockFabricStruct:  s(f_.stockFabricStruct),
+        stockFabricPattern: s(f_.stockFabricPattern),
+        stockFabricW:       s(f_.stockFabricW),
       }
     })
     await insertBatch('fabricOuts', foutData, batch =>
@@ -451,7 +466,21 @@ async function main() {
   }
   console.log('  ✓ Sequences reset\n')
 
-  // ── 5. Summary ──────────────────────────────────────────────────────────
+  // ── 5. Re-add FK constraints (full sync only) ──────────────────────────
+  if (ONLY_TABLES.length === 0) {
+    console.log('🔗 Re-adding FK constraints...')
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ast_bill_of_structures" ADD CONSTRAINT "ast_bill_of_structures_sourceOrderId_fkey" FOREIGN KEY ("sourceOrderId") REFERENCES ast_purchaseorders(id) ON UPDATE CASCADE ON DELETE RESTRICT`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "inventories"            ADD CONSTRAINT "inventories_orderId_fkey"                  FOREIGN KEY ("orderId")        REFERENCES ast_purchaseorders(id) ON UPDATE CASCADE ON DELETE SET NULL`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "orderdeadlines"         ADD CONSTRAINT "orderdeadlines_purchaseOrder_fkey"         FOREIGN KEY ("purchaseOrder")  REFERENCES ast_purchaseorders("purchaseOrder") ON UPDATE CASCADE ON DELETE RESTRICT`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "ordershippeds"          ADD CONSTRAINT "ordershippeds_purchaseOrder_fkey"          FOREIGN KEY ("purchaseOrder")  REFERENCES ast_purchaseorders("purchaseOrder") ON UPDATE CASCADE ON DELETE RESTRICT`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "productions"            ADD CONSTRAINT "productions_purchaseOrder_fkey"            FOREIGN KEY ("purchaseOrder")  REFERENCES ast_purchaseorders("purchaseOrder") ON UPDATE CASCADE ON DELETE RESTRICT`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "material_outsides"      ADD CONSTRAINT "material_outsides_materialId_fkey"         FOREIGN KEY ("materialId")     REFERENCES materials(id) ON UPDATE CASCADE ON DELETE SET NULL`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "material_returns"       ADD CONSTRAINT "material_returns_materialId_fkey"          FOREIGN KEY ("materialId")     REFERENCES materials(id) ON UPDATE CASCADE ON DELETE SET NULL`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "packages"               ADD CONSTRAINT "packages_supplierId_fkey"                  FOREIGN KEY ("supplierId")     REFERENCES suppliers(id) ON UPDATE CASCADE ON DELETE SET NULL`)
+    console.log('  ✓ FK constraints restored\n')
+  }
+
+  // ── 6. Summary ──────────────────────────────────────────────────────────
   console.log('\n📊 สรุปข้อมูลใน PostgreSQL หลัง sync:')
   const [c, co, su, o, fs, fa, sf, fo, mat, matReq] = await Promise.all([
     prisma.customer.count(),
