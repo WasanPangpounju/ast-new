@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
   const [orders, total] = await Promise.all([
     prisma.astPurchaseOrder.findMany({
       where,
-      orderBy: { id: 'desc' },
+      orderBy: { createDate: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
       include: {
@@ -93,6 +93,7 @@ export async function POST(request: NextRequest) {
     deadlines,
     createStructure,
     billNo,
+    createDate: createDateStr,
   } = body
 
   if (!vat || !['SO', 'SOX', 'SOB'].includes(vat))
@@ -138,7 +139,7 @@ export async function POST(request: NextRequest) {
         productionNote: productionNote?.trim() ?? null,
         payment: payment?.trim() ?? null,
         status: 'รอดำเนินการ',
-        createDate: new Date(),
+        createDate: createDateStr ? new Date(createDateStr) : new Date(),
       },
     })
 

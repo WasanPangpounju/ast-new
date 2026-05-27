@@ -346,7 +346,6 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
   function validate(): string {
     const missing: string[] = [];
     if (!customerName.trim()) missing.push("ชื่อลูกค้า");
-    if (!coordinator.trim()) missing.push("ผู้ประสานงาน");
     if (!fabricId.trim()) missing.push("รหัสผ้า");
     if (!fabricPattern.trim()) missing.push("ลายผ้า");
     if (!fabricStructure.trim()) {

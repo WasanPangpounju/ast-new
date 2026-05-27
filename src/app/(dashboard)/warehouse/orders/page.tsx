@@ -9,6 +9,7 @@ interface Order {
   fabricPattern: string | null;
   fabricStructure: string | null;
   orderSumYard: number | null;
+  createDate: string;
   createdAt: string;
   deliveredYard: number;
   deliveredFold: number;
@@ -115,7 +116,7 @@ export default function WarehouseOrdersPage() {
   const fmtDate = (d: string) => {
     try {
       const dt = new Date(d);
-      return `${dt.getDate().toString().padStart(2, "0")}/${(dt.getMonth() + 1).toString().padStart(2, "0")}/${dt.getFullYear() + 543}`;
+      return `${dt.getDate().toString().padStart(2, "0")}/${(dt.getMonth() + 1).toString().padStart(2, "0")}/${dt.getFullYear()}`;
     } catch {
       return "-";
     }
@@ -207,6 +208,16 @@ export default function WarehouseOrdersPage() {
             ค้นหา
           </button>
         </div>
+        {(applied.dateFrom || applied.dateTo) && (
+          <div className="mt-3 flex items-center gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+            <span className="font-medium">แสดงข้อมูลวันที่:</span>
+            {applied.dateFrom && <span>{formatThaiDate(applied.dateFrom)}</span>}
+            {applied.dateFrom && applied.dateTo && <span>—</span>}
+            {applied.dateTo && <span>{formatThaiDate(applied.dateTo)}</span>}
+            {!applied.dateTo && applied.dateFrom && <span className="text-blue-400">เป็นต้นไป</span>}
+            {!applied.dateFrom && applied.dateTo && <span className="text-blue-400 mr-1">ถึง</span>}
+          </div>
+        )}
       </div>
 
       {/* Table */}

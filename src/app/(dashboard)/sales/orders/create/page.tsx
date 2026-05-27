@@ -1,7 +1,8 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-
+import dayjs from "dayjs";
+import { formatThaiDate } from "@/lib/thai-utils";
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface CustomerSug {
@@ -18,11 +19,6 @@ interface DeadlineRow {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function toThaiDate(iso: string): string {
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${parseInt(y) + 543}`;
-}
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
@@ -512,7 +508,6 @@ export default function CreateOrderPage() {
   function validate(): string {
     const missing: string[] = [];
     if (!customerName.trim()) missing.push("ชื่อลูกค้า");
-    if (!coordinator.trim()) missing.push("ผู้ประสานงาน");
     if (!fabricId.trim()) missing.push("รหัสผ้า");
     if (!fabricPattern.trim()) missing.push("ลายผ้า");
     if (!fabricStructure.trim()) {
@@ -526,9 +521,9 @@ export default function CreateOrderPage() {
     if (!weftYarn1.trim()) missing.push("ชนิดด้ายพุ่ง 1");
     if (!orderSumYard.trim()) missing.push("จำนวนออเดอร์ (หลา)");
     if (fabricSPY.trim() === "") missing.push("การสืบ");
-    if (!priceYard.trim() && !priceM.trim()) missing.push("ราคาต่อหน่วย (บาท/หลา)");
-    if (missing.length > 0)
-      return `กรุณากรอกข้อมูล: ${missing.join(", ")}`;
+    if (!priceYard.trim() && !priceM.trim())
+      missing.push("ราคาต่อหน่วย (บาท/หลา)");
+    if (missing.length > 0) return `กรุณากรอกข้อมูล: ${missing.join(", ")}`;
     return "";
   }
 
@@ -587,9 +582,6 @@ export default function CreateOrderPage() {
       setSaving(false);
     }
   }
-
-  const thaiDate = toThaiDate(createDate);
-
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
@@ -622,755 +614,753 @@ export default function CreateOrderPage() {
             </div>
 
             <div className="p-5 space-y-4">
-                {/* Header: date + NO right-aligned */}
-                <div className="flex justify-end text-sm text-gray-600">
-                  วันที่ {thaiDate}&nbsp;&nbsp;NO.
-                  <span className="font-medium text-gray-900">
-                    {billNo || "..."}
-                  </span>
-                </div>
+              {/* Header: date + NO right-aligned */}
+              <div className="flex justify-end text-sm text-gray-600">
+                วันที่ {dayjs(createDate).format("DD/MM/YYYY")}&nbsp;&nbsp;NO.
+                <span className="font-medium text-gray-900">
+                  {billNo || "..."}
+                </span>
+              </div>
 
-                {/* Row 1: No. | วันที่ */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label text="No." />
-                    <Input
-                      value={billNo}
-                      onChange={(v) => {
-                        setBillNo(v);
-                        if (v === "") setBillNoEdited(false);
-                        else setBillNoEdited(true);
-                      }}
-                      placeholder={orderNoLoading ? "กำลังโหลด..." : "No."}
-                      type="number"
-                    />
-                  </div>
-                  <div>
-                    <Label text="วันที่" />
-                    <Input
-                      type="date"
-                      value={createDate}
-                      onChange={setCreateDate}
-                    />
-                  </div>
-                </div>
-
-                {/* Row 2: ชื่อลูกค้า | ผู้ประสานงาน */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label text="ชื่อลูกค้า" required />
-                    <div ref={customerRef} className="relative">
-                      <input
-                        value={customerSearch}
-                        onChange={(e) => {
-                          setCustomerSearch(e.target.value);
-                          setCustomerName(e.target.value);
-                          setCustomerOpen(true);
-                        }}
-                        onFocus={() =>
-                          customerSearch.length >= 1 && setCustomerOpen(true)
-                        }
-                        placeholder="พิมพ์ชื่อลูกค้า..."
-                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
-                      {customerOpen && customerSugs.length > 0 && (
-                        <div className="absolute z-20 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-48 overflow-y-auto">
-                          {customerSugs.map((c) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => {
-                                setCustomerName(c.name);
-                                setCustomerSearch(c.name);
-                                setCustomerOpen(false);
-                              }}
-                              className="w-full text-left px-3 py-1.5 hover:bg-blue-50 text-sm"
-                            >
-                              <div className="font-medium text-gray-900">
-                                {c.name}
-                              </div>
-                              <div className="text-xs text-gray-400">
-                                {[c.tax, c.tel].filter(Boolean).join(" · ")}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <Label text="ผู้ประสานงาน" required />
-                    <Input
-                      value={coordinator}
-                      onChange={setCoordinator}
-                      placeholder="ชื่อผู้ประสาน"
-                    />
-                  </div>
-                </div>
-
-                {/* Row 3: รหัสผ้า | ลายผ้า */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label text="รหัสผ้า" required />
-                    <Input
-                      value={fabricId}
-                      onChange={setFabricId}
-                      placeholder="รหัสผ้า"
-                    />
-                  </div>
-                  <div>
-                    <Label text="ลายผ้า" required />
-                    <Input
-                      value={fabricPattern}
-                      onChange={setFabricPattern}
-                      placeholder="ลายผ้า"
-                    />
-                  </div>
-                </div>
-
-                {/* Row 4: โครงสร้างผ้า full width + สร้าง button */}
+              {/* Row 1: No. | วันที่ */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label text="โครงสร้างผ้า" required />
-                  <div className="flex gap-2">
+                  <Label text="No." />
+                  <Input
+                    value={billNo}
+                    onChange={(v) => {
+                      setBillNo(v);
+                      if (v === "") setBillNoEdited(false);
+                      else setBillNoEdited(true);
+                    }}
+                    placeholder={orderNoLoading ? "กำลังโหลด..." : "No."}
+                    type="number"
+                  />
+                </div>
+                <div>
+                  <Label text="วันที่" />
+                  <Input
+                    type="date"
+                    value={createDate}
+                    onChange={setCreateDate}
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: ชื่อลูกค้า | ผู้ประสานงาน */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label text="ชื่อลูกค้า" required />
+                  <div ref={customerRef} className="relative">
                     <input
-                      value={fabricStructure}
+                      value={customerSearch}
                       onChange={(e) => {
-                        setFabricStructure(e.target.value);
-                        if (e.target.value.trim())
-                          setFabricStructureError(false);
+                        setCustomerSearch(e.target.value);
+                        setCustomerName(e.target.value);
+                        setCustomerOpen(true);
                       }}
-                      placeholder="สร้างอัตโนมัติหรือพิมพ์เอง"
-                      className={`flex-1 border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1
+                      onFocus={() =>
+                        customerSearch.length >= 1 && setCustomerOpen(true)
+                      }
+                      placeholder="พิมพ์ชื่อลูกค้า..."
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    {customerOpen && customerSugs.length > 0 && (
+                      <div className="absolute z-20 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-48 overflow-y-auto">
+                        {customerSugs.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => {
+                              setCustomerName(c.name);
+                              setCustomerSearch(c.name);
+                              setCustomerOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-1.5 hover:bg-blue-50 text-sm"
+                          >
+                            <div className="font-medium text-gray-900">
+                              {c.name}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {[c.tax, c.tel].filter(Boolean).join(" · ")}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <Label text="ผู้ประสานงาน" />
+                  <Input
+                    value={coordinator}
+                    onChange={setCoordinator}
+                    placeholder="ชื่อผู้ประสาน"
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: รหัสผ้า | ลายผ้า */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label text="รหัสผ้า" required />
+                  <Input
+                    value={fabricId}
+                    onChange={setFabricId}
+                    placeholder="รหัสผ้า"
+                  />
+                </div>
+                <div>
+                  <Label text="ลายผ้า" required />
+                  <Input
+                    value={fabricPattern}
+                    onChange={setFabricPattern}
+                    placeholder="ลายผ้า"
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: โครงสร้างผ้า full width + สร้าง button */}
+              <div>
+                <Label text="โครงสร้างผ้า" required />
+                <div className="flex gap-2">
+                  <input
+                    value={fabricStructure}
+                    onChange={(e) => {
+                      setFabricStructure(e.target.value);
+                      if (e.target.value.trim()) setFabricStructureError(false);
+                    }}
+                    placeholder="สร้างอัตโนมัติหรือพิมพ์เอง"
+                    className={`flex-1 border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1
                           ${
                             fabricStructureError
                               ? "border-red-400 focus:ring-red-400 bg-red-50"
                               : "border-gray-300 focus:ring-blue-500"
                           }`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const v = buildFabricStruct(
-                          warpYarn1,
-                          warpCount1,
-                          warpYarn2,
-                          weftYarn1,
-                          weftCount1,
-                          weftYarn2,
-                          weftYarn3,
-                          weftYarn4,
-                        );
-                        setFabricStructure(v);
-                        if (v.trim()) setFabricStructureError(false);
-                      }}
-                      className="px-4 py-1.5 bg-teal-600 text-white text-sm rounded font-medium hover:bg-teal-700 whitespace-nowrap"
-                    >
-                      สร้าง
-                    </button>
-                  </div>
-                  {fabricStructureError && (
-                    <p className="text-xs text-red-500 mt-1">
-                      กรุณากรอกโครงสร้างผ้า หรือกด "สร้าง" เพื่อสร้างอัตโนมัติ
-                    </p>
-                  )}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const v = buildFabricStruct(
+                        warpYarn1,
+                        warpCount1,
+                        warpYarn2,
+                        weftYarn1,
+                        weftCount1,
+                        weftYarn2,
+                        weftYarn3,
+                        weftYarn4,
+                      );
+                      setFabricStructure(v);
+                      if (v.trim()) setFabricStructureError(false);
+                    }}
+                    className="px-4 py-1.5 bg-teal-600 text-white text-sm rounded font-medium hover:bg-teal-700 whitespace-nowrap"
+                  >
+                    สร้าง
+                  </button>
                 </div>
+                {fabricStructureError && (
+                  <p className="text-xs text-red-500 mt-1">
+                    กรุณากรอกโครงสร้างผ้า หรือกด "สร้าง" เพื่อสร้างอัตโนมัติ
+                  </p>
+                )}
+              </div>
 
-                {/* Row 5: จำนวนด้ายยืน | หน้าผ้า */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label text="จำนวนด้ายยืน (เส้น)" />
-                    <Input
-                      value={yarnHCount}
-                      onChange={setYarnHCount}
-                      placeholder="เส้น"
-                      type="number"
-                    />
-                  </div>
-                  <div>
-                    <Label text="หน้าผ้า (นิ้ว)" required />
-                    <Input
-                      value={fabricW}
-                      onChange={setFabricW}
-                      placeholder="นิ้ว"
-                      type="number"
-                    />
-                  </div>
-                </div>
-
-                {/* ── Yarn table ──────────────────────────────────────────── */}
+              {/* Row 5: จำนวนด้ายยืน | หน้าผ้า */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr>
-                        <th className="text-left text-xs font-medium text-gray-600 pb-1 w-28"></th>
-                        <th className="text-left text-xs font-medium text-gray-600 pb-1 pr-2">
-                          ชนิด
-                        </th>
-                        <th className="text-left text-xs font-medium text-gray-600 pb-1 pr-2">
-                          บริษัท
-                        </th>
-                        <th className="text-left text-xs font-medium text-gray-600 pb-1 pr-2">
-                          จำนวน (เส้น)
-                        </th>
-                        <th className="text-left text-xs font-medium text-gray-600 pb-1">
-                          อัตราส่วน
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <YarnRow
-                        label="ชนิดด้ายยืน 1"
-                        required
-                        side="warp"
-                        yarn={warpYarn1}
-                        comp={warpComp1}
-                        count={warpCount1}
-                        ratio={warpRatio1}
-                        onYarn={setWarpYarn1}
-                        onComp={setWarpComp1}
-                        onCount={setWarpCount1}
-                        onRatio={setWarpRatio1}
-                      />
-                      <YarnRow
-                        label="ชนิดด้ายยืน 2"
-                        side="warp"
-                        grayRatio
-                        yarn={warpYarn2}
-                        comp={warpComp2}
-                        count={warpCount2}
-                        ratio={warpRatio2}
-                        onYarn={setWarpYarn2}
-                        onComp={setWarpComp2}
-                        onCount={setWarpCount2}
-                        onRatio={setWarpRatio2}
-                      />
-                      <tr>
-                        <td colSpan={5} className="py-1" />
-                      </tr>
-                      <YarnRow
-                        label="ชนิดด้ายพุ่ง 1"
-                        required
-                        side="weft"
-                        yarn={weftYarn1}
-                        comp={weftComp1}
-                        count={weftCount1}
-                        ratio={weftRatio1}
-                        onYarn={setWeftYarn1}
-                        onComp={setWeftComp1}
-                        onCount={setWeftCount1}
-                        onRatio={setWeftRatio1}
-                      />
-                      <YarnRow
-                        label="ชนิดด้ายพุ่ง 2"
-                        side="weft"
-                        grayRatio
-                        yarn={weftYarn2}
-                        comp={weftComp2}
-                        count={weftCount2}
-                        ratio={weftRatio2}
-                        onYarn={setWeftYarn2}
-                        onComp={setWeftComp2}
-                        onCount={setWeftCount2}
-                        onRatio={setWeftRatio2}
-                      />
-                      <YarnRow
-                        label="ชนิดด้ายพุ่ง 3"
-                        side="weft"
-                        grayRatio
-                        yarn={weftYarn3}
-                        comp={weftComp3}
-                        count={weftCount3}
-                        ratio={weftRatio3}
-                        onYarn={setWeftYarn3}
-                        onComp={setWeftComp3}
-                        onCount={setWeftCount3}
-                        onRatio={setWeftRatio3}
-                      />
-                      <YarnRow
-                        label="ชนิดด้ายพุ่ง 4"
-                        side="weft"
-                        grayRatio
-                        yarn={weftYarn4}
-                        comp={weftComp4}
-                        count={weftCount4}
-                        ratio={weftRatio4}
-                        onYarn={setWeftYarn4}
-                        onComp={setWeftComp4}
-                        onCount={setWeftCount4}
-                        onRatio={setWeftRatio4}
-                      />
-                    </tbody>
-                  </table>
+                  <Label text="จำนวนด้ายยืน (เส้น)" />
+                  <Input
+                    value={yarnHCount}
+                    onChange={setYarnHCount}
+                    placeholder="เส้น"
+                    type="number"
+                  />
                 </div>
+                <div>
+                  <Label text="หน้าผ้า (นิ้ว)" required />
+                  <Input
+                    value={fabricW}
+                    onChange={setFabricW}
+                    placeholder="นิ้ว"
+                    type="number"
+                  />
+                </div>
+              </div>
 
-                {/* เบอร์หวี | หน้าหวี | การลงผ้า */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label text="เบอร์หวี" />
+              {/* ── Yarn table ──────────────────────────────────────────── */}
+              <div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr>
+                      <th className="text-left text-xs font-medium text-gray-600 pb-1 w-28"></th>
+                      <th className="text-left text-xs font-medium text-gray-600 pb-1 pr-2">
+                        ชนิด
+                      </th>
+                      <th className="text-left text-xs font-medium text-gray-600 pb-1 pr-2">
+                        บริษัท
+                      </th>
+                      <th className="text-left text-xs font-medium text-gray-600 pb-1 pr-2">
+                        จำนวน (เส้น)
+                      </th>
+                      <th className="text-left text-xs font-medium text-gray-600 pb-1">
+                        อัตราส่วน
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <YarnRow
+                      label="ชนิดด้ายยืน 1"
+                      required
+                      side="warp"
+                      yarn={warpYarn1}
+                      comp={warpComp1}
+                      count={warpCount1}
+                      ratio={warpRatio1}
+                      onYarn={setWarpYarn1}
+                      onComp={setWarpComp1}
+                      onCount={setWarpCount1}
+                      onRatio={setWarpRatio1}
+                    />
+                    <YarnRow
+                      label="ชนิดด้ายยืน 2"
+                      side="warp"
+                      grayRatio
+                      yarn={warpYarn2}
+                      comp={warpComp2}
+                      count={warpCount2}
+                      ratio={warpRatio2}
+                      onYarn={setWarpYarn2}
+                      onComp={setWarpComp2}
+                      onCount={setWarpCount2}
+                      onRatio={setWarpRatio2}
+                    />
+                    <tr>
+                      <td colSpan={5} className="py-1" />
+                    </tr>
+                    <YarnRow
+                      label="ชนิดด้ายพุ่ง 1"
+                      required
+                      side="weft"
+                      yarn={weftYarn1}
+                      comp={weftComp1}
+                      count={weftCount1}
+                      ratio={weftRatio1}
+                      onYarn={setWeftYarn1}
+                      onComp={setWeftComp1}
+                      onCount={setWeftCount1}
+                      onRatio={setWeftRatio1}
+                    />
+                    <YarnRow
+                      label="ชนิดด้ายพุ่ง 2"
+                      side="weft"
+                      grayRatio
+                      yarn={weftYarn2}
+                      comp={weftComp2}
+                      count={weftCount2}
+                      ratio={weftRatio2}
+                      onYarn={setWeftYarn2}
+                      onComp={setWeftComp2}
+                      onCount={setWeftCount2}
+                      onRatio={setWeftRatio2}
+                    />
+                    <YarnRow
+                      label="ชนิดด้ายพุ่ง 3"
+                      side="weft"
+                      grayRatio
+                      yarn={weftYarn3}
+                      comp={weftComp3}
+                      count={weftCount3}
+                      ratio={weftRatio3}
+                      onYarn={setWeftYarn3}
+                      onComp={setWeftComp3}
+                      onCount={setWeftCount3}
+                      onRatio={setWeftRatio3}
+                    />
+                    <YarnRow
+                      label="ชนิดด้ายพุ่ง 4"
+                      side="weft"
+                      grayRatio
+                      yarn={weftYarn4}
+                      comp={weftComp4}
+                      count={weftCount4}
+                      ratio={weftRatio4}
+                      onYarn={setWeftYarn4}
+                      onComp={setWeftComp4}
+                      onCount={setWeftCount4}
+                      onRatio={setWeftRatio4}
+                    />
+                  </tbody>
+                </table>
+              </div>
+
+              {/* เบอร์หวี | หน้าหวี | การลงผ้า */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label text="เบอร์หวี" />
+                  <Input
+                    value={phewNumber}
+                    onChange={setPhewNumber}
+                    placeholder="เบอร์"
+                  />
+                </div>
+                <div>
+                  <Label text="หน้าหวี (นิ้ว)" />
+                  <Input
+                    value={phewW}
+                    onChange={setPhewW}
+                    placeholder="นิ้ว"
+                    type="number"
+                  />
+                </div>
+                <div>
+                  <Label text="การลงผ้า" />
+                  <Input
+                    value={stackType}
+                    onChange={setStackType}
+                    placeholder="การลงผ้า"
+                  />
+                </div>
+              </div>
+
+              {/* ── Order quantity ────────────────────────────────────── */}
+              <div className="space-y-3">
+                {/* จำนวนออเดอร์ — bidirectional */}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Label text="จำนวนออเดอร์ (หลา)" required />
                     <Input
-                      value={phewNumber}
-                      onChange={setPhewNumber}
-                      placeholder="เบอร์"
+                      value={orderSumYard}
+                      type="number"
+                      placeholder="หลา"
+                      onChange={(v) => {
+                        setOrderSumYard(v);
+                        setOrderSumMeter(
+                          v && !isNaN(+v) ? (+v * 0.9144).toFixed(2) : "",
+                        );
+                      }}
                     />
                   </div>
-                  <div>
-                    <Label text="หน้าหวี (นิ้ว)" />
+                  <span className="text-sm text-gray-400 pb-2 shrink-0">
+                    หรือ
+                  </span>
+                  <div className="flex-1">
+                    <Label text="เมตร" />
                     <Input
-                      value={phewW}
-                      onChange={setPhewW}
-                      placeholder="นิ้ว"
+                      value={orderSumMeter}
+                      type="number"
+                      placeholder="เมตร"
+                      onChange={(v) => {
+                        setOrderSumMeter(v);
+                        setOrderSumYard(
+                          v && !isNaN(+v) ? (+v / 0.9144).toFixed(2) : "",
+                        );
+                      }}
+                    />
+                  </div>
+                </div>
+                {/* การสืบ */}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Label text="การสืบ" required />
+                    <Input
+                      value={fabricSPY}
+                      onChange={setFabricSPY}
+                      placeholder="ไม่มีให้เลข 0"
                       type="number"
                     />
                   </div>
-                  <div>
-                    <Label text="การลงผ้า" />
+                  <span className="text-sm text-gray-400 pb-2 shrink-0">%</span>
+                </div>
+                {/* รวมหลัง การสืบ (derived, read-only) */}
+                {(() => {
+                  const yard = parseFloat(orderSumYard);
+                  const pct = parseFloat(fabricSPY);
+                  if (!yard) return null;
+                  const totalYard =
+                    !pct || pct === 0 ? yard : yard * (1 + pct / 100);
+                  const totalMeter = totalYard * 0.9144;
+                  return (
+                    <div className="flex items-end gap-2 mt-1">
+                      <div className="flex-1">
+                        <Label text="รวม (หลา)" />
+                        <Input value={totalYard.toFixed(2)} readOnly />
+                      </div>
+                      <span className="text-sm text-gray-400 pb-2 shrink-0">
+                        /
+                      </span>
+                      <div className="flex-1">
+                        <Label text="รวม (เมตร)" />
+                        <Input value={totalMeter.toFixed(2)} readOnly />
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* ── Price ──────────────────────────────────────────────── */}
+              <div className="space-y-3">
+                {/* ราคาต่อหน่วย — bidirectional */}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <Label text="ราคาต่อหน่วย (บาท/หลา)" required />
                     <Input
-                      value={stackType}
-                      onChange={setStackType}
-                      placeholder="การลงผ้า"
+                      value={priceYard}
+                      type="number"
+                      placeholder="บาท/หลา"
+                      onChange={(v) => {
+                        setPriceYard(v);
+                        setPriceM(
+                          v && !isNaN(+v) ? (+v / 1.0936).toFixed(2) : "",
+                        );
+                      }}
+                    />
+                  </div>
+                  <span className="text-sm text-gray-400 pb-2 shrink-0">
+                    หรือ
+                  </span>
+                  <div className="flex-1">
+                    <Label text="ราคา (บาท/เมตร)" />
+                    <Input
+                      value={priceM}
+                      type="number"
+                      placeholder="บาท/เมตร"
+                      onChange={(v) => {
+                        setPriceM(v);
+                        setPriceYard(
+                          v && !isNaN(+v) ? (+v * 1.0936).toFixed(2) : "",
+                        );
+                      }}
                     />
                   </div>
                 </div>
 
-                {/* ── Order quantity ────────────────────────────────────── */}
-                <div className="space-y-3">
-                  {/* จำนวนออเดอร์ — bidirectional */}
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <Label text="จำนวนออเดอร์ (หลา)" required />
-                      <Input
-                        value={orderSumYard}
-                        type="number"
-                        placeholder="หลา"
-                        onChange={(v) => {
-                          setOrderSumYard(v);
-                          setOrderSumMeter(
-                            v && !isNaN(+v) ? (+v * 0.9144).toFixed(2) : "",
-                          );
-                        }}
-                      />
-                    </div>
-                    <span className="text-sm text-gray-400 pb-2 shrink-0">
-                      หรือ
-                    </span>
-                    <div className="flex-1">
-                      <Label text="เมตร" />
-                      <Input
-                        value={orderSumMeter}
-                        type="number"
-                        placeholder="เมตร"
-                        onChange={(v) => {
-                          setOrderSumMeter(v);
-                          setOrderSumYard(
-                            v && !isNaN(+v) ? (+v / 0.9144).toFixed(2) : "",
-                          );
-                        }}
-                      />
-                    </div>
+                {/* ส่วนลด + ราคาหลังลด */}
+                <div className="flex items-end gap-2">
+                  <div className="w-40">
+                    <Label text="ส่วนลด (%)" />
+                    <Input
+                      value={discountP}
+                      onChange={setDiscountP}
+                      placeholder="%"
+                      type="number"
+                    />
                   </div>
-                  {/* การสืบ */}
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <Label text="การสืบ" required />
-                      <Input
-                        value={fabricSPY}
-                        onChange={setFabricSPY}
-                        placeholder="ไม่มีให้เลข 0"
-                        type="number"
-                      />
-                    </div>
-                    <span className="text-sm text-gray-400 pb-2 shrink-0">
-                      %
-                    </span>
-                  </div>
-                  {/* รวมหลัง การสืบ (derived, read-only) */}
                   {(() => {
-                    const yard = parseFloat(orderSumYard);
-                    const pct = parseFloat(fabricSPY);
-                    if (!yard) return null;
-                    const totalYard =
-                      !pct || pct === 0 ? yard : yard * (1 + pct / 100);
-                    const totalMeter = totalYard * 0.9144;
+                    const py = parseFloat(priceYard);
+                    const pm = parseFloat(priceM);
+                    const dp = parseFloat(discountP);
+                    if ((!py && !pm) || isNaN(dp)) return null;
+                    const factor = 1 - dp / 100;
+                    const afterY = py ? py * factor : 0;
+                    const afterM = pm ? pm * factor : 0;
                     return (
-                      <div className="flex items-end gap-2 mt-1">
+                      <div className="flex items-end gap-2 flex-1">
+                        <span className="text-sm text-gray-400 pb-2 shrink-0">
+                          → ราคาหลังลด
+                        </span>
                         <div className="flex-1">
-                          <Label text="รวม (หลา)" />
-                          <Input value={totalYard.toFixed(2)} readOnly />
+                          <Label text="บาท/หลา" />
+                          <Input value={afterY.toFixed(2)} readOnly />
                         </div>
                         <span className="text-sm text-gray-400 pb-2 shrink-0">
                           /
                         </span>
                         <div className="flex-1">
-                          <Label text="รวม (เมตร)" />
-                          <Input value={totalMeter.toFixed(2)} readOnly />
+                          <Label text="บาท/เมตร" />
+                          <Input value={afterM.toFixed(2)} readOnly />
                         </div>
                       </div>
                     );
                   })()}
                 </div>
 
-                {/* ── Price ──────────────────────────────────────────────── */}
-                <div className="space-y-3">
-                  {/* ราคาต่อหน่วย — bidirectional */}
-                  <div className="flex items-end gap-2">
-                    <div className="flex-1">
-                      <Label text="ราคาต่อหน่วย (บาท/หลา)" required />
-                      <Input
-                        value={priceYard}
-                        type="number"
-                        placeholder="บาท/หลา"
-                        onChange={(v) => {
-                          setPriceYard(v);
-                          setPriceM(
-                            v && !isNaN(+v) ? (+v / 1.0936).toFixed(2) : "",
-                          );
-                        }}
-                      />
-                    </div>
-                    <span className="text-sm text-gray-400 pb-2 shrink-0">
-                      หรือ
-                    </span>
-                    <div className="flex-1">
-                      <Label text="ราคา (บาท/เมตร)" />
-                      <Input
-                        value={priceM}
-                        type="number"
-                        placeholder="บาท/เมตร"
-                        onChange={(v) => {
-                          setPriceM(v);
-                          setPriceYard(
-                            v && !isNaN(+v) ? (+v * 1.0936).toFixed(2) : "",
-                          );
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* ส่วนลด + ราคาหลังลด */}
-                  <div className="flex items-end gap-2">
-                    <div className="w-40">
-                      <Label text="ส่วนลด (%)" />
-                      <Input
-                        value={discountP}
-                        onChange={setDiscountP}
-                        placeholder="%"
-                        type="number"
-                      />
-                    </div>
-                    {(() => {
-                      const py = parseFloat(priceYard);
-                      const pm = parseFloat(priceM);
-                      const dp = parseFloat(discountP);
-                      if ((!py && !pm) || isNaN(dp)) return null;
-                      const factor = 1 - dp / 100;
-                      const afterY = py ? py * factor : 0;
-                      const afterM = pm ? pm * factor : 0;
-                      return (
-                        <div className="flex items-end gap-2 flex-1">
-                          <span className="text-sm text-gray-400 pb-2 shrink-0">
-                            → ราคาหลังลด
-                          </span>
-                          <div className="flex-1">
-                            <Label text="บาท/หลา" />
-                            <Input value={afterY.toFixed(2)} readOnly />
-                          </div>
-                          <span className="text-sm text-gray-400 pb-2 shrink-0">
-                            /
-                          </span>
-                          <div className="flex-1">
-                            <Label text="บาท/เมตร" />
-                            <Input value={afterM.toFixed(2)} readOnly />
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* ราคารวม */}
-                  {(() => {
-                    const py = parseFloat(priceYard);
-                    const pm = parseFloat(priceM);
-                    const yard = parseFloat(orderSumYard);
-                    const meter = parseFloat(orderSumMeter);
-                    const dp = parseFloat(discountP) || 0;
-                    const factor = 1 - dp / 100;
-                    if ((!py && !pm) || (!yard && !meter)) return null;
-                    const total =
-                      yard && py ? yard * py * factor : meter * pm * factor;
-                    return (
-                      <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded px-3 py-2">
-                        <span className="text-sm font-medium text-blue-800">
-                          ราคารวม
+                {/* ราคารวม */}
+                {(() => {
+                  const py = parseFloat(priceYard);
+                  const pm = parseFloat(priceM);
+                  const yard = parseFloat(orderSumYard);
+                  const meter = parseFloat(orderSumMeter);
+                  const dp = parseFloat(discountP) || 0;
+                  const factor = 1 - dp / 100;
+                  if ((!py && !pm) || (!yard && !meter)) return null;
+                  const total =
+                    yard && py ? yard * py * factor : meter * pm * factor;
+                  return (
+                    <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+                      <span className="text-sm font-medium text-blue-800">
+                        ราคารวม
+                      </span>
+                      <span className="text-base font-semibold text-blue-900">
+                        {total.toLocaleString("th-TH", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{" "}
+                        บาท
+                      </span>
+                      {yard ? (
+                        <span className="text-xs text-blue-600">
+                          ({yard.toLocaleString()} หลา ×{" "}
+                          {(py * factor).toFixed(2)} บาท/หลา)
                         </span>
-                        <span className="text-base font-semibold text-blue-900">
-                          {total.toLocaleString("th-TH", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}{" "}
-                          บาท
+                      ) : (
+                        <span className="text-xs text-blue-600">
+                          ({meter.toLocaleString()} เมตร ×{" "}
+                          {(pm * factor).toFixed(2)} บาท/เมตร)
                         </span>
-                        {yard ? (
-                          <span className="text-xs text-blue-600">
-                            ({yard.toLocaleString()} หลา ×{" "}
-                            {(py * factor).toFixed(2)} บาท/หลา)
-                          </span>
-                        ) : (
-                          <span className="text-xs text-blue-600">
-                            ({meter.toLocaleString()} เมตร ×{" "}
-                            {(pm * factor).toFixed(2)} บาท/เมตร)
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })()}
-                </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
 
-                {/* ── Other fields (2 col) ───────────────────────────────── */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label text="เบอร์เครื่อง" />
-                    <Input
-                      value={machineNumber}
-                      onChange={setMachineNumber}
-                      placeholder="เบอร์เครื่อง"
-                    />
-                  </div>
-                  <div />
-                  <div>
-                    <Label text="SURCHARGE" />
-                    <Input
-                      value={surcharge}
-                      onChange={setSurcharge}
-                      placeholder="Surcharge"
-                    />
-                  </div>
-                  <div />
-                  <div>
-                    <Label text="คอมมิชชั่น" />
-                    <Input
-                      value={commission}
-                      onChange={setCommission}
-                      placeholder="คอมมิชชั่น"
-                      type="number"
-                    />
-                  </div>
-                  <div>
-                    <Label text="VAT" />
-                    <select
-                      value={vat}
-                      onChange={(e) => setVat(e.target.value)}
-                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    >
-                      <option value="SO">SO (excluding vat)</option>
-                      <option value="SOX">SO (including vat)</option>
-                      <option value="SOB">SOB</option>
-                    </select>
-                  </div>
-                  <div>
-                    <Label text="เลขที่ใบสั่งซื้อ" />
-                    <Input
-                      value={orderNo}
-                      onChange={(v) => {
-                        setOrderNo(v);
-                        if (v === "") setOrderNoEdited(false);
-                        else setOrderNoEdited(true);
-                      }}
-                      placeholder={
-                        orderNoLoading ? "กำลังโหลด..." : "เลขที่ใบสั่งซื้อ"
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label text="PO ลูกค้า" />
-                    <Input
-                      value={po}
-                      onChange={setPo}
-                      placeholder="เลขที่ PO"
-                    />
-                  </div>
-                </div>
-
-                {/* ── กำหนดส่ง ────────────────────────────────────────────── */}
+              {/* ── Other fields (2 col) ───────────────────────────────── */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-sm font-medium text-gray-700 mb-2">
-                    กำหนดส่ง
-                  </div>
-                  <table className="w-full text-sm border-collapse border border-gray-200">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600 w-14">
-                          ครั้งที่
-                        </th>
-                        <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600">
-                          วันที่
-                        </th>
-                        <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600">
-                          จำนวน (หลา หรือเมตร)
-                        </th>
-                        <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600 w-20">
-                          %
-                        </th>
-                        <th className="border border-gray-200 px-2 py-1.5 text-xs text-center font-medium text-gray-600 w-16">
-                          เพิ่ม / ลบ
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {deadlines.map((row, i) => (
-                        <tr key={i} className="even:bg-gray-50">
-                          <td className="border border-gray-200 px-2 py-1 text-center text-xs text-gray-500">
-                            {i + 1}
-                          </td>
-                          <td className="border border-gray-200 px-1 py-0.5">
-                            <input
-                              type="date"
-                              value={row.dt}
-                              onChange={(e) =>
-                                updateDeadline(i, "dt", e.target.value)
-                              }
-                              className="w-full border-0 text-sm focus:outline-none bg-transparent"
-                            />
-                          </td>
-                          <td className="border border-gray-200 px-1 py-0.5">
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                value={row.qty}
-                                onChange={(e) =>
-                                  updateDeadline(i, "qty", e.target.value)
-                                }
-                                placeholder="จำนวน"
-                                className="flex-1 min-w-0 border-0 text-sm focus:outline-none bg-transparent"
-                              />
-                              <select
-                                value={row.unit}
-                                onChange={(e) =>
-                                  updateDeadline(i, "unit", e.target.value)
-                                }
-                                className="border-0 text-xs focus:outline-none bg-transparent text-gray-500 shrink-0"
-                              >
-                                <option>หลา</option>
-                                <option>เมตร</option>
-                              </select>
-                            </div>
-                          </td>
-                          <td className="border border-gray-200 px-1 py-0.5">
-                            <input
-                              type="number"
-                              value={row.pct}
-                              onChange={(e) =>
-                                updateDeadline(i, "pct", e.target.value)
-                              }
-                              placeholder="%"
-                              className="w-full border-0 text-sm focus:outline-none bg-transparent"
-                            />
-                          </td>
-                          <td className="border border-gray-200 px-1 py-0.5 text-center ">
-                            {i === 0 ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setDeadlines((prev) => [
-                                    { dt: "", qty: "", unit: "หลา", pct: "" },
-                                    { ...prev[0] },
-                                    ...prev.slice(1),
-                                  ])
-                                }
-                                className="mx-auto w-5 h-5 flex items-center justify-center rounded bg-blue-100 text-blue-600 hover:bg-blue-200 text-sm font-bold leading-none"
-                              >
-                                +
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setDeadlines((prev) =>
-                                    prev.filter((_, idx) => idx !== i),
-                                  )
-                                }
-                                className="mx-auto w-5 h-5 flex items-center justify-center rounded bg-red-100 text-red-500 hover:bg-red-200 text-sm font-bold leading-none"
-                              >
-                                −
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <Label text="เบอร์เครื่อง" />
+                  <Input
+                    value={machineNumber}
+                    onChange={setMachineNumber}
+                    placeholder="เบอร์เครื่อง"
+                  />
                 </div>
-
-                {/* ── Notes ───────────────────────────────────────────────── */}
+                <div />
                 <div>
-                  <Label text="หมายเหตุ" />
-                  <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    rows={3}
-                    placeholder="หมายเหตุ"
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                  <Label text="SURCHARGE" />
+                  <Input
+                    value={surcharge}
+                    onChange={setSurcharge}
+                    placeholder="Surcharge"
+                  />
+                </div>
+                <div />
+                <div>
+                  <Label text="คอมมิชชั่น" />
+                  <Input
+                    value={commission}
+                    onChange={setCommission}
+                    placeholder="คอมมิชชั่น"
+                    type="number"
                   />
                 </div>
                 <div>
-                  <Label text="หมายเหตุการผลิต" />
-                  <textarea
-                    value={productionNote}
-                    onChange={(e) => setProductionNote(e.target.value)}
-                    rows={3}
-                    placeholder="หมายเหตุการผลิต"
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                  />
-                </div>
-                <div>
-                  <Label text="เงื่อนไขการชำระเงิน" />
-                  <textarea
-                    value={payment}
-                    onChange={(e) => setPayment(e.target.value)}
-                    rows={2}
-                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
-                  />
-                </div>
-
-                {/* ── Buttons (centered) ───────────────────────────────────── */}
-                <div className="flex justify-center gap-3 pt-4 border-t border-gray-100">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="flex items-center gap-1.5 px-7 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700 disabled:opacity-60"
+                  <Label text="VAT" />
+                  <select
+                    value={vat}
+                    onChange={(e) => setVat(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      fill="currentColor"
-                      className="bi bi-receipt-cutoff"
-                      viewBox="0 0 16 16"
-                    >
-                      <path d="M3 4.5a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5M11.5 4a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1z" />
-                      <path d="M2.354.646a.5.5 0 0 0-.801.13l-.5 1A.5.5 0 0 0 1 2v13H.5a.5.5 0 0 0 0 1h15a.5.5 0 0 0 0-1H15V2a.5.5 0 0 0-.053-.224l-.5-1a.5.5 0 0 0-.8-.13L13 1.293l-.646-.647a.5.5 0 0 0-.708 0L11 1.293l-.646-.647a.5.5 0 0 0-.708 0L9 1.293 8.354.646a.5.5 0 0 0-.708 0L7 1.293 6.354.646a.5.5 0 0 0-.708 0L5 1.293 4.354.646a.5.5 0 0 0-.708 0L3 1.293zm-.217 1.198.51.51a.5.5 0 0 0 .707 0L4 1.707l.646.647a.5.5 0 0 0 .708 0L6 1.707l.646.647a.5.5 0 0 0 .708 0L8 1.707l.646.647a.5.5 0 0 0 .708 0L10 1.707l.646.647a.5.5 0 0 0 .708 0L12 1.707l.646.647a.5.5 0 0 0 .708 0l.509-.51.137.274V15H2V2.118z" />
-                    </svg>
-                    {saving ? "กำลังสร้าง..." : "ใบสั่งขาย"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={saving}
-                    onClick={handleOpenStructure}
-                    className="flex items-center gap-1.5 px-7 py-2 bg-teal-700 text-white text-sm rounded font-medium hover:bg-teal-800 disabled:opacity-60"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      fill="currentColor"
-                      className="bi bi-grid"
-                      viewBox="0 0 16 16"
-                    >
-                      <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5z" />
-                    </svg>
-                    ใบโครงสร้าง
-                  </button>
+                    <option value="SO">SO (excluding vat)</option>
+                    <option value="SOX">SO (including vat)</option>
+                    <option value="SOB">SOB</option>
+                  </select>
+                </div>
+                <div>
+                  <Label text="เลขที่ใบสั่งซื้อ" />
+                  <Input
+                    value={orderNo}
+                    onChange={(v) => {
+                      setOrderNo(v);
+                      if (v === "") setOrderNoEdited(false);
+                      else setOrderNoEdited(true);
+                    }}
+                    placeholder={
+                      orderNoLoading ? "กำลังโหลด..." : "เลขที่ใบสั่งซื้อ"
+                    }
+                  />
+                </div>
+                <div>
+                  <Label text="PO ลูกค้า" />
+                  <Input value={po} onChange={setPo} placeholder="เลขที่ PO" />
                 </div>
               </div>
+
+              {/* ── กำหนดส่ง ────────────────────────────────────────────── */}
+              <div>
+                <div className="text-sm font-medium text-gray-700 mb-2">
+                  กำหนดส่ง
+                </div>
+                <table className="w-full text-sm border-collapse border border-gray-200">
+                  <thead>
+                    <tr className="bg-gray-50">
+                      <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600 w-14">
+                        ครั้งที่
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600">
+                        วันที่
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600">
+                        จำนวน (หลา หรือเมตร)
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1.5 text-xs text-left font-medium text-gray-600 w-20">
+                        %
+                      </th>
+                      <th className="border border-gray-200 px-2 py-1.5 text-xs text-center font-medium text-gray-600 w-16">
+                        เพิ่ม / ลบ
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deadlines.map((row, i) => (
+                      <tr key={i} className="even:bg-gray-50">
+                        <td className="border border-gray-200 px-2 py-1 text-center text-xs text-gray-500">
+                          {i + 1}
+                        </td>
+                        <td className="border border-gray-200 px-1 py-0.5">
+                          <input
+                            type="date"
+                            value={row.dt}
+                            onChange={(e) =>
+                              updateDeadline(i, "dt", e.target.value)
+                            }
+                            className="w-full border-0 text-sm focus:outline-none bg-transparent"
+                          />
+                          {row.dt && (
+                            <p className="text-xs text-gray-400 text-right pr-1">
+                              {formatThaiDate(row.dt)}
+                            </p>
+                          )}
+                        </td>
+                        <td className="border border-gray-200 px-1 py-0.5">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              value={row.qty}
+                              onChange={(e) =>
+                                updateDeadline(i, "qty", e.target.value)
+                              }
+                              placeholder="จำนวน"
+                              className="flex-1 min-w-0 border-0 text-sm focus:outline-none bg-transparent"
+                            />
+                            <select
+                              value={row.unit}
+                              onChange={(e) =>
+                                updateDeadline(i, "unit", e.target.value)
+                              }
+                              className="border-0 text-xs focus:outline-none bg-transparent text-gray-500 shrink-0"
+                            >
+                              <option>หลา</option>
+                              <option>เมตร</option>
+                            </select>
+                          </div>
+                        </td>
+                        <td className="border border-gray-200 px-1 py-0.5">
+                          <input
+                            type="number"
+                            value={row.pct}
+                            onChange={(e) =>
+                              updateDeadline(i, "pct", e.target.value)
+                            }
+                            placeholder="%"
+                            className="w-full border-0 text-sm focus:outline-none bg-transparent"
+                          />
+                        </td>
+                        <td className="border border-gray-200 px-1 py-0.5 text-center ">
+                          {i === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDeadlines((prev) => [
+                                  { dt: "", qty: "", unit: "หลา", pct: "" },
+                                  { ...prev[0] },
+                                  ...prev.slice(1),
+                                ])
+                              }
+                              className="mx-auto w-5 h-5 flex items-center justify-center rounded bg-blue-100 text-blue-600 hover:bg-blue-200 text-sm font-bold leading-none"
+                            >
+                              +
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDeadlines((prev) =>
+                                  prev.filter((_, idx) => idx !== i),
+                                )
+                              }
+                              className="mx-auto w-5 h-5 flex items-center justify-center rounded bg-red-100 text-red-500 hover:bg-red-200 text-sm font-bold leading-none"
+                            >
+                              −
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ── Notes ───────────────────────────────────────────────── */}
+              <div>
+                <Label text="หมายเหตุ" />
+                <textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={3}
+                  placeholder="หมายเหตุ"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                />
+              </div>
+              <div>
+                <Label text="หมายเหตุการผลิต" />
+                <textarea
+                  value={productionNote}
+                  onChange={(e) => setProductionNote(e.target.value)}
+                  rows={3}
+                  placeholder="หมายเหตุการผลิต"
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                />
+              </div>
+              <div>
+                <Label text="เงื่อนไขการชำระเงิน" />
+                <textarea
+                  value={payment}
+                  onChange={(e) => setPayment(e.target.value)}
+                  rows={2}
+                  className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none"
+                />
+              </div>
+
+              {/* ── Buttons (centered) ───────────────────────────────────── */}
+              <div className="flex justify-center gap-3 pt-4 border-t border-gray-100">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-7 py-2 bg-blue-600 text-white text-sm rounded font-medium hover:bg-blue-700 disabled:opacity-60"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    fill="currentColor"
+                    className="bi bi-receipt-cutoff"
+                    viewBox="0 0 16 16"
+                  >
+                    <path d="M3 4.5a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 1 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5m0 2a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5M11.5 4a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1z" />
+                    <path d="M2.354.646a.5.5 0 0 0-.801.13l-.5 1A.5.5 0 0 0 1 2v13H.5a.5.5 0 0 0 0 1h15a.5.5 0 0 0 0-1H15V2a.5.5 0 0 0-.053-.224l-.5-1a.5.5 0 0 0-.8-.13L13 1.293l-.646-.647a.5.5 0 0 0-.708 0L11 1.293l-.646-.647a.5.5 0 0 0-.708 0L9 1.293 8.354.646a.5.5 0 0 0-.708 0L7 1.293 6.354.646a.5.5 0 0 0-.708 0L5 1.293 4.354.646a.5.5 0 0 0-.708 0L3 1.293zm-.217 1.198.51.51a.5.5 0 0 0 .707 0L4 1.707l.646.647a.5.5 0 0 0 .708 0L6 1.707l.646.647a.5.5 0 0 0 .708 0L8 1.707l.646.647a.5.5 0 0 0 .708 0L10 1.707l.646.647a.5.5 0 0 0 .708 0L12 1.707l.646.647a.5.5 0 0 0 .708 0l.509-.51.137.274V15H2V2.118z" />
+                  </svg>
+                  {saving ? "กำลังสร้าง..." : "ใบสั่งขาย"}
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={handleOpenStructure}
+                  className="flex items-center gap-1.5 px-7 py-2 bg-teal-700 text-white text-sm rounded font-medium hover:bg-teal-800 disabled:opacity-60"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    fill="currentColor"
+                    className="bi bi-grid"
+                    viewBox="0 0 16 16"
+                  >
+                    <path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h3A1.5 1.5 0 0 1 7 2.5v3A1.5 1.5 0 0 1 5.5 7h-3A1.5 1.5 0 0 1 1 5.5zM2.5 2a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm6.5.5A1.5 1.5 0 0 1 10.5 1h3A1.5 1.5 0 0 1 15 2.5v3A1.5 1.5 0 0 1 13.5 7h-3A1.5 1.5 0 0 1 9 5.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zM1 10.5A1.5 1.5 0 0 1 2.5 9h3A1.5 1.5 0 0 1 7 10.5v3A1.5 1.5 0 0 1 5.5 15h-3A1.5 1.5 0 0 1 1 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5zm6.5.5A1.5 1.5 0 0 1 10.5 9h3a1.5 1.5 0 0 1 1.5 1.5v3a1.5 1.5 0 0 1-1.5 1.5h-3A1.5 1.5 0 0 1 9 13.5zm1.5-.5a.5.5 0 0 0-.5.5v3a.5.5 0 0 0 .5.5h3a.5.5 0 0 0 .5-.5v-3a.5.5 0 0 0-.5-.5z" />
+                  </svg>
+                  ใบโครงสร้าง
+                </button>
+              </div>
+            </div>
           </div>
         </form>
       </div>
