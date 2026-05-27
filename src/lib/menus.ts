@@ -24,6 +24,7 @@ export const ALL_MENUS: MenuItem[] = [
   { key: 'warehouse.stock',              label: 'สต็อกผ้า',                href: '/warehouse/stock',                  group: 'ระบบคลังสินค้า' },
   { key: 'warehouse.stock-deposit',      label: 'สต็อกผ้าฝากจัดเก็บ',      href: '/warehouse/stock-deposit',          group: 'ระบบคลังสินค้า' },
   { key: 'warehouse.reports',            label: 'รายงาน',                  href: '/warehouse/reports',                group: 'ระบบคลังสินค้า' },
+  { key: 'warehouse.returns',            label: 'ส่งคืนผ้าซัพพลายเออร์',   href: '/warehouse/returns',                group: 'ระบบคลังสินค้า' },
 
   // ─── ระบบวัตถุดิบ ──────────────────────────────────────
   { key: 'material.create',              label: 'นำเข้าวัตถุดิบ',           href: '/warehouse/material/create',        group: 'ระบบวัตถุดิบ' },

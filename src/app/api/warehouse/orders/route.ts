@@ -28,15 +28,15 @@ export async function GET(request: NextRequest) {
   }
   if (customer) where.AND.push({ customerName: { contains: customer, mode: 'insensitive' } })
   if (fabricId) where.AND.push({ fabricId: { contains: fabricId, mode: 'insensitive' } })
-  if (dateFrom) where.AND.push({ createdAt: { gte: new Date(dateFrom) } })
-  if (dateTo) where.AND.push({ createdAt: { lte: new Date(dateTo + 'T23:59:59') } })
+  if (dateFrom) where.AND.push({ createDate: { gte: new Date(dateFrom) } })
+  if (dateTo) where.AND.push({ createDate: { lte: new Date(dateTo + 'T23:59:59') } })
   if (where.AND.length === 0) delete where.AND
 
   try {
   const [orders, total] = await Promise.all([
     prisma.astPurchaseOrder.findMany({
       where,
-      orderBy: { id: 'desc' },
+      orderBy: { createDate: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
       include: {

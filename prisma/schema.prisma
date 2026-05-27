@@ -82,7 +82,8 @@ model Supplier {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  packages  Package[]
+  packages       Package[]
+  fabricReturns  FabricReturn[]
 
   @@map("suppliers")
 }
@@ -679,6 +680,26 @@ model BosDeadline {
 
   @@index([bosId])
   @@map("bos_deadlines")
+}
+
+model FabricReturn {
+  id            Int       @id @default(autoincrement())
+  supplierId    Int
+  fabricCode    String
+  qty           Float
+  unit          String    @default("หลา")
+  returnQty     Float     @default(0)
+  receivedQty   Float?
+  totalReturned Float?
+  returnDate    DateTime
+  note          String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  supplier  Supplier  @relation(fields: [supplierId], references: [id])
+
+  @@index([supplierId])
+  @@map("fabric_returns")
 }
 
 // ─── LEGACY (DO NOT USE FOR NEW FEATURES) ────────────

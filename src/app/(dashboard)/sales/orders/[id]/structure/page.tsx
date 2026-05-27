@@ -1,6 +1,8 @@
 "use client";
 import { useState, useEffect, useRef, use } from "react";
 import { useRouter } from "next/navigation";
+import dayjs from "dayjs";
+import { formatThaiDate } from "@/lib/thai-utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -12,11 +14,6 @@ interface DeadlineRow {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function toThaiDate(iso: string): string {
-  const [y, m, d] = iso.split("-");
-  return `${d}/${m}/${parseInt(y) + 543}`;
-}
 
 function buildFabricStruct(
   warpYarn1: string,
@@ -545,8 +542,6 @@ export default function StructureEditPage({
     }
   }
 
-  const thaiDate = createDate ? toThaiDate(createDate) : "-";
-
   if (loading)
     return (
       <div className="flex items-center justify-center min-h-64">
@@ -570,9 +565,9 @@ export default function StructureEditPage({
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen w-full bg-gray-50">
       {/* ── Content ──────────────────────────────────────────────────────────── */}
-      <div className="p-3 max-w-4xl">
+      <div className="p-3 w-full">
         <form onSubmit={handleSave}>
           {toast && (
             <div className="text-xs text-green-700 bg-green-50 border border-green-300 rounded px-3 py-2 mb-3">
@@ -603,7 +598,7 @@ export default function StructureEditPage({
             <div className="p-5 space-y-4">
               {/* Header: date + NO right-aligned */}
               <div className="flex justify-end text-sm text-gray-600">
-                วันที่ {thaiDate}&nbsp;&nbsp;NO.
+                วันที่ {dayjs(createDate).format("DD/MM/YYYY")}&nbsp;&nbsp;NO.
                 <span className="font-medium text-gray-900">
                   {purchaseOrder || "..."}
                 </span>
@@ -617,7 +612,7 @@ export default function StructureEditPage({
                 </div>
                 <div>
                   <Label text="วันที่" />
-                  <Input value={createDate} readOnly gray />
+                  <Input value={dayjs(createDate).format("DD/MM/YYYY")} readOnly gray />
                 </div>
               </div>
 
