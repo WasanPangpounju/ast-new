@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   const dateTo = searchParams.get('dateTo') ?? ''
   const statusFilter = searchParams.get('status') ?? 'อนุมัติให้ผลิต'
 
-  const where: any = { AND: [], status: statusFilter }
+  const where: any = { AND: [], status: statusFilter, deletedAt: null }
   if (search) {
     where.AND.push({
       OR: [
