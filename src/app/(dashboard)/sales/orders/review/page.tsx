@@ -217,7 +217,7 @@ export default function SalesOrdersReviewPage() {
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-175 text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs">
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600 w-24">วันที่</th>

@@ -312,7 +312,7 @@ export default function CreateOrderPage() {
 
   // Header
   const [createDate, setCreateDate] = useState(TODAY);
-  const [vat, setVat] = useState("SO");
+  const [vat, setVat] = useState("SOX");
 
   // Customer
   const [customerName, setCustomerName] = useState("");
@@ -1161,8 +1161,8 @@ export default function CreateOrderPage() {
                     onChange={(e) => setVat(e.target.value)}
                     className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
-                    <option value="SO">SO (excluding vat)</option>
                     <option value="SOX">SO (including vat)</option>
+                    <option value="SO">SO (excluding vat)</option>
                     <option value="SOB">SOB</option>
                   </select>
                 </div>

@@ -17,6 +17,7 @@ export async function GET(
       fabricAstStructure: true,
       orderDeadlines: { orderBy: { dt: 'asc' } },
       orderShipped: true,
+      billOfStructure: { include: { deadlines: { orderBy: { dt: 'asc' } } } },
     },
   })
   if (!order) return Response.json({ error: 'ไม่พบใบสั่งขาย' }, { status: 404 })
