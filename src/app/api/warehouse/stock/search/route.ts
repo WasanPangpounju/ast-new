@@ -107,11 +107,6 @@ export async function GET(request: NextRequest) {
          WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
            AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern
            AND o.n_customer = s.n_customer),
-        (SELECT SUM(o.out_fold) FROM norm_outs o
-         WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
-           AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern),
-        (SELECT SUM(o.out_fold) FROM norm_outs o
-         WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width),
         0
       )::int AS used_fold,
       COALESCE(
@@ -119,11 +114,6 @@ export async function GET(request: NextRequest) {
          WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
            AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern
            AND o.n_customer = s.n_customer),
-        (SELECT SUM(o.out_yard) FROM norm_outs o
-         WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
-           AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern),
-        (SELECT SUM(o.out_yard) FROM norm_outs o
-         WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width),
         0
       )::float AS used_yard
     FROM agg_stock s
