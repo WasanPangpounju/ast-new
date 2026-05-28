@@ -199,10 +199,16 @@ const navItems: NavItem[] = [
         menuKey: "material.outside-history",
       },
       {
+        href: "/warehouse/material/stock",
+        label: "สต็อกวัตถุดิบ",
+        menuKey: "material.stock",
+      },
+      {
         href: "/warehouse/returns",
         label: "ส่งคืนบรรจุภัณฑ์",
         menuKey: "warehouse.returns",
       },
+     
     ],
   },
   {
