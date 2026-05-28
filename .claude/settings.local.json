@@ -53,7 +53,9 @@
       "Bash(where psql *)",
       "Bash(where pg_isready)",
       "Read(//c/Program Files/**)",
-      "PowerShell(Get-Command *)"
+      "PowerShell(Get-Command *)",
+      "Bash(Select-String -Path \"C:\\\\Users\\\\Friendly Dev\\\\project\\\\ast-new\\\\src\\\\app\\\\api\\\\warehouse\\\\orders\\\\route.ts\" -Pattern \"where\")",
+      "Bash(Select-Object -First 5)"
     ]
   }
 }

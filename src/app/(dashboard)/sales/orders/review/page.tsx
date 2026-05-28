@@ -59,8 +59,8 @@ export default function SalesOrdersReviewPage() {
   const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const [month, setMonth] = useState(CURRENT_MONTH)
-  const [year, setYear] = useState(CURRENT_YEAR)
+  const [month, setMonth] = useState('')
+  const [year, setYear] = useState('')
   const [applied, setApplied] = useState({
     q: '',
     status: '',
