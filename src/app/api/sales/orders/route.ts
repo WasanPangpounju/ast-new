@@ -105,7 +105,195 @@ export async function POST(request: NextRequest) {
   if (providedPO?.trim()) {
     purchaseOrder = providedPO.trim()
     const exists = await prisma.astPurchaseOrder.findUnique({ where: { purchaseOrder } })
-    if (exists) return Response.json({ error: `เลขที่ ${purchaseOrder} มีอยู่แล้ว` }, { status: 400 })
+    if (exists && !exists.deletedAt)
+      return Response.json({ error: `เลขที่ ${purchaseOrder} มีอยู่แล้ว` }, { status: 400 })
+
+    // SO เคยถูกลบไปแล้ว → restore แทน create ใหม่
+    if (exists && exists.deletedAt) {
+      const result = await prisma.$transaction(async tx => {
+        // ลบ related records เก่าที่อาจหลงเหลือ (ถ้ามี)
+        await tx.orderDeadline.deleteMany({ where: { purchaseOrder } })
+        await tx.fabricAst.deleteMany({ where: { purchaseOrder } })
+        await tx.fabricAstStructure.deleteMany({ where: { purchaseOrder } })
+
+        const order = await tx.astPurchaseOrder.update({
+          where: { purchaseOrder },
+          data: {
+            deletedAt: null,
+            vat,
+            customerName: customerName.trim(),
+            emp: coordinator?.trim() ?? null,
+            fabricId: fabricId?.trim() ?? null,
+            fabricStructure: fabricStructure?.trim() ?? null,
+            fabricPattern: fabricPattern?.trim() ?? null,
+            orderSumYard: orderSumYard ? parseFloat(orderSumYard) : null,
+            fabricSPY: fabricSPY ? parseFloat(fabricSPY) : null,
+            priceYard: priceYard ? parseFloat(priceYard) : null,
+            priceM: priceM ? parseFloat(priceM) : null,
+            discountP: discountP ? parseFloat(discountP) : null,
+            discountYard: discountYard ? parseFloat(discountYard) : null,
+            commission: commission ? parseFloat(commission) : null,
+            billNo: billNo ? parseInt(billNo, 10) : null,
+            machineNumber: machineNumber?.trim() ?? null,
+            surcharge: surcharge?.trim() ?? null,
+            po: po?.trim() ?? null,
+            note: note?.trim() ?? null,
+            productionNote: productionNote?.trim() ?? null,
+            payment: payment?.trim() ?? null,
+            status: 'รอดำเนินการ',
+            createDate: createDateStr ? new Date(createDateStr) : new Date(),
+          },
+        })
+
+        await tx.fabricAst.create({
+          data: {
+            purchaseOrder,
+            vat,
+            fabricW: fabricW?.trim() ?? null,
+            yarnHCount: yarnHCount?.trim() ?? null,
+            phewNumber: phewNumber?.trim() ?? null,
+            phewW: phewW?.trim() ?? null,
+            stackType: stackType?.trim() ?? null,
+          },
+        })
+
+        await tx.fabricAstStructure.create({
+          data: {
+            purchaseOrder,
+            yarnWRatio2: 'รอดำเนินการ',
+            yarnHType: warpYarn1?.trim() ?? null,
+            yarnHType2: warpYarn2?.trim() ?? null,
+            subNameH1: warpComp1?.trim() ?? null,
+            subNameH2: warpComp2?.trim() ?? null,
+            yarnHCount1: warpCount1?.trim() ?? null,
+            yarnHCount2: warpCount2?.trim() ?? null,
+            yarnHRatio1: warpRatio1?.trim() ?? null,
+            yarnHRatio2: warpRatio2?.trim() ?? null,
+            yarnWType: weftYarn1?.trim() ?? null,
+            yarnWType2: weftYarn2?.trim() ?? null,
+            yarnWType3: weftYarn3?.trim() ?? null,
+            yarnWType4: weftYarn4?.trim() ?? null,
+            subNameW1: weftComp1?.trim() ?? null,
+            subNameW2: weftComp2?.trim() ?? null,
+            subNameW3: weftComp3?.trim() ?? null,
+            subNameW4: weftComp4?.trim() ?? null,
+            yarnWCount1: weftCount1?.trim() ?? null,
+            yarnWCount2: weftCount2?.trim() ?? null,
+            yarnWCount3: weftCount3?.trim() ?? null,
+            yarnWCount4: weftCount4?.trim() ?? null,
+            yarnWRatio1: weftRatio1?.trim() ?? null,
+            weftRatio2: weftRatio2?.trim() ?? null,
+            yarnWRatio3: weftRatio3?.trim() ?? null,
+            yarnWRatio4: weftRatio4?.trim() ?? null,
+          },
+        })
+
+        if (Array.isArray(deadlines) && deadlines.length > 0) {
+          for (const dl of deadlines) {
+            if (dl.dt) {
+              await tx.orderDeadline.create({
+                data: {
+                  purchaseOrder,
+                  dt: new Date(dl.dt),
+                  label: dl.label ?? 'กำหนดส่ง',
+                  qty: dl.qty ? parseFloat(dl.qty) : null,
+                  unit: dl.unit ?? 'หลา',
+                  pct: dl.pct ? parseFloat(dl.pct) : null,
+                },
+              })
+            }
+          }
+        }
+
+        if (createStructure) {
+          const bosExists = await tx.astBillOfStructure.findUnique({ where: { sourceOrderId: order.id } })
+          if (!bosExists) {
+            const bos = await tx.astBillOfStructure.create({
+              data: {
+                purchaseOrder,
+                sourceOrderId: order.id,
+                vat,
+                customerName: customerName?.trim() ?? null,
+                emp: coordinator?.trim() ?? null,
+                fabricId: fabricId?.trim() ?? null,
+                fabricPattern: fabricPattern?.trim() ?? null,
+                fabricStructure: fabricStructure?.trim() ?? null,
+                yarnHCount: yarnHCount?.trim() ?? null,
+                fabricW: fabricW?.trim() ?? null,
+                phewNumber: phewNumber?.trim() ?? null,
+                phewW: phewW?.trim() ?? null,
+                stackType: stackType?.trim() ?? null,
+                warpYarn1: warpYarn1?.trim() ?? null,
+                warpComp1: warpComp1?.trim() ?? null,
+                warpCount1: warpCount1?.trim() ?? null,
+                warpRatio1: warpRatio1?.trim() ?? null,
+                warpYarn2: warpYarn2?.trim() ?? null,
+                warpComp2: warpComp2?.trim() ?? null,
+                warpCount2: warpCount2?.trim() ?? null,
+                warpRatio2: warpRatio2?.trim() ?? null,
+                weftYarn1: weftYarn1?.trim() ?? null,
+                weftComp1: weftComp1?.trim() ?? null,
+                weftCount1: weftCount1?.trim() ?? null,
+                weftRatio1: weftRatio1?.trim() ?? null,
+                weftYarn2: weftYarn2?.trim() ?? null,
+                weftComp2: weftComp2?.trim() ?? null,
+                weftCount2: weftCount2?.trim() ?? null,
+                weftRatio2: weftRatio2?.trim() ?? null,
+                weftYarn3: weftYarn3?.trim() ?? null,
+                weftComp3: weftComp3?.trim() ?? null,
+                weftCount3: weftCount3?.trim() ?? null,
+                weftRatio3: weftRatio3?.trim() ?? null,
+                weftYarn4: weftYarn4?.trim() ?? null,
+                weftComp4: weftComp4?.trim() ?? null,
+                weftCount4: weftCount4?.trim() ?? null,
+                weftRatio4: weftRatio4?.trim() ?? null,
+                orderSumYard: orderSumYard ? parseFloat(orderSumYard) : null,
+                fabricSPY: fabricSPY ? parseFloat(fabricSPY) : null,
+                priceYard: priceYard ? parseFloat(priceYard) : null,
+                priceM: priceM ? parseFloat(priceM) : null,
+                discountP: discountP ? parseFloat(discountP) : null,
+                machineNumber: machineNumber?.trim() ?? null,
+                surcharge: surcharge?.trim() ?? null,
+                commission: commission ? parseFloat(commission) : null,
+                po: po?.trim() ?? null,
+                note: note?.trim() ?? null,
+                productionNote: productionNote?.trim() ?? null,
+                payment: payment?.trim() ?? null,
+                status: 'รอดำเนินการ',
+                createDate: new Date(),
+              },
+            })
+            if (Array.isArray(deadlines) && deadlines.length > 0) {
+              for (const dl of deadlines) {
+                if (dl.dt) {
+                  await tx.bosDeadline.create({
+                    data: {
+                      bosId: bos.id,
+                      dt: new Date(dl.dt),
+                      label: dl.label ?? 'กำหนดส่ง',
+                      qty: dl.qty ? parseFloat(dl.qty) : null,
+                      unit: dl.unit ?? 'หลา',
+                      pct: dl.pct ? parseFloat(dl.pct) : null,
+                    },
+                  })
+                }
+              }
+            }
+            return { order, bos, bosCreated: true }
+          }
+          return { order, bos: bosExists, bosCreated: false }
+        }
+
+        return { order, bos: null, bosCreated: false }
+      })
+
+      return Response.json({
+        order: result.order,
+        billOfStructure: result.bos,
+        bosCreated: result.bosCreated,
+        purchaseOrder,
+      }, { status: 201 })
+    }
   } else {
     const existing = await prisma.astPurchaseOrder.findMany({
       where: { vat, deletedAt: null },
