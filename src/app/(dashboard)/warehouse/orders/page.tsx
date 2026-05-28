@@ -124,7 +124,7 @@ export default function WarehouseOrdersPage() {
 
   return (
     <div className="p-4 max-w-full">
-            {/* Header */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div>
           <h1 className="text-3xl font-semibold text-gray-900">
@@ -211,11 +211,17 @@ export default function WarehouseOrdersPage() {
         {(applied.dateFrom || applied.dateTo) && (
           <div className="mt-3 flex items-center gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
             <span className="font-medium">แสดงข้อมูลวันที่:</span>
-            {applied.dateFrom && <span>{formatThaiDate(applied.dateFrom)}</span>}
+            {applied.dateFrom && (
+              <span>{formatThaiDate(applied.dateFrom)}</span>
+            )}
             {applied.dateFrom && applied.dateTo && <span>—</span>}
             {applied.dateTo && <span>{formatThaiDate(applied.dateTo)}</span>}
-            {!applied.dateTo && applied.dateFrom && <span className="text-blue-400">เป็นต้นไป</span>}
-            {!applied.dateFrom && applied.dateTo && <span className="text-blue-400 mr-1">ถึง</span>}
+            {!applied.dateTo && applied.dateFrom && (
+              <span className="text-blue-400">เป็นต้นไป</span>
+            )}
+            {!applied.dateFrom && applied.dateTo && (
+              <span className="text-blue-400 mr-1">ถึง</span>
+            )}
           </div>
         )}
       </div>
@@ -547,9 +553,13 @@ export default function WarehouseOrdersPage() {
                           <a
                             href={`/warehouse/bill/print/${b.vatType}${b.vatNo}`}
                             target="_blank"
-                            className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 text-gray-600"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition-colors"
                           >
-                            🖨
+                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16">
+                              <path d="M5 1a2 2 0 0 0-2 2v1h10V3a2 2 0 0 0-2-2zm6 8H5a1 1 0 0 0-1 1v3a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1" />
+                              <path d="M0 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-1v-2a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v2H2a2 2 0 0 1-2-2zm2.5 1a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1" />
+                            </svg>
+                            พิมพ์
                           </a>
                         </td>
                       </tr>

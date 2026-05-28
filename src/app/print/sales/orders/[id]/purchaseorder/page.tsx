@@ -63,7 +63,7 @@ function fmt3(n: number) {
 function fmtDate(d: string) {
   try {
     const dt = new Date(d)
-    return `${dt.getDate().toString().padStart(2, '0')}/${(dt.getMonth() + 1).toString().padStart(2, '0')}/${dt.getFullYear() + 543}`
+    return `${dt.getDate().toString().padStart(2, '0')}/${(dt.getMonth() + 1).toString().padStart(2, '0')}/${dt.getFullYear()}`
   } catch { return '-' }
 }
 
