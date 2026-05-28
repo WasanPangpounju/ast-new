@@ -103,11 +103,16 @@ export default function OrderDetailPage({
     try {
       const res = await fetch(`/api/sales/orders/${id}`, { method: "DELETE" });
       if (res.ok) {
+        setShowDeleteConfirm(false);
         router.push("/sales/orders/review");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error ?? "เกิดข้อผิดพลาดในการลบ กรุณาลองใหม่");
       }
+    } catch {
+      alert("เกิดข้อผิดพลาด กรุณาตรวจสอบการเชื่อมต่อ");
     } finally {
       setDeleting(false);
-      setShowDeleteConfirm(false);
     }
   }
 

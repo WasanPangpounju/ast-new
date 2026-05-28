@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
   const orders = await prisma.astPurchaseOrder.findMany({
     where: {
       status: 'อนุมัติให้ผลิต',
+      deletedAt: null,
       OR: [
         { purchaseOrder: { contains: q, mode: 'insensitive' } },
         { customerName: { contains: q, mode: 'insensitive' } },

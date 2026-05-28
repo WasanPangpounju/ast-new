@@ -12,12 +12,13 @@ export async function GET(request: NextRequest) {
   const search = searchParams.get('search') ?? ''
 
   const where = search ? {
+    deletedAt: null,
     OR: [
       { customerName: { contains: search, mode: 'insensitive' as const } },
       { purchaseOrder: { contains: search, mode: 'insensitive' as const } },
       { fabricPattern: { contains: search, mode: 'insensitive' as const } },
     ],
-  } : {}
+  } : { deletedAt: null }
 
   const [orders, total] = await Promise.all([
     prisma.astPurchaseOrder.findMany({
