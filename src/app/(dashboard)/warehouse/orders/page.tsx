@@ -545,7 +545,7 @@ export default function WarehouseOrdersPage() {
                         </td>
                         <td className="px-2 py-2 md:px-3 md:py-2.5 text-center">
                           <a
-                            href={`/warehouse/bill/print/${b.vatType}${b.vatNo}`}
+                            href={`/warehouse/bill/print/${b.vatNo}?vatType=${b.vatType}`}
                             target="_blank"
                             className="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 text-gray-600"
                           >
