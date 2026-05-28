@@ -3,7 +3,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useEffect } from "react";
 
-type NavChild = { href: string; label: string; menuKey: string; labelIcon?: React.ReactNode };
+type NavChild = {
+  href: string;
+  label: string;
+  menuKey: string;
+  labelIcon?: React.ReactNode;
+};
 type NavItem = {
   href?: string;
   label: string;
@@ -43,10 +48,26 @@ const navItems: NavItem[] = [
       </svg>
     ),
     children: [
-      { href: "/sales/customers",     label: "ข้อมูลลูกค้า",          menuKey: "sales.customers" },
-      { href: "/sales/suppliers",     label: "ข้อมูลซัพพลายเออร์",    menuKey: "sales.suppliers" },
-      { href: "/sales/orders/create", label: "ใบสั่งขาย",             menuKey: "sales.orders-create" },
-      { href: "/sales/orders/review", label: "ตรวจสอบใบสั่งขาย",      menuKey: "sales.orders-review" },
+      {
+        href: "/sales/customers",
+        label: "ข้อมูลลูกค้า",
+        menuKey: "sales.customers",
+      },
+      {
+        href: "/sales/suppliers",
+        label: "ข้อมูลซัพพลายเออร์",
+        menuKey: "sales.suppliers",
+      },
+      {
+        href: "/sales/orders/create",
+        label: "ใบสั่งขาย",
+        menuKey: "sales.orders-create",
+      },
+      {
+        href: "/sales/orders/review",
+        label: "ตรวจสอบใบสั่งขาย",
+        menuKey: "sales.orders-review",
+      },
     ],
   },
   {
@@ -64,16 +85,56 @@ const navItems: NavItem[] = [
       </svg>
     ),
     children: [
-      { href: "/warehouse/stock/create",          label: "คีย์ผ้าเข้าสต็อก",        menuKey: "warehouse.fabric-in" },
-      { href: "/warehouse/stock/scan",            label: "สแกนรูปคีย์ผ้าเข้าสต็อก", menuKey: "warehouse.fabric-in-scan" },
-      { href: "/warehouse/fabric-in/review",      label: "ตรวจสอบคีย์ผ้า",          menuKey: "warehouse.fabric-review" },
-      { href: "/warehouse/stock/purchase",        label: "คีย์ผ้าซื้อเข้า",          menuKey: "warehouse.purchase" },
-      { href: "/warehouse/stock/purchase/review", label: "ตรวจสอบผ้าซื้อเข้า",       menuKey: "warehouse.purchase-review" },
-      { href: "/warehouse/bill/create",           label: "เปิดบิลผ้า",              menuKey: "warehouse.bill-create" },
-      { href: "/warehouse/bill",                  label: "พิมพ์บิลส่งของ",           menuKey: "warehouse.bill" },
-      { href: "/warehouse/orders",                label: "ออร์เดอร์ลูกค้า",          menuKey: "warehouse.orders" },
-      { href: "/warehouse/stock",                 label: "สต็อกผ้า",                menuKey: "warehouse.stock" },
-      { href: "/warehouse/stock-deposit",         label: "สต็อกผ้าฝากจัดเก็บ",      menuKey: "warehouse.stock-deposit" },
+      {
+        href: "/warehouse/stock/create",
+        label: "คีย์ผ้าเข้าสต็อก",
+        menuKey: "warehouse.fabric-in",
+      },
+      {
+        href: "/warehouse/stock/scan",
+        label: "สแกนรูปคีย์ผ้าเข้าสต็อก",
+        menuKey: "warehouse.fabric-in-scan",
+      },
+      {
+        href: "/warehouse/fabric-in/review",
+        label: "ตรวจสอบคีย์ผ้า",
+        menuKey: "warehouse.fabric-review",
+      },
+      {
+        href: "/warehouse/stock/purchase",
+        label: "คีย์ผ้าซื้อเข้า",
+        menuKey: "warehouse.purchase",
+      },
+      {
+        href: "/warehouse/stock/purchase/review",
+        label: "ตรวจสอบผ้าซื้อเข้า",
+        menuKey: "warehouse.purchase-review",
+      },
+      {
+        href: "/warehouse/bill/create",
+        label: "เปิดบิลผ้า",
+        menuKey: "warehouse.bill-create",
+      },
+      {
+        href: "/warehouse/bill",
+        label: "พิมพ์บิลส่งของ",
+        menuKey: "warehouse.bill",
+      },
+      {
+        href: "/warehouse/orders",
+        label: "ออร์เดอร์ลูกค้า",
+        menuKey: "warehouse.orders",
+      },
+      {
+        href: "/warehouse/stock",
+        label: "สต็อกผ้า",
+        menuKey: "warehouse.stock",
+      },
+      {
+        href: "/warehouse/stock-deposit",
+        label: "สต็อกผ้าฝากจัดเก็บ",
+        menuKey: "warehouse.stock-deposit",
+      },
       {
         href: "/warehouse/reports",
         label: "รายงาน",
@@ -93,18 +154,6 @@ const navItems: NavItem[] = [
     ],
   },
   {
-    label: "ระบบส่งคืน",
-    icon: (
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-        <path d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2z"/>
-        <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466"/>
-      </svg>
-    ),
-    children: [
-      { href: "/warehouse/returns", label: "ส่งคืนผ้าซัพพลายเออร์", menuKey: "warehouse.returns" },
-    ],
-  },
-  {
     label: "ระบบวัตถุดิบ",
     icon: (
       <svg
@@ -114,22 +163,63 @@ const navItems: NavItem[] = [
         fill="currentColor"
         viewBox="0 0 16 16"
       >
-        <path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 11.5V4a1 1 0 0 1-1-1zm2 3v7.5A1.5 1.5 0 0 0 3.5 13h9a1.5 1.5 0 0 0 1.5-1.5V4zm13-1V1H1v2z"/>
-        <path d="M5 7.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5"/>
+        <path d="M0 1a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1v7.5a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 1 11.5V4a1 1 0 0 1-1-1zm2 3v7.5A1.5 1.5 0 0 0 3.5 13h9a1.5 1.5 0 0 0 1.5-1.5V4zm13-1V1H1v2z" />
+        <path d="M5 7.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5" />
       </svg>
     ),
     children: [
-      { href: "/warehouse/material/create",               label: "นำเข้าวัตถุดิบ",           menuKey: "material.create" },
-      { href: "/warehouse/material/history",              label: "ประวัติการนำเข้า",         menuKey: "material.history" },
-      { href: "/warehouse/material/requisition",          label: "เบิกวัตถุดิบภายใน",        menuKey: "material.requisition" },
-      { href: "/warehouse/material/requisition-history",  label: "ประวัติการเบิก",           menuKey: "material.requisition-history" },
-      { href: "/warehouse/material/outside",              label: "เบิกวัตถุดิบภายนอก",       menuKey: "material.outside" },
-      { href: "/warehouse/material/outside-history",      label: "ประวัติเบิกภายนอก",        menuKey: "material.outside-history" },
+      {
+        href: "/warehouse/material/create",
+        label: "นำเข้าวัตถุดิบ",
+        menuKey: "material.create",
+      },
+      {
+        href: "/warehouse/material/history",
+        label: "ประวัติการนำเข้า",
+        menuKey: "material.history",
+      },
+      {
+        href: "/warehouse/material/requisition",
+        label: "เบิกวัตถุดิบภายใน",
+        menuKey: "material.requisition",
+      },
+      {
+        href: "/warehouse/material/requisition-history",
+        label: "ประวัติการเบิก",
+        menuKey: "material.requisition-history",
+      },
+      {
+        href: "/warehouse/material/outside",
+        label: "เบิกวัตถุดิบภายนอก",
+        menuKey: "material.outside",
+      },
+      {
+        href: "/warehouse/material/outside-history",
+        label: "ประวัติเบิกภายนอก",
+        menuKey: "material.outside-history",
+      },
+      {
+        href: "/warehouse/returns",
+        label: "ส่งคืนบรรจุภัณฑ์",
+        menuKey: "warehouse.returns",
+      },
     ],
   },
   {
     label: "ตั้งค่า",
-    icon: "⚙️",
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        fill="currentColor"
+        className="bi bi-gear"
+        viewBox="0 0 16 16"
+      >
+        <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0" />
+        <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z" />
+      </svg>
+    ),
     children: [
       { href: "/admin/users", label: "จัดการผู้ใช้", menuKey: "admin.users" },
     ],
@@ -147,14 +237,20 @@ export default function NavLinks({
 
   const findActiveSection = (path: string) => {
     for (const item of navItems) {
-      if (item.children?.some((c) => path === c.href || path.startsWith(c.href + "/"))) {
+      if (
+        item.children?.some(
+          (c) => path === c.href || path.startsWith(c.href + "/"),
+        )
+      ) {
         return item.label;
       }
     }
     return null;
   };
 
-  const [open, setOpen] = useState<string | null>(() => findActiveSection(pathname));
+  const [open, setOpen] = useState<string | null>(() =>
+    findActiveSection(pathname),
+  );
 
   useEffect(() => {
     const section = findActiveSection(pathname);
@@ -168,7 +264,9 @@ export default function NavLinks({
     <div className="space-y-0.5">
       {navItems.map((item) => {
         if (item.children) {
-          const visibleChildren = item.children.filter((c) => allowed(c.menuKey));
+          const visibleChildren = item.children.filter((c) =>
+            allowed(c.menuKey),
+          );
           if (visibleChildren.length === 0) return null;
 
           const isChildActive = (href: string) => {
@@ -177,7 +275,7 @@ export default function NavLinks({
               (c) =>
                 c.href !== href &&
                 c.href.startsWith(href) &&
-                (pathname === c.href || pathname.startsWith(c.href + "/"))
+                (pathname === c.href || pathname.startsWith(c.href + "/")),
             );
             return !hasMoreSpecific && pathname.startsWith(href + "/");
           };
