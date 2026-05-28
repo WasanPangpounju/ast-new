@@ -95,30 +95,19 @@ export async function GET(request: NextRequest) {
           s.lot_count,
           s.produced_fold,
           s.produced_yard,
-          -- Fallback P1→P2→P3 for used_fold
+          -- Match on struct + width + pattern + customer only; no cross-customer fallback
           COALESCE(
             (SELECT SUM(o.out_fold) FROM norm_outs o
              WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
                AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern
                AND o.n_customer = s.n_customer),
-            (SELECT SUM(o.out_fold) FROM norm_outs o
-             WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
-               AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern),
-            (SELECT SUM(o.out_fold) FROM norm_outs o
-             WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width),
             0
           )::int AS used_fold,
-          -- Fallback P1→P2→P3 for used_yard
           COALESCE(
             (SELECT SUM(o.out_yard) FROM norm_outs o
              WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
                AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern
                AND o.n_customer = s.n_customer),
-            (SELECT SUM(o.out_yard) FROM norm_outs o
-             WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
-               AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern),
-            (SELECT SUM(o.out_yard) FROM norm_outs o
-             WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width),
             0
           )::float AS used_yard
         FROM agg_stock s
