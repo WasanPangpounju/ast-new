@@ -328,7 +328,7 @@ export default function WarehouseOrdersPage() {
                       className="hover:bg-blue-50/30 transition-colors"
                     >
                       <td className="hidden sm:table-cell px-2 py-2 md:px-3 md:py-2.5 text-xs text-gray-500 whitespace-nowrap">
-                        {fmtDate(order.createdAt)}
+                        {fmtDate(order.createDate)}
                       </td>
                       <td className="px-2 py-2 md:px-3 md:py-2.5">
                         <div className="font-mono text-blue-600 font-medium text-xs">

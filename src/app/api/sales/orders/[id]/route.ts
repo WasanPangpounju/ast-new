@@ -34,7 +34,7 @@ export async function GET(
 
   const customer = order.customerName
     ? await prisma.customer.findFirst({
-        where: { name: { contains: order.customerName.split(' ')[0], mode: 'insensitive' }, deletedAt: null },
+        where: { name: { contains: order.customerName.trim(), mode: 'insensitive' }, deletedAt: null },
         select: { id: true, name: true, tax: true, address: true, tel: true, email: true },
       })
     : null
