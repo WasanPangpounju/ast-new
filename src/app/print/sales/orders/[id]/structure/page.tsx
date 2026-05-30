@@ -215,7 +215,7 @@ export default function StructurePrintPage({
   const yarnCount = (() => {
     const raw = nd(order.fabricStructure);
     if (!raw) return null;
-    const slashIdx = raw.search(/\/(?![^(]*\))/);
+    const slashIdx = raw.search(/(?<!\/)\/(?!\/)(?![^(]*\))/);
     const structRaw =
       slashIdx >= 0 ? raw.slice(0, slashIdx).trim() : raw.trim();
     const wRaw = slashIdx >= 0 ? raw.slice(slashIdx + 1).trim() : "";
@@ -223,7 +223,8 @@ export default function StructurePrintPage({
       .split("*")
       .map((p) => p.trim())
       .filter(Boolean);
-    const wParts = wRaw
+    const wRawCounts = wRaw.split(/(?<!\/)\/(?!\/)(?![^(]*\))/)[0].trim();
+    const wParts = wRawCounts
       .split("*")
       .map((p) => p.trim())
       .filter(Boolean);
@@ -254,6 +255,7 @@ export default function StructurePrintPage({
       <style>{`
         @media print {
           .no-print { display: none !important; }
+          nextjs-portal { display: none !important; }
           html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
           @page { size: 10in 6.5in landscape; margin: 8mm 12mm; }
           #print-body { page-break-after: avoid; page-break-inside: avoid; break-after: avoid; break-inside: avoid; }

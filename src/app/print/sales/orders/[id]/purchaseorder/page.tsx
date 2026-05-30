@@ -177,8 +177,9 @@ export default function PurchaseOrderPrintPage({
       <style>{`
         @media print {
           .no-print { display: none !important; }
-          body { margin: 0; }
-          @page { size: A4; margin: 10mm 10mm; }
+          nextjs-portal { display: none !important; }
+          body { margin: 0; padding: 8mm 10mm; }
+          @page { size: A4; margin: 0; }
         }
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; }
       `}</style>
@@ -338,7 +339,7 @@ export default function PurchaseOrderPrintPage({
                     .trim();
 
                   const raw = order.fabricStructure || "";
-                  const slashIdx = raw.search(/\/(?![^(]*\))/);
+                  const slashIdx = raw.search(/(?<!\/)\/(?!\/)(?![^(]*\))/);
                   const structRaw =
                     slashIdx >= 0 ? raw.slice(0, slashIdx).trim() : raw.trim();
                   const wRaw =
@@ -348,7 +349,8 @@ export default function PurchaseOrderPrintPage({
                     .split("*")
                     .map((s: string) => s.trim())
                     .filter(Boolean);
-                  const wParts = wRaw
+                  const wRawCounts = wRaw.split(/(?<!\/)\/(?!\/)(?![^(]*\))/)[0].trim();
+                  const wParts = wRawCounts
                     .split("*")
                     .map((s: string) => s.trim())
                     .filter(Boolean);
@@ -504,13 +506,13 @@ export default function PurchaseOrderPrintPage({
         </div>
 
         {/* Signatures */}
-        <div className="grid grid-cols-2 gap-8 mt-16">
+        <div className="grid grid-cols-2 gap-8 mt-8">
           <div className="text-center">
-            <div className="border-b border-gray-500 mb-2 pb-12"></div>
+            <div className="border-b border-gray-500 mb-2 pb-8"></div>
             <p className="font-bold text-sm">ผู้สั่งสินค้า</p>
           </div>
           <div className="text-center">
-            <div className="border-b border-gray-500 mb-2 pb-12"></div>
+            <div className="border-b border-gray-500 mb-2 pb-8"></div>
             <p className="font-bold text-sm">ผู้ขายสินค้า</p>
           </div>
         </div>

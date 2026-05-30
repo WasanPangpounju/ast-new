@@ -687,6 +687,32 @@ export default function StructureEditPage({
                     สร้าง
                   </button>
                 </div>
+                {fabricStructure.trim() && (() => {
+                  const raw = fabricStructure.trim();
+                  const si = raw.search(/(?<!\/)\/(?!\/)(?![^(]*\))/);
+                  const sRaw = si >= 0 ? raw.slice(0, si).trim() : raw.trim();
+                  const wRaw = si >= 0 ? raw.slice(si + 1).trim() : "";
+                  const sp = sRaw.split("*").map((s: string) => s.trim()).filter(Boolean);
+                  const wp = wRaw.split(/(?<!\/)\/(?!\/)(?![^(]*\))/)[0].trim()
+                    .split("*").map((s: string) => s.trim()).filter(Boolean);
+                  if (!sp.length) return null;
+                  return (
+                    <div className="mt-2 inline-block border border-gray-300 rounded px-3 py-1.5 bg-gray-50 text-sm font-medium text-center min-w-32">
+                      {sp.length >= 2 ? (
+                        <div className="grid grid-cols-3 gap-1 text-center">
+                          <span>{sp[0]}</span><span className="text-gray-400">x</span><span>{sp[1]}</span>
+                        </div>
+                      ) : <div>{sp[0]}</div>}
+                      {wp.length >= 2 ? (
+                        <div className="grid grid-cols-3 gap-1 text-center border-t border-gray-500 mt-1 pt-1">
+                          <span>{wp[0]}</span><span className="text-gray-400">x</span><span>{wp[1]}</span>
+                        </div>
+                      ) : wp.length === 1 ? (
+                        <div className="border-t border-gray-500 mt-1 pt-1">{wp[0]}</div>
+                      ) : null}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Row 5: จำนวนด้ายยืน | หน้าผ้า */}
