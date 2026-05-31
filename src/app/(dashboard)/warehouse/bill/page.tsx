@@ -301,7 +301,7 @@ export default function BillListPage() {
                         { label: "ลายผ้า", key: "fabricPattern" },
                         { label: "หน้ากว้าง", key: "fabricW" },
                         { label: "โครงสร้างผ้า (ทางเลือก)", key: "altFabricStruct" },
-                        { label: "เลขที่ใบสั่งซื้อ (ทางเลือก)", key: "altPurchaseOrder" },
+                        { label: "แทนผู้สั่งซื้อ (ทางเลือก)", key: "altPurchaseOrder" },
                       ].map(({ label, key }) => (
                         <div key={key}>
                           <label className="block text-xs text-gray-500 mb-1">{label}</label>

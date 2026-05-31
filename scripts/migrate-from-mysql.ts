@@ -218,6 +218,7 @@ async function main() {
             fabricW: f.fabricW ?? null,
             customerName: f.customerName ?? null,
             receiveName: f.receiveName ?? null,
+            altPurchaseOrder: f.customerReplace ?? f.customer_replace ?? null,
             purchaseOrder: f.purchase_order ?? f.purchaseOrder ?? null,
             orderId: f.order_id ? Number(f.order_id) : null,
             createDate,

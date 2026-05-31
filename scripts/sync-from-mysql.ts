@@ -343,6 +343,7 @@ async function main() {
         fabricW:            s(f_.fabricW),
         customerName:       s(f_.customerName),
         receiveName:        s(f_.receiveName),
+        altPurchaseOrder:   s(f_.customerReplace ?? f_.customer_replace),
         purchaseOrder:      s(f_.purchase_order ?? f_.purchaseOrder),
         orderId:            (rawOrderId && pgOrderIds.has(rawOrderId)) ? rawOrderId : null,
         createDate:         d(f_.createDate ?? f_.create_date),
