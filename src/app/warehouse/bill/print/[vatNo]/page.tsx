@@ -77,23 +77,24 @@ export default function BillPrintPage({
     }
   };
 
-  const fabricCode = first.altFabricStruct
-    ? first.altFabricStruct
-    : `${first.fabricStruct ?? ""} ${first.fabricPattern ?? ""} ${first.fabricW ? `${first.fabricW}''` : ""}`.trim() ||
-      "-";
-
-  const receiverName = first.altPurchaseOrder
-    ? first.altPurchaseOrder
-    : (first.receiveName ?? "-");
-
   const trimCompanyName = (name: string | null): string => {
     if (!name) return "-";
     return name
       .replace(/^บริษัท\s*/u, "")
       .replace(/\s*จำกัด.*/u, "")
-      .replace(/\s*\(.*?\)\s*/gu, "")
       .trim() || "-";
   };
+
+  const fabricCode = first.altFabricStruct
+    ? first.altFabricStruct
+    : `${first.fabricStruct ?? ""} ${first.fabricPattern ?? ""} ${first.fabricW ? `${first.fabricW}''` : ""}`.trim() ||
+      "-";
+
+  const ordererName = first.altPurchaseOrder
+    ? first.altPurchaseOrder
+    : trimCompanyName(first.customerName);
+
+  const receiverName = trimCompanyName(first.receiveName);
 
   const handleDownloadPDF = async () => {
     const el = document.getElementById("print-body");
@@ -286,10 +287,10 @@ export default function BillPrintPage({
                 <div className="flex items-baseline justify-between mb-2 shrink-0 text-[15px] print-sm mt-10">
                   <div>
                     <span className="font-bold">ผู้สั่ง Order by :</span>
-                    <span className="font-bold ml-1 whitespace-nowrap">{trimCompanyName(first.customerName)}</span>
+                    <span className="font-bold ml-1 whitespace-nowrap">{ordererName}</span>
                   </div>
                   <div className="shrink-0 ml-8 text-right">
-                    <span className="font-bold">ผู้รับ Received by :</span>
+                    <span className="font-bold">ผู้รับ Received by</span>
                     <span className="font-bold ml-1 whitespace-nowrap">{trimCompanyName(receiverName)}</span>
                   </div>
                 </div>
@@ -337,7 +338,7 @@ export default function BillPrintPage({
                               return (
                                 <React.Fragment key={c}>
                                   <td className="border border-[#999] px-1 text-center text-sm text-gray-500 w-4 print-sm">
-                                    {slotNo}
+                                    {roll ? slotNo : ""}
                                   </td>
                                   <td className="border border-[#999] px-1 text-center text-lg font-bold print-base">
                                     {roll?.sumYard
@@ -380,16 +381,21 @@ export default function BillPrintPage({
 
                     {/* Right */}
                     <div className="flex-1 flex flex-col justify-between px-4 py-2">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-sm print-sm">รวม</span>
-                        <span className="text-[20px] font-bold print-big">
-                          {totalFold}
-                        </span>
-                        <span className="text-sm print-sm">พับ</span>
-                        <span className="text-[20px] font-bold ml-2 print-big">
-                          {totalYard.toLocaleString()}
-                        </span>
-                        <span className="text-sm print-sm">หลา</span>
+                      <div className="flex items-center gap-3">
+                        <div className="text-center leading-tight">
+                          <div className="text-sm print-sm font-medium">รวม</div>
+                          <div className="text-xs text-gray-500 print-xs">Total</div>
+                        </div>
+                        <span className="text-[20px] font-bold print-big">{totalFold}</span>
+                        <div className="text-center leading-tight">
+                          <div className="text-sm print-sm font-medium">พับ</div>
+                          <div className="text-xs text-gray-500 print-xs">Pieces</div>
+                        </div>
+                        <span className="text-[20px] font-bold ml-2 print-big">{totalYard.toLocaleString()}</span>
+                        <div className="text-center leading-tight">
+                          <div className="text-sm print-sm font-medium">หลา</div>
+                          <div className="text-xs text-gray-500 print-xs">Yards</div>
+                        </div>
                       </div>
                       <div>
                         <p className="text-xs font-medium print-xs">
