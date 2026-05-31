@@ -249,12 +249,12 @@ export default function PurchaseOrderPrintPage({
             <p className="text-base font-semibold text-gray-700">
               {COMPANY.nameEN}
             </p>
-            <p className="text-xs text-gray-600 mt-1">{COMPANY.address}</p>
-            <p className="text-xs text-gray-600">
+            <p className="text-sm text-gray-600 mt-1">{COMPANY.address}</p>
+            <p className="text-sm text-gray-600">
               โทร : {COMPANY.tel} &nbsp;|&nbsp; แฟกซ์ {COMPANY.fax}{" "}
               &nbsp;|&nbsp; Email : {COMPANY.email}
             </p>
-            <p className="text-xs text-gray-600">
+            <p className="text-sm text-gray-600">
               เลขประจำตัวผู้เสียภาษี : {COMPANY.tax}
             </p>
           </div>
@@ -267,7 +267,7 @@ export default function PurchaseOrderPrintPage({
         </div>
 
         {/* Info section */}
-        <div className="grid grid-cols-2 gap-x-8 mb-6 text-sm">
+        <div className="grid grid-cols-2 gap-x-8 mb-6 text-base">
           <div className="space-y-1.5">
             <div className="flex gap-2">
               <span className="font-bold w-32 flex-shrink-0">ชื่อลูกค้า</span>
@@ -308,7 +308,7 @@ export default function PurchaseOrderPrintPage({
 
         {/* Items table */}
         <table
-          className="w-full border-collapse text-sm mb-4"
+          className="w-full border-collapse text-base mb-4"
           style={{
             borderTop: "2px solid #333",
             borderBottom: "2px solid #333",
@@ -371,7 +371,7 @@ export default function PurchaseOrderPrintPage({
                         <div className="grid grid-cols-3 text-center items-center mb-1">
                           <span>
                             {hRatio ? (
-                              <div className="text-xs text-gray-500">
+                              <div className="text-sm text-gray-500">
                                 {hRatio}
                               </div>
                             ) : (
@@ -382,7 +382,7 @@ export default function PurchaseOrderPrintPage({
                           <span>x</span>
                           <span>
                             {wRatio ? (
-                              <div className="text-xs text-gray-500">
+                              <div className="text-sm text-gray-500">
                                 {wRatio}
                               </div>
                             ) : (
@@ -448,7 +448,7 @@ export default function PurchaseOrderPrintPage({
         </table>
 
         {/* Summary */}
-        <div className="flex gap-8 mb-6 text-sm">
+        <div className="flex gap-8 mb-6 text-base">
           {/* Notes left */}
           <div className="flex-1">
             <div className="flex gap-2">
@@ -509,11 +509,11 @@ export default function PurchaseOrderPrintPage({
         <div className="grid grid-cols-2 gap-8 mt-8">
           <div className="text-center">
             <div className="border-b border-gray-500 mb-2 pb-8"></div>
-            <p className="font-bold text-sm">ผู้สั่งสินค้า</p>
+            <p className="font-bold text-base">ผู้สั่งสินค้า</p>
           </div>
           <div className="text-center">
             <div className="border-b border-gray-500 mb-2 pb-8"></div>
-            <p className="font-bold text-sm">ผู้ขายสินค้า</p>
+            <p className="font-bold text-base">ผู้ขายสินค้า</p>
           </div>
         </div>
       </div>

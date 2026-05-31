@@ -6,6 +6,8 @@ import html2canvas from "html2canvas";
 interface OrderData {
   id: number;
   vat: string;
+  billNo: number | null;
+  surcharge: string | null;
   purchaseOrder: string;
   customerName: string | null;
   fabricId: string | null;
@@ -25,6 +27,7 @@ interface OrderData {
     phewNumber: string | null;
     phewW: string | null;
     stackType: string | null;
+    vat: string | null;
   } | null;
   fabricAstStructure: {
     yarnHType: string | null;
@@ -79,10 +82,10 @@ function Field({
 }) {
   return (
     <div className={`flex items-baseline gap-2 py-0.5 ${className}`}>
-      <span className="font-bold text-sm whitespace-nowrap w-32 shrink-0">
+      <span className="font-bold text-base whitespace-nowrap w-36 shrink-0">
         {label} :
       </span>
-      <span className="text-sm flex-1 border-b border-dashed border-gray-400 pb-0.5 min-w-0">
+      <span className="text-base flex-1 border-b border-dashed border-gray-400 pb-0.5 min-w-0">
         {value}
       </span>
     </div>
@@ -105,7 +108,11 @@ export default function StructurePrintPage({
         if (!r.ok) throw new Error("ไม่พบข้อมูล");
         return r.json();
       })
-      .then((d) => setOrder(d.order))
+      .then((d) => {
+        console.log("[structure] order data:", d.order);
+        console.log("[structure] fabricAstStructure:", d.order?.fabricAstStructure);
+        setOrder(d.order);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
@@ -132,47 +139,31 @@ export default function StructurePrintPage({
 
   const hRatio1 = nd(s?.yarnHRatio1);
   const wRatio1 = nd(s?.yarnWRatio1);
-  const showRatioRow = hRatio1 || wRatio1;
-  const hCount1 = nd(s?.yarnHCount1) ?? "";
-  const wCount1 = nd(s?.yarnWCount1) ?? "";
+
+  const cleanName = (v: string | null | undefined) =>
+    v?.replace("บริษัท", "").replace("จำกัด", "").trim();
 
   const warpYarnLine = (() => {
     const parts: string[] = [];
-    const add = (v: string | null | undefined) => {
-      const c = nd(v);
-      if (c) parts.push(c);
-    };
+    const add = (v: string | null | undefined) => { const c = nd(v); if (c) parts.push(c); };
     add(s?.yarnHType);
-    add(s?.subNameH1?.replace("บริษัท", "").trim());
-    if (nd(s?.yarnHType2)) {
-      parts.push("+ " + nd(s?.yarnHType2));
-      add(s?.subNameH2?.replace("บริษัท", "").replace("จำกัด", "").trim());
-    }
+    add(cleanName(s?.subNameH1));
+    if (nd(s?.yarnHType2)) parts.push("+ " + nd(s?.yarnHType2));
+    add(cleanName(s?.subNameH2));
     return parts.join(" ");
   })();
 
   const weftYarnLine = (() => {
     const parts: string[] = [];
-    const add = (v: string | null | undefined) => {
-      const c = nd(v);
-      if (c) parts.push(c);
-    };
-    if (nd(s?.yarnWType)) {
-      parts.push(nd(s?.yarnWType)!);
-      add(s?.subNameW1?.replace("บริษัท", "").trim());
-    }
-    if (nd(s?.yarnWType2)) {
-      parts.push("+ " + nd(s?.yarnWType2));
-      add(s?.subNameW2?.replace("บริษัท", "").replace("จำกัด", "").trim());
-    }
-    if (nd(s?.yarnWType3)) {
-      parts.push("+ " + nd(s?.yarnWType3));
-      add(s?.subNameW3?.replace("บริษัท", "").replace("จำกัด", "").trim());
-    }
-    if (nd(s?.yarnWType4)) {
-      parts.push("+ " + nd(s?.yarnWType4));
-      add(s?.subNameW4?.replace("บริษัท", "").replace("จำกัด", "").trim());
-    }
+    const add = (v: string | null | undefined) => { const c = nd(v); if (c) parts.push(c); };
+    if (nd(s?.yarnWType)) parts.push(nd(s?.yarnWType)!);
+    add(cleanName(s?.subNameW1));
+    if (nd(s?.yarnWType2)) parts.push("+ " + nd(s?.yarnWType2));
+    add(cleanName(s?.subNameW2));
+    if (nd(s?.yarnWType3)) parts.push("+ " + nd(s?.yarnWType3));
+    add(cleanName(s?.subNameW3));
+    if (nd(s?.yarnWType4)) parts.push("+ " + nd(s?.yarnWType4));
+    add(cleanName(s?.subNameW4));
     return parts.join(" ");
   })();
 
@@ -215,19 +206,33 @@ export default function StructurePrintPage({
   const yarnCount = (() => {
     const raw = nd(order.fabricStructure);
     if (!raw) return null;
-    const slashIdx = raw.search(/(?<!\/)\/(?!\/)(?![^(]*\))/);
-    const structRaw =
-      slashIdx >= 0 ? raw.slice(0, slashIdx).trim() : raw.trim();
-    const wRaw = slashIdx >= 0 ? raw.slice(slashIdx + 1).trim() : "";
-    const structParts = structRaw
-      .split("*")
-      .map((p) => p.trim())
-      .filter(Boolean);
-    const wRawCounts = wRaw.split(/(?<!\/)\/(?!\/)(?![^(]*\))/)[0].trim();
-    const wParts = wRawCounts
-      .split("*")
-      .map((p) => p.trim())
-      .filter(Boolean);
+    // Find first single slash (not //) by masking // as null bytes (preserves positions)
+    const singleSlashIdx = (s: string) => s.replace(/\/\//g, "\0\0").indexOf("/");
+    const si = singleSlashIdx(raw);
+    if (si < 0) {
+      return { structParts: raw.split("*").map((p) => p.trim()).filter(Boolean), wParts: [] as string[] };
+    }
+    const part1 = raw.slice(0, si).trim();
+    const rest = raw.slice(si + 1).trim();
+    let structParts: string[];
+    let countsStr: string;
+    if (part1.includes("*")) {
+      structParts = part1.split("*").map((p) => p.trim()).filter(Boolean);
+      const wi = singleSlashIdx(rest);
+      countsStr = wi >= 0 ? rest.slice(0, wi).trim() : rest.trim();
+    } else {
+      const si2 = singleSlashIdx(rest);
+      if (si2 < 0) {
+        structParts = [part1].filter(Boolean);
+        countsStr = rest.trim();
+      } else {
+        structParts = [part1, rest.slice(0, si2).trim()].filter(Boolean);
+        const rest2 = rest.slice(si2 + 1).trim();
+        const wi2 = singleSlashIdx(rest2);
+        countsStr = wi2 >= 0 ? rest2.slice(0, wi2).trim() : rest2.trim();
+      }
+    }
+    const wParts = countsStr.split("*").map((p) => p.trim()).filter((p) => p && /^\d/.test(p));
     return { structParts, wParts };
   })();
 
@@ -318,7 +323,7 @@ export default function StructurePrintPage({
           className="max-w-5xl mx-auto p-8 print:p-4 bg-white shadow-xl print:shadow-none"
         >
           {/* Header */}
-          <div className="flex items-baseline gap-8 mb-4 font-bold text-sm">
+          <div className="flex items-baseline gap-8 mb-4 font-bold text-base">
             <span>
               ชื่อลูกค้า:{" "}
               {order.customerName
@@ -327,7 +332,7 @@ export default function StructurePrintPage({
                 .trim() ?? "-"}
             </span>
             <span>วันที่: {fmtDate(order.createDate)}</span>
-            <span>No.: {order.purchaseOrder}</span>
+            <span>No.: {order.id ?? order.purchaseOrder}</span>
           </div>
 
           {/* Yarn count + fabric info row */}
@@ -338,36 +343,36 @@ export default function StructurePrintPage({
               {(yarnCount || nd(fa?.fabricW)) && (
                 <div className="flex-1 flex items-center gap-6">
                   {yarnCount && (
-                    <div className="min-w-80">
+                    <div className="inline-block w-90 items-center">
                       {yarnCount.structParts.length >= 2 && (
-                        <div className="grid grid-cols-3 text-center mb-0.5">
-                          <div>
-                            {hRatio1 && <div className="text-xs text-gray-500">{hRatio1}</div>}
-                            <span className="font-semibold">{yarnCount.structParts[0]}</span>
+                        <div className="flex justify-center items-center gap-3 mb-0.5">
+                          <div className="text-center whitespace-nowrap">
+                            {hRatio1 && <div className="text-sm text-gray-500">{hRatio1}</div>}
+                            <span className="font-semibold text-lg">{yarnCount.structParts[0]}</span>
                           </div>
-                          <div className="font-bold">x</div>
-                          <div>
-                            {wRatio1 && <div className="text-xs text-gray-500">{wRatio1}</div>}
-                            <span className="font-semibold">{yarnCount.structParts[1]}</span>
+                          <div className="font-bold text-lg px-1">x</div>
+                          <div className="text-center whitespace-nowrap">
+                            {wRatio1 && <div className="text-sm text-gray-500">{wRatio1}</div>}
+                            <span className="font-semibold text-lg">{yarnCount.structParts[1]}</span>
                           </div>
                         </div>
                       )}
                       {yarnCount.structParts.length === 1 && (
-                        <div className="text-center font-semibold mb-0.5">{yarnCount.structParts[0]}</div>
+                        <div className="text-center font-semibold text-lg mb-0.5 whitespace-nowrap">{yarnCount.structParts[0]}</div>
                       )}
                       {yarnCount.wParts.length >= 2 ? (
-                        <div className="grid grid-cols-3 text-center border-t-2 border-gray-800 pt-1 font-bold text-base">
-                          <span>{yarnCount.wParts[0]}</span>
-                          <span>x</span>
-                          <span>{yarnCount.wParts[1]}</span>
+                        <div className="flex justify-center items-center gap-3 border-t-2 border-gray-800 pt-1 font-bold text-xl">
+                          <span className="whitespace-nowrap">{yarnCount.wParts[0]}</span>
+                          <span className="px-1">x</span>
+                          <span className="whitespace-nowrap">{yarnCount.wParts[1]}</span>
                         </div>
                       ) : yarnCount.wParts.length === 1 ? (
-                        <div className="text-center border-t-2 border-gray-800 pt-1 font-bold text-base">{yarnCount.wParts[0]}</div>
+                        <div className="text-center border-t-2 border-gray-800 pt-1 font-bold text-xl whitespace-nowrap">{yarnCount.wParts[0]}</div>
                       ) : null}
                     </div>
                   )}
                   {nd(fa?.fabricW) && (
-                    <span className="font-semibold text-sm pb-0.5">{nd(fa?.fabricW)} &quot;</span>
+                    <span className="font-semibold text-base pb-0.5">{nd(fa?.fabricW)} &quot;</span>
                   )}
                 </div>
               )}
@@ -381,59 +386,36 @@ export default function StructurePrintPage({
           )}
 
           {/* Fields */}
-          <div className="flex gap-8 mt-3 text-sm">
+          <div className="flex gap-8 mt-3 text-base">
             {/* Left column */}
             <div className="flex-1 flex flex-col">
-              {nd(fa?.yarnHCount) && (
-                <Field label="จำนวนด้ายยืน" value={nd(fa?.yarnHCount)!} />
-              )}
-              {warpYarnLine && (
-                <Field label="ชนิดด้ายยืน" value={warpYarnLine} />
-              )}
-              {weftYarnLine && (
-                <Field label="ชนิดด้ายพุ่ง" value={weftYarnLine} />
-              )}
-              {nd(fa?.phewW) && (
-                <Field label="หน้าหวีกว้าง" value={`${nd(fa?.phewW)} นิ้ว`} />
-              )}
-              {machineType && (
-                <Field label="ชนิดเครื่องทอ" value={machineType} />
-              )}
+              <Field label="จำนวนด้ายยืน" value={nd(fa?.yarnHCount) ?? ""} />
+              <Field label="ชนิดด้ายยืน" value={warpYarnLine} />
+              <Field label="ชนิดด้ายพุ่ง" value={weftYarnLine} />
+              <Field label="จำนวนด้ายพุ่ง" value={nd(s?.yarnWCount1) ?? ""} />
+              <Field label="ฟันหวีเบอร์" value={nd(fa?.phewNumber) ?? ""} />
+              <Field label="พ่นสีลงผ้า" value={nd(fa?.vat) ?? ""} />
+              <Field
+                label="ออร์เดอร์สืบ"
+                value={orderQty.raw > 0 ? `${orderQty.value} ${orderQty.unit}` : ""}
+              />
+              <Field label="ชนิดเครื่องทอ" value={machineType} />
             </div>
             {/* Right column */}
             <div className="flex-1 flex flex-col">
-              {nd(order.fabricId) && (
-                <Field label="รหัสผ้า" value={nd(order.fabricId)!} />
-              )}
-              {nd(s?.yarnWCount1) && (
-                <Field label="จำนวนด้ายพุ่ง" value={nd(s?.yarnWCount1)!} />
-              )}
-              {nd(fa?.phewNumber) && (
-                <Field label="ฟันหวีเบอร์" value={nd(fa?.phewNumber)!} />
-              )}
-              {nd(order.vat) && (
-                <Field label="พ่นสีลงผ้า" value={nd(order.vat)!} />
-              )}
-              {orderQty.raw > 0 && (
-                <Field
-                  label="ออร์เดอร์สืบ"
-                  value={`${orderQty.value} ${orderQty.unit}`}
-                />
-              )}
-              {order.orderDeadlines.length > 0 && (
-                <Field
-                  label="กำหนดส่ง"
-                  value={order.orderDeadlines
-                    .map(
-                      (d, i) =>
-                        `${i + 1}. ${fmtDate(d.dt)}${d.qty ? ` ${d.qty.toLocaleString()} ${d.unit ?? "หลา"}` : ""}${d.pct ? ` (${d.pct}%)` : ""}`,
-                    )
-                    .join("  ")}
-                />
-              )}
-              {nd(order.machineNumber) && (
-                <Field label="เบอร์เครื่อง" value={nd(order.machineNumber)!} />
-              )}
+              <Field label="รหัสผ้า" value={nd(order.fabricId) ?? ""} />
+              <Field label="หน้าผ้ากว้าง" value={nd(fa?.fabricW) ? `${nd(fa?.fabricW)} นิ้ว` : ""} className="mt-10" />
+              <Field label="หน้าหวีกว้าง" value={nd(fa?.phewW) ? `${nd(fa?.phewW)} นิ้ว` : ""} />
+              <Field
+                label="กำหนดส่ง"
+                value={order.orderDeadlines.length > 0
+                  ? order.orderDeadlines
+                      .map((d, i) => `${i + 1}. ${fmtDate(d.dt)}${d.qty ? ` ${d.qty.toLocaleString()} ${d.unit ?? "หลา"}` : ""}${d.pct ? ` (${d.pct}%)` : ""}`)
+                      .join("  ")
+                  : ""}
+                  className="mt-1"
+              />
+              <Field label="เบอร์เครื่อง" value={nd(order.machineNumber) ?? ""} />
             </div>
           </div>
 
@@ -442,8 +424,8 @@ export default function StructurePrintPage({
           order.vat === "SOX" ||
           (order.po && order.po !== "no data") ||
           orderBase > 0 ? (
-            <div className="mt-3 text-sm">
-              <span className="font-bold">หมายเหตุ</span>
+            <div className="mt-3 text-base">
+              <span className="font-bold">หมายเหตุ :</span>
               <div className="ml-1 inline">
                 {note && note !== "no data" && <span> {note}</span>}
                 {order.vat === "SOX" && (
@@ -452,7 +434,7 @@ export default function StructurePrintPage({
                 {order.po && order.po !== "no data" && <span> {order.po}</span>}
               </div>
               {orderBase > 0 && (
-                <div className="mt-0.5">
+                <div className="mt-0.5 font-bold">
                   ออร์เดอร์ : {orderBase.toLocaleString()}{" "}
                   {isM ? "เมตร" : "หลา"}
                 </div>
@@ -464,11 +446,11 @@ export default function StructurePrintPage({
           <div className="grid grid-cols-2 gap-16 mt-8">
             <div>
               <div className="border-b border-gray-500 pb-6"></div>
-              <p className="text-sm mt-1 text-center">ผู้สั่งงาน</p>
+              <p className="text-base mt-1 text-center">ผู้สั่งงาน</p>
             </div>
             <div>
               <div className="border-b border-gray-500 pb-6"></div>
-              <p className="text-sm mt-1 text-center">ผู้ตรวจสอบ</p>
+              <p className="text-base mt-1 text-center">ผู้ตรวจสอบ</p>
             </div>
           </div>
         </div>
