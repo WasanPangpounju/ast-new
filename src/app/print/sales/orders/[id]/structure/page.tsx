@@ -332,7 +332,7 @@ export default function StructurePrintPage({
                 .trim() ?? "-"}
             </span>
             <span>วันที่: {fmtDate(order.createDate)}</span>
-            <span>No.: {order.id ?? order.purchaseOrder}</span>
+            <span>No.: {order.billNo ?? order.purchaseOrder}</span>
           </div>
 
           {/* Yarn count + fabric info row */}
