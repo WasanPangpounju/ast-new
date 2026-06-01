@@ -109,7 +109,7 @@ export default function StructurePrintPage({
         return r.json();
       })
       .then((d) => {
-        console.log("[structure] order data:", d.order);
+        console.log("[structure] fabricAst:", d.order?.fabricAst);
         console.log("[structure] fabricAstStructure:", d.order?.fabricAstStructure);
         setOrder(d.order);
       })
@@ -332,7 +332,7 @@ export default function StructurePrintPage({
                 .trim() ?? "-"}
             </span>
             <span>วันที่: {fmtDate(order.createDate)}</span>
-            <span>No.: {order.id ?? order.purchaseOrder}</span>
+            <span>No.: {order.billNo}</span>
           </div>
 
           {/* Yarn count + fabric info row */}

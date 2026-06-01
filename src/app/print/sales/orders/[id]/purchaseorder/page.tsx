@@ -164,6 +164,9 @@ export default function PurchaseOrderPrintPage({
     pdf.save(`ใบสั่งขาย-${order.purchaseOrder}.pdf`);
   };
 
+  console.log("isSurchargeValid:", isSurchargeValid);
+  console.log("surcharge:", surcharge);
+  console.log("surchargeRaw:", surchargeRaw);
   console.log("fabricStructure:", order.fabricStructure);
   console.log("fabricW:", order.fabricAst?.fabricW);
   console.log("fabricPattern:", order.fabricPattern);
@@ -349,7 +352,9 @@ export default function PurchaseOrderPrintPage({
                     .split("*")
                     .map((s: string) => s.trim())
                     .filter(Boolean);
-                  const wRawCounts = wRaw.split(/(?<!\/)\/(?!\/)(?![^(]*\))/)[0].trim();
+                  const wRawCounts = wRaw
+                    .split(/(?<!\/)\/(?!\/)(?![^(]*\))/)[0]
+                    .trim();
                   const wParts = wRawCounts
                     .split("*")
                     .map((s: string) => s.trim())
@@ -475,7 +480,9 @@ export default function PurchaseOrderPrintPage({
               </div>
             </div>
             <div className="flex justify-between">
-              <span>หักส่วนลด {discountPct} %</span>
+              <span>
+                <span className="underline">หัก</span> ส่วนลด {discountPct} %
+              </span>
               <div className="flex gap-2">
                 <strong>{fmt2(discountAmt)}</strong>
                 <span>บาท</span>
