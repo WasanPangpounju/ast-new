@@ -383,85 +383,98 @@ export default function StructureEditPage({
   // ─── Load BillOfStructure ─────────────────────────────────────────────────
 
   useEffect(() => {
-    fetch(`/api/bill-of-structures?sourceOrderId=${id}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.error) {
-          setError(d.error);
-          return;
-        }
-        const b = d.billOfStructure;
-        setBosId(b.id);
-        setPurchaseOrder(b.purchaseOrder ?? "");
-        setCreateDate(b.createDate ? b.createDate.slice(0, 10) : "");
-        setVat(b.vat ?? "");
-        setCustomerName(b.customerName ?? "");
-        setCoordinator(b.emp ?? "");
-        setFabricId(b.fabricId ?? "");
-        setFabricPattern(b.fabricPattern ?? "");
-        setFabricStructure(b.fabricStructure ?? "");
-        setYarnHCount(b.yarnHCount ?? "");
-        setFabricW(b.fabricW ?? "");
-        setWarpYarn1(b.warpYarn1 ?? "");
-        setWarpComp1(b.warpComp1 ?? "");
-        setWarpCount1(b.warpCount1 ?? "");
-        setWarpRatio1(b.warpRatio1 ?? "");
-        setWarpYarn2(b.warpYarn2 ?? "");
-        setWarpComp2(b.warpComp2 ?? "");
-        setWarpCount2(b.warpCount2 ?? "");
-        setWarpRatio2(b.warpRatio2 ?? "");
-        setWeftYarn1(b.weftYarn1 ?? "");
-        setWeftComp1(b.weftComp1 ?? "");
-        setWeftCount1(b.weftCount1 ?? "");
-        setWeftRatio1(b.weftRatio1 ?? "");
-        setWeftYarn2(b.weftYarn2 ?? "");
-        setWeftComp2(b.weftComp2 ?? "");
-        setWeftCount2(b.weftCount2 ?? "");
-        setWeftRatio2(b.weftRatio2 ?? "");
-        setWeftYarn3(b.weftYarn3 ?? "");
-        setWeftComp3(b.weftComp3 ?? "");
-        setWeftCount3(b.weftCount3 ?? "");
-        setWeftRatio3(b.weftRatio3 ?? "");
-        setWeftYarn4(b.weftYarn4 ?? "");
-        setWeftComp4(b.weftComp4 ?? "");
-        setWeftCount4(b.weftCount4 ?? "");
-        setWeftRatio4(b.weftRatio4 ?? "");
-        setPhewNumber(b.phewNumber ?? "");
-        setPhewW(b.phewW ?? "");
-        setStackType(b.stackType ?? "");
-        const yard = b.orderSumYard ?? "";
-        setOrderSumYard(yard ? String(yard) : "");
-        setOrderSumMeter(yard ? (parseFloat(yard) * 0.9144).toFixed(2) : "");
-        setFabricSPY(b.fabricSPY != null ? String(b.fabricSPY) : "");
-        setPriceYard(b.priceYard != null ? String(b.priceYard) : "");
-        setPriceM(b.priceM != null ? String(b.priceM) : "");
-        setDiscountP(b.discountP != null ? String(b.discountP) : "");
-        setMachineNumber(b.machineNumber ?? "");
-        setSurcharge(b.surcharge ?? "");
-        setCommission(b.commission != null ? String(b.commission) : "");
-        setPo(b.po ?? "");
-        setNote(b.note ?? "");
-        setProductionNote(b.productionNote ?? "");
-        setPayment(b.payment ?? "");
-        if (Array.isArray(b.deadlines) && b.deadlines.length > 0) {
-          setDeadlines(
-            b.deadlines.map(
-              (dl: {
-                dt: string | null;
-                qty: number | null;
-                unit: string | null;
-                pct: number | null;
-              }) => ({
-                dt: dl.dt ? dl.dt.slice(0, 10) : "",
-                qty: dl.qty != null ? String(dl.qty) : "",
-                unit: dl.unit ?? "หลา",
-                pct: dl.pct != null ? String(dl.pct) : "",
-              }),
-            ),
-          );
-        }
-      })
-      .catch(() => setError("โหลดข้อมูลไม่สำเร็จ"))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function applyBos(b: any) {
+      setBosId(b.id);
+      setPurchaseOrder(b.purchaseOrder ?? "");
+      setCreateDate(b.createDate ? b.createDate.slice(0, 10) : "");
+      setVat(b.vat ?? "");
+      setCustomerName(b.customerName ?? "");
+      setCoordinator(b.emp ?? "");
+      setFabricId(b.fabricId ?? "");
+      setFabricPattern(b.fabricPattern ?? "");
+      setFabricStructure(b.fabricStructure ?? "");
+      setYarnHCount(b.yarnHCount ?? "");
+      setFabricW(b.fabricW ?? "");
+      setWarpYarn1(b.warpYarn1 ?? "");
+      setWarpComp1(b.warpComp1 ?? "");
+      setWarpCount1(b.warpCount1 ?? "");
+      setWarpRatio1(b.warpRatio1 ?? "");
+      setWarpYarn2(b.warpYarn2 ?? "");
+      setWarpComp2(b.warpComp2 ?? "");
+      setWarpCount2(b.warpCount2 ?? "");
+      setWarpRatio2(b.warpRatio2 ?? "");
+      setWeftYarn1(b.weftYarn1 ?? "");
+      setWeftComp1(b.weftComp1 ?? "");
+      setWeftCount1(b.weftCount1 ?? "");
+      setWeftRatio1(b.weftRatio1 ?? "");
+      setWeftYarn2(b.weftYarn2 ?? "");
+      setWeftComp2(b.weftComp2 ?? "");
+      setWeftCount2(b.weftCount2 ?? "");
+      setWeftRatio2(b.weftRatio2 ?? "");
+      setWeftYarn3(b.weftYarn3 ?? "");
+      setWeftComp3(b.weftComp3 ?? "");
+      setWeftCount3(b.weftCount3 ?? "");
+      setWeftRatio3(b.weftRatio3 ?? "");
+      setWeftYarn4(b.weftYarn4 ?? "");
+      setWeftComp4(b.weftComp4 ?? "");
+      setWeftCount4(b.weftCount4 ?? "");
+      setWeftRatio4(b.weftRatio4 ?? "");
+      setPhewNumber(b.phewNumber ?? "");
+      setPhewW(b.phewW ?? "");
+      setStackType(b.stackType ?? "");
+      const yard = b.orderSumYard ?? "";
+      setOrderSumYard(yard ? String(yard) : "");
+      setOrderSumMeter(yard ? (parseFloat(yard) * 0.9144).toFixed(2) : "");
+      setFabricSPY(b.fabricSPY != null ? String(b.fabricSPY) : "");
+      setPriceYard(b.priceYard != null ? String(b.priceYard) : "");
+      setPriceM(b.priceM != null ? String(b.priceM) : "");
+      setDiscountP(b.discountP != null ? String(b.discountP) : "");
+      setMachineNumber(b.machineNumber ?? "");
+      setSurcharge(b.surcharge ?? "");
+      setCommission(b.commission != null ? String(b.commission) : "");
+      setPo(b.po ?? "");
+      setNote(b.note ?? "");
+      setProductionNote(b.productionNote ?? "");
+      setPayment(b.payment ?? "");
+      if (Array.isArray(b.deadlines) && b.deadlines.length > 0) {
+        setDeadlines(
+          b.deadlines.map(
+            (dl: {
+              dt: string | null;
+              qty: number | null;
+              unit: string | null;
+              pct: number | null;
+            }) => ({
+              dt: dl.dt ? dl.dt.slice(0, 10) : "",
+              qty: dl.qty != null ? String(dl.qty) : "",
+              unit: dl.unit ?? "หลา",
+              pct: dl.pct != null ? String(dl.pct) : "",
+            }),
+          ),
+        );
+      }
+    }
+
+    async function load() {
+      const r = await fetch(`/api/bill-of-structures?sourceOrderId=${id}`);
+      const d = await r.json();
+      if (r.status === 404) {
+        // BOS ยังไม่เคยถูกสร้าง — สร้างอัตโนมัติจากข้อมูล order
+        const r2 = await fetch(`/api/sales/orders/${id}/open-structure`, {
+          method: "POST",
+        });
+        const d2 = await r2.json();
+        if (!r2.ok) throw new Error(d2.error ?? "สร้างใบโครงสร้างไม่สำเร็จ");
+        applyBos(d2.billOfStructure);
+        return;
+      }
+      if (!r.ok || d.error) throw new Error(d.error ?? "โหลดข้อมูลไม่สำเร็จ");
+      applyBos(d.billOfStructure);
+    }
+
+    load()
+      .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
   }, [id]);
 
