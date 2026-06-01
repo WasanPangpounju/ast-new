@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 interface Bill {
   vatType: string;
@@ -14,6 +14,13 @@ interface Bill {
   totalYard: number;
   altFabricStruct: string | null;
   altPurchaseOrder: string | null;
+  hasStockMatch: boolean;
+  stockFabricStruct: string | null;
+  stockFabricW: string | null;
+  stockFabricPattern: string | null;
+  stockCustomer: string | null;
+  orderId: number | null;
+  purchaseOrder: string | null;
 }
 
 interface EditForm {
@@ -32,6 +39,33 @@ interface FoldItem {
   sumYard: number;
 }
 
+interface StockResult {
+  fabricStruct: string;
+  fabricPattern: string;
+  fabricW: string;
+  fabricCode: string | null;
+  customer: string;
+  produced_fold: number;
+  produced_yard: number;
+  used_fold: number;
+  used_yard: number;
+}
+
+interface OrderResult {
+  id: number;
+  purchaseOrder: string;
+  customerName: string;
+  fabricStructure: string;
+  fabricPattern: string;
+  fabricId: string;
+  fabricW: string;
+  orderSumYard: number;
+  deliveredYard: number;
+  remainingYard: number;
+}
+
+type ActiveTab = 'bill' | 'stock' | 'order' | 'folds';
+
 export default function BillListPage() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [total, setTotal] = useState(0);
@@ -39,9 +73,10 @@ export default function BillListPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [applied, setApplied] = useState("");
+  const [noStockOnly, setNoStockOnly] = useState(false);
 
   const [manageBill, setManageBill] = useState<Bill | null>(null);
-  const [activeTab, setActiveTab] = useState<'bill' | 'folds'>('bill');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('bill');
   const [editForm, setEditForm] = useState<EditForm>({ customerName: "", receiveName: "", fabricStruct: "", fabricPattern: "", fabricW: "", altFabricStruct: "", altPurchaseOrder: "" });
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -52,15 +87,28 @@ export default function BillListPage() {
   const [foldSaving, setFoldSaving] = useState(false);
   const [confirmDeleteFold, setConfirmDeleteFold] = useState<number | null>(null);
 
+  const [stockSearch, setStockSearch] = useState("");
+  const [stockResults, setStockResults] = useState<StockResult[]>([]);
+  const [stockSearching, setStockSearching] = useState(false);
+  const [stockSaving, setStockSaving] = useState(false);
+  const stockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [orderSearch, setOrderSearch] = useState("");
+  const [orderResults, setOrderResults] = useState<OrderResult[]>([]);
+  const [orderSearching, setOrderSearching] = useState(false);
+  const [orderSaving, setOrderSaving] = useState(false);
+  const orderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fetchBills = useCallback(() => {
     setLoading(true);
     const p = new URLSearchParams({ page: String(page) });
     if (applied) p.set("search", applied);
+    if (noStockOnly) p.set("noStockOnly", "1");
     fetch(`/api/warehouse/bill?${p}`)
       .then((r) => r.json())
       .then((d) => { setBills(d.bills ?? []); setTotal(d.total ?? 0); })
       .finally(() => setLoading(false));
-  }, [page, applied]);
+  }, [page, applied, noStockOnly]);
 
   useEffect(() => { fetchBills(); }, [fetchBills]);
 
@@ -84,6 +132,24 @@ export default function BillListPage() {
       .finally(() => setFoldsLoading(false));
   }, []);
 
+  const doStockSearch = useCallback((q: string) => {
+    if (!q.trim()) { setStockResults([]); return; }
+    setStockSearching(true);
+    fetch(`/api/warehouse/stock/search?q=${encodeURIComponent(q.trim())}`)
+      .then(r => r.json())
+      .then(d => setStockResults(d.results ?? []))
+      .finally(() => setStockSearching(false));
+  }, []);
+
+  const doOrderSearch = useCallback((q: string) => {
+    if (!q.trim()) { setOrderResults([]); return; }
+    setOrderSearching(true);
+    fetch(`/api/warehouse/orders/search?q=${encodeURIComponent(q.trim())}`)
+      .then(r => r.json())
+      .then(d => setOrderResults(d.orders ?? []))
+      .finally(() => setOrderSearching(false));
+  }, []);
+
   const openManage = (b: Bill) => {
     setManageBill(b);
     setActiveTab('bill');
@@ -99,6 +165,8 @@ export default function BillListPage() {
     setConfirmDelete(false);
     setEditingFold(null);
     setConfirmDeleteFold(null);
+    setStockSearch(""); setStockResults([]);
+    setOrderSearch(""); setOrderResults([]);
   };
 
   const closeManage = () => {
@@ -106,14 +174,108 @@ export default function BillListPage() {
     setConfirmDelete(false);
     setEditingFold(null);
     setConfirmDeleteFold(null);
+    setStockResults([]);
+    setOrderResults([]);
   };
 
-  const switchTab = (tab: 'bill' | 'folds') => {
+  const switchTab = (tab: ActiveTab) => {
     setActiveTab(tab);
     setConfirmDelete(false);
     setEditingFold(null);
     setConfirmDeleteFold(null);
-    if (tab === 'folds' && manageBill) fetchFolds(manageBill.vatType, manageBill.vatNo);
+    if (tab === 'folds' && manageBill) {
+      fetchFolds(manageBill.vatType, manageBill.vatNo);
+    }
+    if (tab === 'stock' && manageBill) {
+      const q = manageBill.stockFabricStruct || manageBill.fabricStruct || "";
+      setStockSearch(q);
+      if (q) doStockSearch(q);
+    }
+    if (tab === 'order' && manageBill) {
+      const q = manageBill.purchaseOrder || manageBill.customerName || "";
+      setOrderSearch(q);
+      if (q) doOrderSearch(q);
+    }
+  };
+
+  const handleStockSearchChange = (v: string) => {
+    setStockSearch(v);
+    if (stockTimer.current) clearTimeout(stockTimer.current);
+    stockTimer.current = setTimeout(() => doStockSearch(v), 400);
+  };
+
+  const handleSelectStock = async (s: StockResult) => {
+    if (!manageBill || stockSaving) return;
+    setStockSaving(true);
+    await fetch("/api/warehouse/bill", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vatType: manageBill.vatType, vatNo: manageBill.vatNo,
+        stockFabricStruct: s.fabricStruct,
+        stockFabricW: s.fabricW,
+        stockFabricPattern: s.fabricPattern,
+        stockCustomer: s.customer,
+      }),
+    });
+    setStockSaving(false);
+    setManageBill(b => b ? { ...b, stockFabricStruct: s.fabricStruct, stockFabricW: s.fabricW, stockFabricPattern: s.fabricPattern, stockCustomer: s.customer, hasStockMatch: true } : b);
+    fetchBills();
+  };
+
+  const handleClearStock = async () => {
+    if (!manageBill || stockSaving) return;
+    setStockSaving(true);
+    await fetch("/api/warehouse/bill", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vatType: manageBill.vatType, vatNo: manageBill.vatNo,
+        stockFabricStruct: null, stockFabricW: null,
+        stockFabricPattern: null, stockCustomer: null,
+      }),
+    });
+    setStockSaving(false);
+    setManageBill(b => b ? { ...b, stockFabricStruct: null, stockFabricW: null, stockFabricPattern: null, stockCustomer: null } : b);
+    fetchBills();
+  };
+
+  const handleOrderSearchChange = (v: string) => {
+    setOrderSearch(v);
+    if (orderTimer.current) clearTimeout(orderTimer.current);
+    orderTimer.current = setTimeout(() => doOrderSearch(v), 400);
+  };
+
+  const handleSelectOrder = async (o: OrderResult) => {
+    if (!manageBill || orderSaving) return;
+    setOrderSaving(true);
+    await fetch("/api/warehouse/bill", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vatType: manageBill.vatType, vatNo: manageBill.vatNo,
+        orderId: o.id, purchaseOrder: o.purchaseOrder,
+      }),
+    });
+    setOrderSaving(false);
+    setManageBill(b => b ? { ...b, orderId: o.id, purchaseOrder: o.purchaseOrder } : b);
+    fetchBills();
+  };
+
+  const handleUnlinkOrder = async () => {
+    if (!manageBill || orderSaving) return;
+    setOrderSaving(true);
+    await fetch("/api/warehouse/bill", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vatType: manageBill.vatType, vatNo: manageBill.vatNo,
+        orderId: null, purchaseOrder: null,
+      }),
+    });
+    setOrderSaving(false);
+    setManageBill(b => b ? { ...b, orderId: null, purchaseOrder: null } : b);
+    fetchBills();
   };
 
   const handleSaveFold = async () => {
@@ -171,21 +333,28 @@ export default function BillListPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-gray-200 p-4 mb-4 shadow-sm flex gap-3">
+      <div className="bg-white border border-gray-200 p-4 mb-4 shadow-sm flex flex-wrap gap-3">
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="ค้นหาลูกค้า, เลขที่บิล..."
           onKeyDown={(e) => e.key === "Enter" && (setPage(1), setApplied(search))}
-          className="flex-1 border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-40"
         />
         <button type="button" onClick={() => { setPage(1); setApplied(search); }}
           className="px-6 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium">
           ค้นหา
         </button>
-        <button type="button" onClick={() => { setSearch(""); setApplied(""); setPage(1); }}
+        <button type="button" onClick={() => { setSearch(""); setApplied(""); setNoStockOnly(false); setPage(1); }}
           className="px-4 py-1.5 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600">
           เคลียร์
+        </button>
+        <button
+          type="button"
+          onClick={() => { setNoStockOnly(v => !v); setPage(1); }}
+          className={`px-4 py-1.5 text-sm font-medium border transition-colors ${noStockOnly ? "bg-red-600 text-white border-red-600 hover:bg-red-700" : "border-red-300 text-red-600 hover:bg-red-50"}`}
+        >
+          {noStockOnly ? "● ไม่มีสต็อก" : "○ ไม่มีสต็อก"}
         </button>
       </div>
 
@@ -200,20 +369,21 @@ export default function BillListPage() {
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">โครงสร้างผ้า</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 w-16">พับ</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 w-24">หลา</th>
+                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-20">สต็อก</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-24">พิมพ์</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-20" aria-label="actions"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     กำลังโหลด...
                   </div>
                 </td></tr>
               ) : bills.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
               ) : bills.map((b, i) => (
                 <tr key={i} className="hover:bg-blue-50/30 transition-colors">
                   <td className="px-3 py-2 font-mono font-medium text-blue-700">{b.vatType} - {b.vatNo}</td>
@@ -230,6 +400,13 @@ export default function BillListPage() {
                   </td>
                   <td className="px-3 py-2 text-right text-gray-800">{b.foldCount}</td>
                   <td className="px-3 py-2 text-right font-medium text-gray-900">{Number(b.totalYard).toLocaleString()}</td>
+                  <td className="px-3 py-2 text-center">
+                    {b.hasStockMatch ? (
+                      <span className="inline-block px-2 py-0.5 text-xs bg-green-100 text-green-700 font-medium">ตัดแล้ว</span>
+                    ) : (
+                      <span className="inline-block px-2 py-0.5 text-xs bg-red-100 text-red-700 font-medium">ไม่มีสต็อก</span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-center">
                     <button type="button" onClick={() => openPrint(b.vatType, b.vatNo)}
                       className="text-xs px-3 py-1 bg-green-600 text-white hover:bg-green-700 transition-colors font-medium inline-flex items-center gap-1">
@@ -268,96 +445,278 @@ export default function BillListPage() {
       {manageBill && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={closeManage} />
-          <div className="relative bg-white shadow-xl w-full max-w-md mx-4 overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-900 text-sm">
-                จัดการบิล {manageBill.vatType}-{manageBill.vatNo}
-              </h2>
+          <div className="relative bg-white shadow-xl w-full max-w-lg mx-4 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-gray-900 text-sm">
+                  จัดการบิล {manageBill.vatType}-{manageBill.vatNo}
+                </h2>
+                {manageBill.hasStockMatch ? (
+                  <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 font-medium">ตัดสต็อกแล้ว</span>
+                ) : (
+                  <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 font-medium">ไม่มีสต็อก</span>
+                )}
+              </div>
               <button type="button" onClick={closeManage} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-gray-200">
-              <button type="button" onClick={() => switchTab('bill')}
-                className={`flex-1 py-2 text-xs font-medium transition-colors ${activeTab === 'bill' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                ข้อมูลบิล
-              </button>
-              <button type="button" onClick={() => switchTab('folds')}
-                className={`flex-1 py-2 text-xs font-medium transition-colors ${activeTab === 'folds' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
-                แก้ไขพับ ({manageBill.foldCount})
-              </button>
+            <div className="flex border-b border-gray-200 flex-shrink-0">
+              {([ ['bill','ข้อมูลบิล'], ['stock','ตัดสต็อก'], ['order','ออร์เดอร์'], ['folds',`พับ (${manageBill.foldCount})`] ] as [ActiveTab, string][]).map(([id, label]) => (
+                <button key={id} type="button" onClick={() => switchTab(id)}
+                  className={`flex-1 py-2 text-xs font-medium transition-colors ${activeTab === id ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>
+                  {label}
+                </button>
+              ))}
             </div>
 
             {/* Tab: ข้อมูลบิล */}
             {activeTab === 'bill' && (
-              <>
-                {!confirmDelete ? (
-                  <>
-                    <div className="px-5 py-4 space-y-3 max-h-[60vh] overflow-y-auto">
-                      {[
-                        { label: "ลูกค้า / ผู้สั่ง", key: "customerName" },
-                        { label: "ผู้รับ", key: "receiveName" },
-                        { label: "โครงสร้างผ้า", key: "fabricStruct" },
-                        { label: "ลายผ้า", key: "fabricPattern" },
-                        { label: "หน้ากว้าง", key: "fabricW" },
-                        { label: "โครงสร้างผ้า (ทางเลือก)", key: "altFabricStruct" },
-                        { label: "แทนผู้สั่งซื้อ (ทางเลือก)", key: "altPurchaseOrder" },
-                      ].map(({ label, key }) => (
-                        <div key={key}>
-                          <label className="block text-xs text-gray-500 mb-1">{label}</label>
-                          <input
-                            value={editForm[key as keyof EditForm]}
-                            onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
-                            title={label}
-                            className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-                      ))}
-                      <p className="text-xs text-gray-400">การแก้ไขจะมีผลกับทุกรายการในบิลนี้ ({manageBill.foldCount} รายการ)</p>
-                    </div>
-                    <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between">
-                      <button type="button" onClick={() => setConfirmDelete(true)}
-                        className="px-4 py-1.5 text-xs border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
-                        ลบบิล
+              !confirmDelete ? (
+                <>
+                  <div className="px-5 py-4 space-y-3 overflow-y-auto flex-1">
+                    {([
+                      { label: "ลูกค้า / ผู้สั่ง", key: "customerName" },
+                      { label: "ผู้รับ", key: "receiveName" },
+                      { label: "โครงสร้างผ้า", key: "fabricStruct" },
+                      { label: "ลายผ้า", key: "fabricPattern" },
+                      { label: "หน้ากว้าง", key: "fabricW" },
+                      { label: "โครงสร้างผ้า (ทางเลือก)", key: "altFabricStruct" },
+                      { label: "แทนผู้สั่งซื้อ (ทางเลือก)", key: "altPurchaseOrder" },
+                    ] as { label: string; key: keyof EditForm }[]).map(({ label, key }) => (
+                      <div key={key}>
+                        <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                        <input
+                          value={editForm[key]}
+                          onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
+                          title={label}
+                          className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    ))}
+                    <p className="text-xs text-gray-400">การแก้ไขจะมีผลกับทุกรายการในบิลนี้ ({manageBill.foldCount} รายการ)</p>
+                  </div>
+                  <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between flex-shrink-0">
+                    <button type="button" onClick={() => setConfirmDelete(true)}
+                      className="px-4 py-1.5 text-xs border border-red-200 text-red-500 hover:bg-red-50 transition-colors">
+                      ลบบิล
+                    </button>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={closeManage} className="px-4 py-1.5 text-xs border border-gray-300 hover:bg-gray-50 text-gray-600">ยกเลิก</button>
+                      <button type="button" onClick={handleSave} disabled={saving}
+                        className="px-5 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium">
+                        {saving ? "กำลังบันทึก..." : "บันทึก"}
                       </button>
-                      <div className="flex gap-2">
-                        <button type="button" onClick={closeManage} className="px-4 py-1.5 text-xs border border-gray-300 hover:bg-gray-50 text-gray-600">ยกเลิก</button>
-                        <button type="button" onClick={handleSave} disabled={saving}
-                          className="px-5 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium">
-                          {saving ? "กำลังบันทึก..." : "บันทึก"}
-                        </button>
-                      </div>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="px-5 py-6 text-center">
-                      <div className="w-12 h-12 bg-red-100 flex items-center justify-center mx-auto mb-3">
-                        <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900 mb-1">ยืนยันการลบบิล</p>
-                      <p className="text-xs text-gray-500">
-                        บิล <span className="font-medium text-gray-700">{manageBill.vatType}-{manageBill.vatNo}</span> จำนวน {manageBill.foldCount} รายการ
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="px-5 py-6 text-center flex-1">
+                    <div className="w-12 h-12 bg-red-100 flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </div>
+                    <p className="text-sm font-medium text-gray-900 mb-1">ยืนยันการลบบิล</p>
+                    <p className="text-xs text-gray-500">
+                      บิล <span className="font-medium text-gray-700">{manageBill.vatType}-{manageBill.vatNo}</span> จำนวน {manageBill.foldCount} รายการ
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
+                  </div>
+                  <div className="px-5 py-3 border-t border-gray-100 flex gap-2 justify-center flex-shrink-0">
+                    <button type="button" onClick={() => setConfirmDelete(false)} className="px-5 py-1.5 text-xs border border-gray-300 hover:bg-gray-50 text-gray-600">ยกเลิก</button>
+                    <button type="button" onClick={handleDelete} disabled={saving}
+                      className="px-5 py-1.5 text-xs bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 font-medium">
+                      {saving ? "กำลังลบ..." : "ยืนยันลบ"}
+                    </button>
+                  </div>
+                </>
+              )
+            )}
+
+            {/* Tab: ตัดสต็อก */}
+            {activeTab === 'stock' && (
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <div className="px-5 py-4 space-y-3 flex-1 overflow-y-auto">
+                  {/* Current override info */}
+                  {(manageBill.stockFabricStruct || manageBill.stockFabricPattern || manageBill.stockFabricW) && (
+                    <div className="bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs">
+                      <p className="text-blue-600 font-medium mb-0.5">ตัดจากสต็อก (กำหนดไว้)</p>
+                      <p className="text-blue-800">
+                        {manageBill.stockFabricStruct || manageBill.fabricStruct}
+                        {(manageBill.stockFabricW || manageBill.fabricW) ? ` ${manageBill.stockFabricW || manageBill.fabricW}''` : ""}
+                        {(manageBill.stockFabricPattern || manageBill.fabricPattern) ? ` ลาย ${manageBill.stockFabricPattern || manageBill.fabricPattern}` : ""}
+                        {manageBill.stockCustomer ? ` — ${manageBill.stockCustomer}` : ""}
                       </p>
-                      <p className="text-xs text-gray-400 mt-1">การดำเนินการนี้ไม่สามารถย้อนกลับได้</p>
                     </div>
-                    <div className="px-5 py-3 border-t border-gray-100 flex gap-2 justify-center">
-                      <button type="button" onClick={() => setConfirmDelete(false)} className="px-5 py-1.5 text-xs border border-gray-300 hover:bg-gray-50 text-gray-600">ยกเลิก</button>
-                      <button type="button" onClick={handleDelete} disabled={saving}
-                        className="px-5 py-1.5 text-xs bg-red-500 text-white hover:bg-red-600 disabled:opacity-50 font-medium">
-                        {saving ? "กำลังลบ..." : "ยืนยันลบ"}
-                      </button>
+                  )}
+
+                  {/* Search */}
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">ค้นหาสต็อก</label>
+                    <input
+                      value={stockSearch}
+                      onChange={e => handleStockSearchChange(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && doStockSearch(stockSearch)}
+                      placeholder="โครงสร้าง, ลาย, รหัสผ้า..."
+                      className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Results */}
+                  {stockSearching ? (
+                    <div className="text-center py-4 text-gray-400 text-xs">กำลังค้นหา...</div>
+                  ) : stockResults.length > 0 ? (
+                    <div className="border border-gray-200 divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                      {stockResults.map((s, i) => {
+                        const remaining = s.produced_yard - s.used_yard;
+                        const isCurrentMatch =
+                          (manageBill.stockFabricStruct || manageBill.fabricStruct) === s.fabricStruct &&
+                          (manageBill.stockFabricW || manageBill.fabricW) === s.fabricW &&
+                          (manageBill.stockFabricPattern || manageBill.fabricPattern) === s.fabricPattern &&
+                          (manageBill.stockCustomer || manageBill.customerName || 'AST') === s.customer;
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => handleSelectStock(s)}
+                            disabled={stockSaving}
+                            className={`w-full text-left px-3 py-2.5 text-xs transition-colors disabled:opacity-50 ${isCurrentMatch ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="font-medium text-gray-900">
+                                  {s.fabricStruct}{s.fabricW ? ` ${s.fabricW}''` : ""}
+                                </span>
+                                {s.fabricPattern && <span className="text-gray-600"> ลาย {s.fabricPattern}</span>}
+                                {s.fabricCode && <span className="ml-1 text-gray-400">({s.fabricCode})</span>}
+                                <div className="text-gray-400 mt-0.5">{s.customer}</div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <div className={`font-medium ${remaining < 0 ? 'text-red-600' : 'text-gray-800'}`}>
+                                  {remaining.toLocaleString(undefined, { maximumFractionDigits: 1 })} หลา
+                                </div>
+                                <div className="text-gray-400">คงเหลือ</div>
+                              </div>
+                            </div>
+                            {isCurrentMatch && (
+                              <span className="mt-1 inline-block text-blue-600 font-medium">✓ ใช้อยู่</span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
-                  </>
+                  ) : stockSearch ? (
+                    <div className="text-center py-4 text-gray-400 text-xs">ไม่พบสต็อก</div>
+                  ) : null}
+                </div>
+
+                {/* Footer */}
+                {(manageBill.stockFabricStruct || manageBill.stockFabricPattern || manageBill.stockFabricW) && (
+                  <div className="px-5 py-3 border-t border-gray-100 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleClearStock}
+                      disabled={stockSaving}
+                      className="w-full py-1.5 text-xs border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-50 transition-colors"
+                    >
+                      {stockSaving ? "กำลังบันทึก..." : "ล้างการกำหนดสต็อก (ใช้การ match อัตโนมัติ)"}
+                    </button>
+                  </div>
                 )}
-              </>
+              </div>
+            )}
+
+            {/* Tab: ออร์เดอร์ */}
+            {activeTab === 'order' && (
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <div className="px-5 py-4 space-y-3 flex-1 overflow-y-auto">
+                  {/* Current order */}
+                  {manageBill.orderId && (
+                    <div className="bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs">
+                      <p className="text-blue-600 font-medium mb-0.5">ออร์เดอร์ปัจจุบัน</p>
+                      <p className="text-blue-800 font-medium">
+                        {manageBill.purchaseOrder || `#${manageBill.orderId}`}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Search */}
+                  <div>
+                    <label className="block text-xs text-gray-500 mb-1">ค้นหาออร์เดอร์</label>
+                    <input
+                      value={orderSearch}
+                      onChange={e => handleOrderSearchChange(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && doOrderSearch(orderSearch)}
+                      placeholder="เลขที่ SO, ชื่อลูกค้า..."
+                      className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {/* Results */}
+                  {orderSearching ? (
+                    <div className="text-center py-4 text-gray-400 text-xs">กำลังค้นหา...</div>
+                  ) : orderResults.length > 0 ? (
+                    <div className="border border-gray-200 divide-y divide-gray-100 max-h-64 overflow-y-auto">
+                      {orderResults.map((o, i) => {
+                        const isLinked = manageBill.orderId === o.id;
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => handleSelectOrder(o)}
+                            disabled={orderSaving}
+                            className={`w-full text-left px-3 py-2.5 text-xs transition-colors disabled:opacity-50 ${isLinked ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="font-medium text-gray-900">{o.purchaseOrder}</div>
+                                <div className="text-gray-600">{o.customerName}</div>
+                                <div className="text-gray-400 mt-0.5">
+                                  {o.fabricStructure}{o.fabricW ? ` ${o.fabricW}''` : ""}
+                                  {o.fabricPattern ? ` ลาย ${o.fabricPattern}` : ""}
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <div className={`font-medium ${o.remainingYard < 0 ? 'text-red-600' : 'text-gray-800'}`}>
+                                  {o.remainingYard.toLocaleString(undefined, { maximumFractionDigits: 1 })} หลา
+                                </div>
+                                <div className="text-gray-400">คงเหลือ</div>
+                              </div>
+                            </div>
+                            {isLinked && (
+                              <span className="mt-1 inline-block text-blue-600 font-medium">✓ เชื่อมอยู่</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : orderSearch ? (
+                    <div className="text-center py-4 text-gray-400 text-xs">ไม่พบออร์เดอร์</div>
+                  ) : null}
+                </div>
+
+                {/* Footer */}
+                {manageBill.orderId && (
+                  <div className="px-5 py-3 border-t border-gray-100 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleUnlinkOrder}
+                      disabled={orderSaving}
+                      className="w-full py-1.5 text-xs border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-50 transition-colors"
+                    >
+                      {orderSaving ? "กำลังบันทึก..." : "ยกเลิกการเชื่อมออร์เดอร์"}
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
 
             {/* Tab: แก้ไขพับ */}
             {activeTab === 'folds' && (
-              <div className="max-h-[65vh] overflow-y-auto">
+              <div className="flex-1 overflow-y-auto">
                 {foldsLoading ? (
                   <div className="flex justify-center py-8 text-gray-400 text-xs">กำลังโหลด...</div>
                 ) : folds.length === 0 ? (

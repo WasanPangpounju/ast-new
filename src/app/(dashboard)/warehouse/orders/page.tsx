@@ -407,7 +407,7 @@ export default function WarehouseOrdersPage() {
                             </button>
                           </div>
                           <a
-                            href={`/sales/orders/${order.id}/structure`}
+                            href={`/print/sales/orders/${order.id}/structure`}
                             target="_blank"
                             className="text-xs px-2 py-1 bg-teal-50 text-teal-700 border border-teal-300 rounded hover:bg-teal-100 transition-colors whitespace-nowrap"
                           >
