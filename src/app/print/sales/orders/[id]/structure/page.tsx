@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, use, type ReactNode } from "react";
+import { useState, useEffect, use, type ReactNode, useRef } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -81,11 +81,11 @@ function Field({
   className?: string;
 }) {
   return (
-    <div className={`flex items-baseline gap-2 py-0.5 ${className}`}>
+    <div className={`flex items-baseline gap-2 py-1 ${className}`}>
       <span className="font-bold text-base whitespace-nowrap w-36 shrink-0">
         {label} :
       </span>
-      <span className="text-base flex-1 border-b border-dashed border-gray-400 pb-0.5 min-w-0">
+      <span className="text-base flex-1 border-b border-dashed border-gray-400 pb-1.5 min-w-0">
         {value}
       </span>
     </div>
@@ -110,7 +110,10 @@ export default function StructurePrintPage({
       })
       .then((d) => {
         console.log("[structure] fabricAst:", d.order?.fabricAst);
-        console.log("[structure] fabricAstStructure:", d.order?.fabricAstStructure);
+        console.log(
+          "[structure] fabricAstStructure:",
+          d.order?.fabricAstStructure,
+        );
         setOrder(d.order);
       })
       .catch((e) => setError(e.message))
@@ -145,7 +148,10 @@ export default function StructurePrintPage({
 
   const warpYarnLine = (() => {
     const parts: string[] = [];
-    const add = (v: string | null | undefined) => { const c = nd(v); if (c) parts.push(c); };
+    const add = (v: string | null | undefined) => {
+      const c = nd(v);
+      if (c) parts.push(c);
+    };
     add(s?.yarnHType);
     add(cleanName(s?.subNameH1));
     if (nd(s?.yarnHType2)) parts.push("+ " + nd(s?.yarnHType2));
@@ -155,7 +161,10 @@ export default function StructurePrintPage({
 
   const weftYarnLine = (() => {
     const parts: string[] = [];
-    const add = (v: string | null | undefined) => { const c = nd(v); if (c) parts.push(c); };
+    const add = (v: string | null | undefined) => {
+      const c = nd(v);
+      if (c) parts.push(c);
+    };
     if (nd(s?.yarnWType)) parts.push(nd(s?.yarnWType)!);
     add(cleanName(s?.subNameW1));
     if (nd(s?.yarnWType2)) parts.push("+ " + nd(s?.yarnWType2));
@@ -201,23 +210,32 @@ export default function StructurePrintPage({
   const orderBase = isM ? (order.orderSumM ?? 0) : (order.orderSumYard ?? 0);
 
   const note = nd(order.productionNote) ?? nd(order.note) ?? "";
-  const machineType = nd(fa?.stackType) ?? "";
 
   const yarnCount = (() => {
     const raw = nd(order.fabricStructure);
     if (!raw) return null;
     // Find first single slash (not //) by masking // as null bytes (preserves positions)
-    const singleSlashIdx = (s: string) => s.replace(/\/\//g, "\0\0").indexOf("/");
+    const singleSlashIdx = (s: string) =>
+      s.replace(/\/\//g, "\0\0").indexOf("/");
     const si = singleSlashIdx(raw);
     if (si < 0) {
-      return { structParts: raw.split("*").map((p) => p.trim()).filter(Boolean), wParts: [] as string[] };
+      return {
+        structParts: raw
+          .split("*")
+          .map((p) => p.trim())
+          .filter(Boolean),
+        wParts: [] as string[],
+      };
     }
     const part1 = raw.slice(0, si).trim();
     const rest = raw.slice(si + 1).trim();
     let structParts: string[];
     let countsStr: string;
     if (part1.includes("*")) {
-      structParts = part1.split("*").map((p) => p.trim()).filter(Boolean);
+      structParts = part1
+        .split("*")
+        .map((p) => p.trim())
+        .filter(Boolean);
       const wi = singleSlashIdx(rest);
       countsStr = wi >= 0 ? rest.slice(0, wi).trim() : rest.trim();
     } else {
@@ -232,28 +250,55 @@ export default function StructurePrintPage({
         countsStr = wi2 >= 0 ? rest2.slice(0, wi2).trim() : rest2.trim();
       }
     }
-    const wParts = countsStr.split("*").map((p) => p.trim()).filter((p) => p && /^\d/.test(p));
+    const wParts = countsStr
+      .split("*")
+      .map((p) => p.trim())
+      .filter((p) => p && /^\d/.test(p));
     return { structParts, wParts };
   })();
 
-  const handleDownloadPDF = async () => {
+const handleDownloadPDF = async () => {
+  try {
     const el = document.getElementById("print-body");
     if (!el) return;
+
     const canvas = await html2canvas(el, {
       scale: 3,
       useCORS: true,
       backgroundColor: "#ffffff",
       logging: false,
+      windowWidth: Math.max(document.documentElement.scrollWidth, 1280),
+      onclone: (_clonedDoc, clonedEl) => {
+        const doc = clonedEl.ownerDocument!;
+        const style = doc.createElement("style");
+        style.textContent = `
+          #print-body, #print-body * {
+            color: #000 !important;
+            background-color: transparent !important;
+            -webkit-print-color-adjust: exact;
+          }
+          #print-body { background-color: #fff !important; }
+          .border-dashed { border-style: dashed !important; }
+          .border-b { border-bottom-width: 1px !important; }
+          .border-t-2 { border-top-width: 2px !important; }
+          .border-gray-800 { border-color: #1f2937 !important; }
+          .border-gray-400 { border-color: #9ca3af !important; }
+          .border-gray-500 { border-color: #6b7280 !important; }
+        `;
+        doc.head.appendChild(style);
+      },
     });
+
     const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({
-      orientation: "landscape",
-      unit: "mm",
-      format: [254, 165.1],
-    });
-    pdf.addImage(imgData, "PNG", 0, 0, 254, 165.1);
-    pdf.save(`ใบโครงสร้าง-${order.purchaseOrder}.pdf`);
-  };
+    const pdfW = 254;
+    const pdfH = Math.round((canvas.height / canvas.width) * pdfW * 10) / 10;
+    const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [pdfW, pdfH] });
+    pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
+    pdf.save(`ใบโครงสร้าง-${order!.purchaseOrder}.pdf`);
+  } catch (e) {
+    console.error("PDF error:", e);
+  }
+};
 
   return (
     <>
@@ -266,6 +311,20 @@ export default function StructurePrintPage({
           #print-body { page-break-after: avoid; page-break-inside: avoid; break-after: avoid; break-inside: avoid; }
         }
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; }
+      .a4-page {
+        font-family: 'Sarabun', 'Tahoma', sans-serif;
+        background-color: #fff;
+      }
+      .a4-page * {
+        -webkit-text-size-adjust: none;
+        text-size-adjust: none;
+        color: #000;
+        background-color: transparent;
+      }
+      .a4-page .bg-white {
+        background-color: #fff !important;
+      }
+          
       `}</style>
 
       {/* Print button bar */}
@@ -320,7 +379,7 @@ export default function StructurePrintPage({
       <div className="bg-gray-400 print:bg-white print:p-0 min-h-screen p-8">
         <div
           id="print-body"
-          className="max-w-5xl mx-auto p-8 print:p-4 bg-white shadow-xl print:shadow-none"
+          className="a4-page max-w-5xl mx-auto p-8 print:p-4 shadow-xl print:shadow-none"
         >
           {/* Header */}
           <div className="flex items-baseline gap-8 mb-4 font-bold text-base">
@@ -343,42 +402,64 @@ export default function StructurePrintPage({
               {(yarnCount || nd(fa?.fabricW)) && (
                 <div className="flex-1 flex items-center gap-6">
                   {yarnCount && (
-                    <div className="inline-block w-90 items-center">
+                    <div className="inline-block max-w-90 items-center">
                       {yarnCount.structParts.length >= 2 && (
-                        <div className="flex justify-center items-center gap-3 mb-0.5">
+                        <div className="flex justify-center items-center gap-3 mb-2">
                           <div className="text-center whitespace-nowrap">
-                            {hRatio1 && <div className="text-sm text-gray-500">{hRatio1}</div>}
-                            <span className="font-semibold text-lg">{yarnCount.structParts[0]}</span>
+                            {hRatio1 && (
+                              <div className="text-sm text-gray-500">
+                                {hRatio1}
+                              </div>
+                            )}
+                            <span className="font-semibold text-lg">
+                              {yarnCount.structParts[0]}
+                            </span>
                           </div>
                           <div className="font-bold text-lg px-1">x</div>
                           <div className="text-center whitespace-nowrap">
-                            {wRatio1 && <div className="text-sm text-gray-500">{wRatio1}</div>}
-                            <span className="font-semibold text-lg">{yarnCount.structParts[1]}</span>
+                            {wRatio1 && (
+                              <div className="text-sm text-gray-500">
+                                {wRatio1}
+                              </div>
+                            )}
+                            <span className="font-semibold text-lg">
+                              {yarnCount.structParts[1]}
+                            </span>
                           </div>
                         </div>
                       )}
                       {yarnCount.structParts.length === 1 && (
-                        <div className="text-center font-semibold text-lg mb-0.5 whitespace-nowrap">{yarnCount.structParts[0]}</div>
+                        <div className="text-center font-semibold text-lg mb-2 whitespace-nowrap">
+                          {yarnCount.structParts[0]}
+                        </div>
                       )}
                       {yarnCount.wParts.length >= 2 ? (
-                        <div className="flex justify-center items-center gap-3 border-t-2 border-gray-800 pt-1 font-bold text-xl">
-                          <span className="whitespace-nowrap">{yarnCount.wParts[0]}</span>
+                        <div className="flex justify-center items-center gap-3 border-t-2 border-gray-800 pt-2 font-bold text-xl">
+                          <span className="whitespace-nowrap">
+                            {yarnCount.wParts[0]}
+                          </span>
                           <span className="px-1">x</span>
-                          <span className="whitespace-nowrap">{yarnCount.wParts[1]}</span>
+                          <span className="whitespace-nowrap">
+                            {yarnCount.wParts[1]}
+                          </span>
                         </div>
                       ) : yarnCount.wParts.length === 1 ? (
-                        <div className="text-center border-t-2 border-gray-800 pt-1 font-bold text-xl whitespace-nowrap">{yarnCount.wParts[0]}</div>
+                        <div className="text-center border-t-2 border-gray-800 pt-2 font-bold text-xl whitespace-nowrap">
+                          {yarnCount.wParts[0]}
+                        </div>
                       ) : null}
                     </div>
                   )}
                   {nd(fa?.fabricW) && (
-                    <span className="font-semibold text-base pb-0.5">{nd(fa?.fabricW)} &quot;</span>
+                    <span className="font-semibold text-base pb-0.5">
+                      {nd(fa?.fabricW)} &quot;
+                    </span>
                   )}
                 </div>
               )}
               {/* Block 2: ลายผ้า */}
               {nd(order.fabricPattern) && (
-                <div className="flex-1">
+                <div className="flex-1 ">
                   <Field label="ลายผ้า" value={nd(order.fabricPattern)!} />
                 </div>
               )}
@@ -394,28 +475,45 @@ export default function StructurePrintPage({
               <Field label="ชนิดด้ายพุ่ง" value={weftYarnLine} />
               <Field label="จำนวนด้ายพุ่ง" value={nd(s?.yarnWCount1) ?? ""} />
               <Field label="ฟันหวีเบอร์" value={nd(fa?.phewNumber) ?? ""} />
-              <Field label="พ่นสีลงผ้า" value={nd(fa?.vat) ?? ""} />
+              <Field label="พ่นสีลงผ้า" value={nd(fa?.stackType) ?? ""} />
               <Field
                 label="ออร์เดอร์สืบ"
-                value={orderQty.raw > 0 ? `${orderQty.value} ${orderQty.unit}` : ""}
+                value={
+                  orderQty.raw > 0 ? `${orderQty.value} ${orderQty.unit}` : ""
+                }
               />
-              <Field label="ชนิดเครื่องทอ" value={machineType} />
+              <Field label="ชนิดเครื่องทอ" value={null} className="mt-1.5" />
             </div>
             {/* Right column */}
             <div className="flex-1 flex flex-col">
               <Field label="รหัสผ้า" value={nd(order.fabricId) ?? ""} />
-              <Field label="หน้าผ้ากว้าง" value={nd(fa?.fabricW) ? `${nd(fa?.fabricW)} นิ้ว` : ""} className="mt-10" />
-              <Field label="หน้าหวีกว้าง" value={nd(fa?.phewW) ? `${nd(fa?.phewW)} นิ้ว` : ""} />
+              <Field
+                label="หน้าผ้ากว้าง"
+                value={nd(fa?.fabricW) ? `${nd(fa?.fabricW)} นิ้ว` : ""}
+                className="mt-10"
+              />
+              <Field
+                label="หน้าหวีกว้าง"
+                value={nd(fa?.phewW) ? `${nd(fa?.phewW)} นิ้ว` : ""}
+              />
               <Field
                 label="กำหนดส่ง"
-                value={order.orderDeadlines.length > 0
-                  ? order.orderDeadlines
-                      .map((d, i) => `${i + 1}. ${fmtDate(d.dt)}${d.qty ? ` ${d.qty.toLocaleString()} ${d.unit ?? "หลา"}` : ""}${d.pct ? ` (${d.pct}%)` : ""}`)
-                      .join("  ")
-                  : ""}
-                  className="mt-1"
+                value={
+                  order.orderDeadlines.length > 0
+                    ? order.orderDeadlines
+                        .map(
+                          (d, i) =>
+                            `${i + 1}. ${fmtDate(d.dt)}${d.qty ? ` ${d.qty.toLocaleString()} ${d.unit ?? "หลา"}` : ""}${d.pct ? ` (${d.pct}%)` : ""}`,
+                        )
+                        .join("  ")
+                    : ""
+                }
+                className="mt-7"
               />
-              <Field label="เบอร์เครื่อง" value={nd(order.machineNumber) ?? ""} />
+              <Field
+                label="เบอร์เครื่อง"
+                value={nd(order.machineNumber) ?? ""}
+              />
             </div>
           </div>
 

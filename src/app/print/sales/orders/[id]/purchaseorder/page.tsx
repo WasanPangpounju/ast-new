@@ -148,20 +148,81 @@ export default function PurchaseOrderPrintPage({
   const handleDownloadPDF = async () => {
     const el = document.getElementById("print-body");
     if (!el) return;
-    const canvas = await html2canvas(el, {
-      scale: 3,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-    });
-    const imgData = canvas.toDataURL("image/png");
+
     const pdf = new jsPDF({
       orientation: "portrait",
       unit: "mm",
       format: "a4",
     });
-    pdf.addImage(imgData, "PNG", 0, 0, 210, 297);
-    pdf.save(`ใบสั่งขาย-${order.purchaseOrder}.pdf`);
+    const pageEls = el.querySelectorAll(".a4-page");
+    const targets: Element[] = pageEls.length > 0 ? Array.from(pageEls) : [el];
+
+    for (let i = 0; i < targets.length; i++) {
+      const canvas = await html2canvas(targets[i] as HTMLElement, {
+        scale: 5,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        windowWidth: 794,
+        onclone: (_clonedDoc, clonedEl) => {
+          
+          const doc = clonedEl.ownerDocument!;
+          const style = doc.createElement("style");
+          style.textContent = `
+          :root { color-scheme: light !important; }
+          #print-body { background-color: #fff !important; }
+          #print-body, #print-body * {
+            color: #000 !important;
+            background-color: transparent !important;
+            -webkit-print-color-adjust: exact;
+          }
+          .text-blue-900 { color: #1e3a5f !important; }
+          .text-gray-700 { color: #374151 !important; }
+          .text-gray-600 { color: #4b5563 !important; }
+          .text-gray-500 { color: #6b7280 !important; }
+          .bg-blue-700 { background-color: #1d4ed8 !important; color: #fff !important; }
+          .border-gray-500 { border-color: #6b7280 !important; }
+          .border-gray-400 { border-color: #9ca3af !important; }
+        `;
+          doc.head.appendChild(style);
+
+          // 👇 ส่วนใหม่ — walk ทุก element แล้วแทน oklch/lab ด้วย hex
+          doc.querySelectorAll("*").forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            const cs = doc.defaultView?.getComputedStyle(htmlEl);
+            if (!cs) return;
+            (
+              [
+                "color",
+                "background-color",
+                "border-color",
+                "border-top-color",
+                "border-right-color",
+                "border-bottom-color",
+                "border-left-color",
+                "outline-color",
+              ] as const
+            ).forEach((prop) => {
+              const val = cs.getPropertyValue(prop);
+              if (
+                val &&
+                (val.includes("lab(") ||
+                  val.includes("oklch(") ||
+                  val.includes("oklab("))
+              ) {
+                htmlEl.style.setProperty(prop, "#000000", "important");
+              }
+            });
+          });
+        },
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const imgH = (canvas.height / canvas.width) * 210;
+      if (i > 0) pdf.addPage([210, imgH], "portrait");
+      pdf.addImage(imgData, "PNG", 0, 0, 210, imgH);
+    }
+
+    pdf.save(`ใบส่งสินค้า-${order.purchaseOrder}.pdf`);
   };
 
   console.log("isSurchargeValid:", isSurchargeValid);
@@ -181,10 +242,35 @@ export default function PurchaseOrderPrintPage({
         @media print {
           .no-print { display: none !important; }
           nextjs-portal { display: none !important; }
-          body { margin: 0; padding: 8mm 10mm; }
+          html, body { margin: 0 !important; padding: 0 !important; height: auto !important; min-height: 0 !important; display: block !important; }
           @page { size: A4; margin: 0; }
+          .a4-page { height: auto !important; min-height: 0 !important; }
+         .print-struct-row {
+          display: flex !important;
+          flex-direction: row !important;
+          justify-content: center !important;
+          align-items: center !important;
+          gap: 24px !important;
+          grid-template-columns: unset !important;
+        }
+        .print-struct-row > span {
+          white-space: nowrap !important;
+          width: auto !important;
+          flex: none !important;
+        }
         }
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; }
+
+        .a4-page {
+          width: 210mm !important;
+          height: auto !important;
+          padding: 12mm !important;
+          box-sizing: border-box;
+          overflow-x: hidden;
+        }
+          
+       
+
       `}</style>
 
       {/* Print button bar */}
@@ -236,10 +322,13 @@ export default function PurchaseOrderPrintPage({
       </div>
 
       {/* Document */}
-      <div className="max-w-[210mm] mx-auto p-6 bg-white">
+      <div
+        id="print-body"
+        className="a4-page mx-auto bg-white"
+      >
         {/* Header */}
 
-        <div className="flex gap-4 mb-2">
+        <div className="flex gap-3 mb-2">
           <div className="flex-shrink-0">
             <div className="w-20 h-20 bg-blue-700 flex items-center justify-center text-white font-bold text-xl rounded">
               AST
@@ -263,15 +352,15 @@ export default function PurchaseOrderPrintPage({
           </div>
         </div>
 
-        <div className="text-center my-4 border-b-2">
-          <h2 className="text-xl font-bold  border-gray-800 pb-1 inline-block px-8">
+        <div className="text-center my-3 border-b-2">
+          <h2 className="text-xl font-bold  border-gray-800 py-3 inline-block px-8">
             ใบสั่งขาย
           </h2>
         </div>
 
         {/* Info section */}
-        <div className="grid grid-cols-2 gap-x-8 mb-6 text-base">
-          <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-x-8 my-4 py-2 text-base">
+          <div className="space-y-2">
             <div className="flex gap-2">
               <span className="font-bold w-32 flex-shrink-0">ชื่อลูกค้า</span>
               <span>{order.customerName ?? "-"}</span>
@@ -289,7 +378,7 @@ export default function PurchaseOrderPrintPage({
               <span className="font-mono">{customer?.tax ?? "-"}</span>
             </div>
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             <div className="flex gap-2">
               <span className="font-bold w-32 flex-shrink-0">
                 เลขที่ใบสั่งขาย
@@ -311,7 +400,7 @@ export default function PurchaseOrderPrintPage({
 
         {/* Items table */}
         <table
-          className="w-full border-collapse text-base mb-4"
+          className="w-full border-collapse text-base my-4"
           style={{
             borderTop: "2px solid #333",
             borderBottom: "2px solid #333",
@@ -319,13 +408,13 @@ export default function PurchaseOrderPrintPage({
         >
           <thead>
             <tr style={{ borderBottom: "1px solid #333" }}>
-              <th className="py-2 px-2 text-center font-bold w-10">ลำดับ</th>
-              <th className="py-2 px-2 text-center font-bold">รายการสินค้า</th>
-              <th className="py-2 px-2 text-center font-bold w-24">
+              <th className="py-3 px-2 text-center font-bold w-10">ลำดับ</th>
+              <th className="py-3 px-2 text-center font-bold">รายการสินค้า</th>
+              <th className="py-3 px-2 text-center font-bold w-24">
                 {isM ? "จำนวนเมตร" : "จำนวนหลา"}
               </th>
-              <th className="py-2 px-2 text-center font-bold w-24">หน่วยละ</th>
-              <th className="py-2 px-2 text-center font-bold w-28">
+              <th className="py-3 px-2 text-center font-bold w-24">หน่วยละ</th>
+              <th className="px-3 text-center font-bold w-28">
                 จำนวนเงิน
               </th>
             </tr>
@@ -373,8 +462,8 @@ export default function PurchaseOrderPrintPage({
                     <>
                       {/* แถว ratio + struct: "25:1-->2เส้น  OE20  x  (OE20+OE7)  12:1" */}
                       {structParts.length >= 2 && (
-                        <div className="grid grid-cols-3 text-center items-center mb-1">
-                          <span>
+                        <div className="print-struct-row  grid grid-cols-3 text-center items-center mb-2">
+                          <span className="whitespace-nowrap">
                             {hRatio ? (
                               <div className="text-sm text-gray-500">
                                 {hRatio}
@@ -385,7 +474,7 @@ export default function PurchaseOrderPrintPage({
                             {structParts[0]}
                           </span>
                           <span>x</span>
-                          <span>
+                          <span className="whitespace-nowrap">
                             {wRatio ? (
                               <div className="text-sm text-gray-500">
                                 {wRatio}
@@ -398,12 +487,12 @@ export default function PurchaseOrderPrintPage({
                         </div>
                       )}
                       {structParts.length === 1 && (
-                        <div className="text-center mb-1">{structParts[0]}</div>
+                        <div className="print-struct-row text-center mb-1">{structParts[0]}</div>
                       )}
 
                       {/* เส้นแบ่ง + แถว W */}
                       {wParts.length >= 2 ? (
-                        <div className="grid grid-cols-3 text-center border-t border-gray-400 pt-1 mb-1">
+                        <div className="print-struct-row grid grid-cols-3 text-center border-t border-gray-400 pt-1 mb-1">
                           <span>{wParts[0]}</span>
                           <span>x</span>
                           <span>{wParts[1]}</span>
@@ -416,14 +505,14 @@ export default function PurchaseOrderPrintPage({
 
                       {/* pattern: "25:1-->2เส้น กันลม 63" */}
                       {pattern && (
-                        <div className="text-center my-5">
+                        <div className="text-center my-1">
                           {hRatio ? `${hRatio} ` : ""}
                           {pattern}
                           {fa?.fabricW ? ` ${fa.fabricW}"` : ""}
                         </div>
                       )}
 
-                      <div className="my-2">
+                      <div className="my-1">
                         <strong>รหัสผ้า</strong> {order.fabricId ?? "-"}
                       </div>
                     </>
@@ -442,20 +531,20 @@ export default function PurchaseOrderPrintPage({
             </tr>
             {isSurchargeValid && (
               <tr style={{ borderTop: "1px solid #ddd" }}>
-                <td className="py-2 px-2 text-center">2</td>
-                <td className="py-2 px-4">Surcharge</td>
+                <td className="py-4 px-2 text-center">2</td>
+                <td className="py-4 px-4">Surcharge</td>
                 <td></td>
                 <td></td>
-                <td className="py-2 px-2 text-right">{fmt2(surcharge!)}</td>
+                <td className="py-4 px-2 text-right">{fmt2(surcharge!)}</td>
               </tr>
             )}
           </tbody>
         </table>
 
         {/* Summary */}
-        <div className="flex gap-8 mb-6 text-base">
+        <div className="flex gap-4 pb-4 my-6 text-base">
           {/* Notes left */}
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex gap-2">
               <span className="font-bold flex-shrink-0">หมายเหตุ</span>
               <div>
@@ -470,56 +559,45 @@ export default function PurchaseOrderPrintPage({
             </div>
           </div>
 
-          {/* Totals right */}
-          <div className="w-72 space-y-1">
-            <div className="flex justify-between">
-              <span>รวมเป็นเงิน</span>
-              <div className="flex gap-2">
-                <strong>{fmt2(baseTotal)}</strong>
-                <span>บาท</span>
-              </div>
+          {/* Totals right – w-3/5 caps width; flex-1 min-w-0 labels shrink if needed */}
+          <div className="w-3/5 shrink-0 space-y-1 text-sm">
+            <div className="flex items-baseline gap-2 py-1">
+              <span className="flex-1 min-w-0">รวมเป็นเงิน</span>
+              <strong className="whitespace-nowrap tabular-nums">{fmt2(baseTotal)}</strong>
+              <span className="whitespace-nowrap">บาท</span>
             </div>
-            <div className="flex justify-between">
-              <span>
-                <span className="underline">หัก</span> ส่วนลด {discountPct} %
-              </span>
-              <div className="flex gap-2">
-                <strong>{fmt2(discountAmt)}</strong>
-                <span>บาท</span>
-              </div>
+            <div className="flex items-baseline gap-2 py-1">
+              <span className="flex-1 min-w-0"><span className="underline">หัก</span> ส่วนลด {discountPct} %</span>
+              <strong className="whitespace-nowrap tabular-nums">{fmt2(discountAmt)}</strong>
+              <span className="whitespace-nowrap">บาท</span>
             </div>
-            <div className="flex justify-between">
-              <span>จำนวนเงินหลังหักส่วนลด</span>
-              <div className="flex gap-2">
-                <strong>{fmt2(afterDiscount)}</strong>
-                <span>บาท</span>
-              </div>
+            <div className="flex items-baseline gap-2 py-1">
+              <span className="flex-1 min-w-0">จำนวนเงินหลังหักส่วนลด</span>
+              <strong className="whitespace-nowrap tabular-nums">{fmt2(afterDiscount)}</strong>
+              <span className="whitespace-nowrap">บาท</span>
             </div>
-            <div className="flex justify-between">
-              <span>จำนวนภาษีมูลค่าเพิ่ม</span>
-              <div className="flex gap-2">
-                <strong>{order.vat === "SO" ? fmt2(vatAmt) : "0.00"}</strong>
-                <span>บาท</span>
-              </div>
+            <div className="flex items-baseline gap-2 py-1 pb-4">
+              <span className="flex-1 min-w-0">จำนวนภาษีมูลค่าเพิ่ม</span>
+              <strong className="whitespace-nowrap tabular-nums">{order.vat === "SO" ? fmt2(vatAmt) : "0.00"}</strong>
+              <span className="whitespace-nowrap">บาท</span>
             </div>
-            <div className="flex justify-between font-bold border-t border-gray-400 pt-1">
-              <span>จำนวนเงินรวมทั้งสิ้น</span>
-              <div className="flex gap-2">
-                <strong>{fmt2(grandTotal)}</strong>
-                <span>บาท</span>
-              </div>
+            <div className="border-t border-gray-400" />
+            <div className="flex items-baseline gap-2 pt-2 font-bold">
+              <span className="flex-1 min-w-0">จำนวนเงินรวมทั้งสิ้น</span>
+              <strong className="whitespace-nowrap tabular-nums">{fmt2(grandTotal)}</strong>
+              <span className="whitespace-nowrap">บาท</span>
             </div>
           </div>
         </div>
 
         {/* Signatures */}
-        <div className="grid grid-cols-2 gap-8 mt-8">
+        <div className="grid grid-cols-2 gap-8" style={{ marginTop: "auto", paddingTop: "60px" }}>
           <div className="text-center">
-            <div className="border-b border-gray-500 mb-2 pb-8"></div>
+            <div className="border-b border-gray-500 mb-2 pb-6"></div>
             <p className="font-bold text-base">ผู้สั่งสินค้า</p>
           </div>
           <div className="text-center">
-            <div className="border-b border-gray-500 mb-2 pb-8"></div>
+            <div className="border-b border-gray-500 mb-2 pb-6"></div>
             <p className="font-bold text-base">ผู้ขายสินค้า</p>
           </div>
         </div>
