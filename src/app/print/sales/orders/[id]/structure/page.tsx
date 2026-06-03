@@ -585,7 +585,7 @@ const handleDownloadPDF = async () => {
           ) : null}
 
           {/* Signatures */}
-          <div className="grid grid-cols-2 gap-16 mt-10">
+          <div className="grid grid-cols-2 gap-16 mt-8">
             <div>
               <div className="border-b border-gray-500 pb-6"></div>
               <p className="text-base mt-1 text-center">ผู้สั่งงาน</p>
