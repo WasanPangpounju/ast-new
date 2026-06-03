@@ -257,21 +257,21 @@ export default function StructurePrintPage({
     return { structParts, wParts };
   })();
 
-const handleDownloadPDF = async () => {
-  try {
-    const el = document.getElementById("print-body");
-    if (!el) return;
+  const handleDownloadPDF = async () => {
+    try {
+      const el = document.getElementById("print-body");
+      if (!el) return;
 
-    const canvas = await html2canvas(el, {
-      scale: 3,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      logging: false,
-      windowWidth: Math.max(document.documentElement.scrollWidth, 1280),
-      onclone: (_clonedDoc, clonedEl) => {
-        const doc = clonedEl.ownerDocument!;
-        const style = doc.createElement("style");
-        style.textContent = `
+      const canvas = await html2canvas(el, {
+        scale: 3,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        logging: false,
+        windowWidth: Math.max(document.documentElement.scrollWidth, 1280),
+        onclone: (_clonedDoc, clonedEl) => {
+          const doc = clonedEl.ownerDocument!;
+          const style = doc.createElement("style");
+          style.textContent = `
           #print-body, #print-body * {
             color: #000 !important;
             background-color: transparent !important;
@@ -285,20 +285,24 @@ const handleDownloadPDF = async () => {
           .border-gray-400 { border-color: #9ca3af !important; }
           .border-gray-500 { border-color: #6b7280 !important; }
         `;
-        doc.head.appendChild(style);
-      },
-    });
+          doc.head.appendChild(style);
+        },
+      });
 
-    const imgData = canvas.toDataURL("image/png");
-    const pdfW = 228.6; // 9 inches
-    const pdfH = 139.7; // 5.5 inches
-    const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [pdfW, pdfH] });
-    pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
-    pdf.save(`ใบโครงสร้าง-${order!.purchaseOrder}.pdf`);
-  } catch (e) {
-    console.error("PDF error:", e);
-  }
-};
+      const imgData = canvas.toDataURL("image/png");
+      const pdfW = 228.6; // 9 inches
+      const pdfH = 139.7; // 5.5 inches
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: [pdfW, pdfH],
+      });
+      pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
+      pdf.save(`ใบโครงสร้าง-${order!.purchaseOrder}.pdf`);
+    } catch (e) {
+      console.error("PDF error:", e);
+    }
+  };
 
   return (
     <>
@@ -321,7 +325,7 @@ const handleDownloadPDF = async () => {
             height: 5.5in !important;
             max-width: none !important;
             margin: 0 !important;
-            padding: 35mm 10mm 5mm !important;
+            padding: 30mm 5mm 5mm !important;
             box-sizing: border-box !important;
             box-shadow: none !important;
             overflow: hidden !important;
@@ -433,8 +437,8 @@ const handleDownloadPDF = async () => {
                 .trim() ?? "-"}
             </span>
             <div className="flex gap-8">
-            <span>วันที่: {fmtDate(order.createDate)}</span>
-            <span>No.: {order.billNo}</span>
+              <span>วันที่: {fmtDate(order.createDate)}</span>
+              <span>No.: {order.billNo}</span>
             </div>
           </div>
 
@@ -503,7 +507,7 @@ const handleDownloadPDF = async () => {
               )}
               {/* Block 2: ลายผ้า */}
               {nd(order.fabricPattern) && (
-                <div >
+                <div>
                   <Field label="ลายผ้า" value={nd(order.fabricPattern)!} />
                 </div>
               )}
@@ -585,7 +589,10 @@ const handleDownloadPDF = async () => {
           ) : null}
 
           {/* Signatures */}
-          <div className="grid grid-cols-2 gap-16 mt-8">
+          <div
+            className="grid grid-cols-2 gap-8"
+            style={{ marginTop: "auto", paddingTop: "60px" }}
+          >
             <div>
               <div className="border-b border-gray-500 pb-6"></div>
               <p className="text-base mt-1 text-center">ผู้สั่งงาน</p>
