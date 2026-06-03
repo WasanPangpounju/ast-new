@@ -81,7 +81,7 @@ function Field({
   className?: string;
 }) {
   return (
-    <div className={`flex items-baseline gap-2 py-1 ${className}`}>
+    <div className={`flex items-baseline gap-2 py-0.5 ${className}`}>
       <span className="font-bold text-base whitespace-nowrap w-36 shrink-0">
         {label} :
       </span>
@@ -290,8 +290,8 @@ const handleDownloadPDF = async () => {
     });
 
     const imgData = canvas.toDataURL("image/png");
-    const pdfW = 254;
-    const pdfH = Math.round((canvas.height / canvas.width) * pdfW * 10) / 10;
+    const pdfW = 228.6; // 9 inches
+    const pdfH = 139.7; // 5.5 inches
     const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: [pdfW, pdfH] });
     pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
     pdf.save(`ใบโครงสร้าง-${order!.purchaseOrder}.pdf`);
@@ -306,9 +306,52 @@ const handleDownloadPDF = async () => {
         @media print {
           .no-print { display: none !important; }
           nextjs-portal { display: none !important; }
-          html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
-          @page { size: 10in 6.5in landscape; margin: 8mm 12mm; }
-          #print-body { page-break-after: avoid; page-break-inside: avoid; break-after: avoid; break-inside: avoid; }
+          html, body {
+            margin: 0 !important; padding: 0 !important;
+            width: 9in !important; height: 5.5in !important;
+            overflow: hidden !important;
+          }
+          .min-h-screen { min-height: 0 !important; height: auto !important; }
+          .p-8 { padding: 0 !important; }
+          @page { size: 9in 5.5in landscape; margin: 0; }
+          #print-body {
+            page-break-after: avoid; page-break-inside: avoid;
+            break-after: avoid; break-inside: avoid;
+            width: 9in !important;
+            height: 5.5in !important;
+            max-width: none !important;
+            margin: 0 !important;
+            padding: 35mm 10mm 5mm !important;
+            box-sizing: border-box !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+          }
+          #print-body .text-base { font-size: 10pt !important; line-height: 1.35 !important; }
+          #print-body .text-sm  { font-size: 8pt !important; }
+          #print-body .text-lg  { font-size: 11.5pt !important; }
+          #print-body .text-xl  { font-size: 13pt !important; }
+          #print-body .w-36 { width: 100px !important; }
+          #print-body .gap-8  { gap: 1.5rem !important; }
+          #print-body .gap-16 { gap: 2rem !important; }
+          #print-body .pb-6   { padding-bottom: 0.3rem !important; }
+          #print-body .mt-6   { margin-top: 0 !important; }
+          #print-body .mt-4   { margin-top: 0 !important; }
+          #print-body .mt-2   { margin-top: 0 !important; }
+          #print-body .mt-1   { margin-top: 0 !important; }
+          #print-body .mb-2   { margin-bottom: 0 !important; }
+          #print-body .mb-1   { margin-bottom: 0 !important; }
+          #print-body .mt-1\.5 { margin-top: 0 !important; }
+          #print-body .border-dashed { border-style: dashed !important; }
+          #print-body .border-b { border-bottom-width: 1px !important; }
+          #print-body .border-t-2 { border-top-width: 2px !important; }
+          #print-body .border-gray-800 { border-color: #1f2937 !important; }
+          #print-body .border-gray-400 { border-color: #9ca3af !important; }
+          #print-body .border-gray-500 { border-color: #6b7280 !important; }
+          #print-body * { color: #000 !important; background-color: transparent !important; }
+          #print-body { background-color: #fff !important; }
         }
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; }
       .a4-page {
@@ -324,7 +367,6 @@ const handleDownloadPDF = async () => {
       .a4-page .bg-white {
         background-color: #fff !important;
       }
-          
       `}</style>
 
       {/* Print button bar */}
@@ -379,10 +421,10 @@ const handleDownloadPDF = async () => {
       <div className="bg-gray-400 print:bg-white print:p-0 min-h-screen p-8">
         <div
           id="print-body"
-          className="a4-page max-w-5xl mx-auto p-8 print:p-4 shadow-xl print:shadow-none"
+          className="a4-page max-w-5xl mx-auto p-6 print:p-3 shadow-xl print:shadow-none"
         >
           {/* Header */}
-          <div className="flex items-baseline gap-8 mb-4 font-bold text-base">
+          <div className="flex items-baseline justify-between mb-2 font-bold text-base">
             <span>
               ชื่อลูกค้า:{" "}
               {order.customerName
@@ -390,19 +432,21 @@ const handleDownloadPDF = async () => {
                 .replace("(สำนักงานใหญ่)", "")
                 .trim() ?? "-"}
             </span>
+            <div className="flex gap-8">
             <span>วันที่: {fmtDate(order.createDate)}</span>
             <span>No.: {order.billNo}</span>
+            </div>
           </div>
 
           {/* Yarn count + fabric info row */}
 
           {(yarnCount || nd(fa?.fabricW) || nd(order.fabricPattern)) && (
-            <div className="flex items-start gap-10 mb-2">
+            <div className="grid grid-cols-2 gap-6 mb-2">
               {/* Block 1: yarn count + fabricW */}
               {(yarnCount || nd(fa?.fabricW)) && (
-                <div className="flex-1 flex items-center gap-6">
+                <div className="flex items-center gap-4 shrink-0">
                   {yarnCount && (
-                    <div className="inline-block max-w-90 items-center">
+                    <div className="w-full">
                       {yarnCount.structParts.length >= 2 && (
                         <div className="flex justify-center items-center gap-3 mb-2">
                           <div className="text-center whitespace-nowrap">
@@ -459,7 +503,7 @@ const handleDownloadPDF = async () => {
               )}
               {/* Block 2: ลายผ้า */}
               {nd(order.fabricPattern) && (
-                <div className="flex-1 ">
+                <div >
                   <Field label="ลายผ้า" value={nd(order.fabricPattern)!} />
                 </div>
               )}
@@ -490,7 +534,7 @@ const handleDownloadPDF = async () => {
               <Field
                 label="หน้าผ้ากว้าง"
                 value={nd(fa?.fabricW) ? `${nd(fa?.fabricW)} นิ้ว` : ""}
-                className="mt-10"
+                className="mt-8"
               />
               <Field
                 label="หน้าหวีกว้าง"
@@ -508,7 +552,7 @@ const handleDownloadPDF = async () => {
                         .join("  ")
                     : ""
                 }
-                className="mt-7"
+                className="mt-5"
               />
               <Field
                 label="เบอร์เครื่อง"
@@ -522,7 +566,7 @@ const handleDownloadPDF = async () => {
           order.vat === "SOX" ||
           (order.po && order.po !== "no data") ||
           orderBase > 0 ? (
-            <div className="mt-3 text-base">
+            <div className="mt-2 text-base">
               <span className="font-bold">หมายเหตุ :</span>
               <div className="ml-1 inline">
                 {note && note !== "no data" && <span> {note}</span>}
@@ -541,7 +585,7 @@ const handleDownloadPDF = async () => {
           ) : null}
 
           {/* Signatures */}
-          <div className="grid grid-cols-2 gap-16 mt-8">
+          <div className="grid grid-cols-2 gap-16 mt-10">
             <div>
               <div className="border-b border-gray-500 pb-6"></div>
               <p className="text-base mt-1 text-center">ผู้สั่งงาน</p>
