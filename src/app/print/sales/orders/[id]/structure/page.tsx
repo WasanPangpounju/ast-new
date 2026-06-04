@@ -286,6 +286,17 @@ export default function StructurePrintPage({
           .border-gray-500 { border-color: #6b7280 !important; }
         `;
           doc.head.appendChild(style);
+          doc.querySelectorAll("*").forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            const cs = doc.defaultView?.getComputedStyle(htmlEl);
+            if (!cs) return;
+            (["color", "background-color", "border-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "outline-color"] as const).forEach((prop) => {
+              const val = cs.getPropertyValue(prop);
+              if (val && (val.includes("lab(") || val.includes("oklch(") || val.includes("oklab("))) {
+                htmlEl.style.setProperty(prop, "#000000", "important");
+              }
+            });
+          });
         },
       });
 
