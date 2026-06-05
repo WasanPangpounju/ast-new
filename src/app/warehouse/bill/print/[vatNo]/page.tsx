@@ -109,6 +109,20 @@ export default function BillPrintPage({
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
+        onclone: (_clonedDoc, clonedEl) => {
+          const doc = clonedEl.ownerDocument!;
+          doc.querySelectorAll("*").forEach((el) => {
+            const htmlEl = el as HTMLElement;
+            const cs = doc.defaultView?.getComputedStyle(htmlEl);
+            if (!cs) return;
+            (["color", "background-color", "border-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "outline-color"] as const).forEach((prop) => {
+              const val = cs.getPropertyValue(prop);
+              if (val && (val.includes("lab(") || val.includes("oklch(") || val.includes("oklab("))) {
+                htmlEl.style.setProperty(prop, "#000000", "important");
+              }
+            });
+          });
+        },
       });
       const imgData = canvas.toDataURL("image/png");
       if (i > 0) pdf.addPage();
@@ -120,9 +134,6 @@ export default function BillPrintPage({
 
   return (
     <div className="bg-gray-400 print:bg-white print:p-0">
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet" />
       <style>{`
         /* TH Sarabun New = Sarabun บน Google Fonts */
 
@@ -176,7 +187,7 @@ export default function BillPrintPage({
           }
 
           .a4-page {
-            width: 228mm !important;
+            width: 210mm !important;
             height: 300mm !important;
             padding: 10mm 12mm !important;
             margin: 0 !important;
