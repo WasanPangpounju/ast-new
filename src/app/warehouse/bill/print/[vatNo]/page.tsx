@@ -79,10 +79,12 @@ export default function BillPrintPage({
 
   const trimCompanyName = (name: string | null): string => {
     if (!name) return "-";
-    return name
-      .replace(/^บริษัท\s*/u, "")
-      .replace(/\s*จำกัด.*/u, "")
-      .trim() || "-";
+    return (
+      name
+        .replace(/^บริษัท\s*/u, "")
+        .replace(/\s*จำกัด.*/u, "")
+        .trim() || "-"
+    );
   };
 
   const fabricCode = first.altFabricStruct
@@ -95,12 +97,15 @@ export default function BillPrintPage({
     : trimCompanyName(first.customerName);
 
   const receiverName = trimCompanyName(first.receiveName);
-
   const handleDownloadPDF = async () => {
     const el = document.getElementById("print-body");
     if (!el) return;
 
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
     const pageEls = el.querySelectorAll(".a4-page");
 
     for (let i = 0; i < pageEls.length; i++) {
@@ -109,15 +114,54 @@ export default function BillPrintPage({
         useCORS: true,
         backgroundColor: "#ffffff",
         logging: false,
+        windowWidth: 794,
         onclone: (_clonedDoc, clonedEl) => {
           const doc = clonedEl.ownerDocument!;
+          const style = doc.createElement("style");
+          style.textContent = `
+            :root { color-scheme: light !important; }
+            #print-body { background-color: #fff !important; }
+            #print-body, #print-body * {
+              color: #000 !important;
+              background-color: transparent !important;
+              -webkit-print-color-adjust: exact;
+            }
+            .bill-footer, .bill-footer .border-r { border-color: #000 !important; }
+            .border-gray-400 { border-color: #9ca3af !important; }
+            .a4-page th {
+              vertical-align: middle !important;
+              padding: 1px 1px 12px 1px !important;
+            }
+
+            .a4-page td {
+              padding: 0px 0px 10px 0px !important;
+            }
+          `;
+          doc.head.appendChild(style);
+
           doc.querySelectorAll("*").forEach((el) => {
             const htmlEl = el as HTMLElement;
             const cs = doc.defaultView?.getComputedStyle(htmlEl);
             if (!cs) return;
-            (["color", "background-color", "border-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "outline-color"] as const).forEach((prop) => {
+            (
+              [
+                "color",
+                "background-color",
+                "border-color",
+                "border-top-color",
+                "border-right-color",
+                "border-bottom-color",
+                "border-left-color",
+                "outline-color",
+              ] as const
+            ).forEach((prop) => {
               const val = cs.getPropertyValue(prop);
-              if (val && (val.includes("lab(") || val.includes("oklch(") || val.includes("oklab("))) {
+              if (
+                val &&
+                (val.includes("lab(") ||
+                  val.includes("oklch(") ||
+                  val.includes("oklab("))
+              ) {
                 htmlEl.style.setProperty(prop, "#000000", "important");
               }
             });
@@ -125,8 +169,9 @@ export default function BillPrintPage({
         },
       });
       const imgData = canvas.toDataURL("image/png");
-      if (i > 0) pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, 0, 210, 297);
+      const imgH = (canvas.height / canvas.width) * 210;
+      if (i > 0) pdf.addPage([210, imgH], "portrait");
+      pdf.addImage(imgData, "PNG", 0, 0, 210, imgH);
     }
 
     pdf.save(`ใบส่งสินค้า-${vatType}-${vatNo}.pdf`);
@@ -159,14 +204,38 @@ export default function BillPrintPage({
 
         /* สีเส้นตารางเดียวกันหมด */
         .a4-page th, .a4-page td { border-color: #555 !important; }
+        .a4-page thead th { padding: 2px 1px; overflow: hidden; white-space: nowrap; }
         .bill-footer { border-color: #555 !important; }
         .bill-footer .border-r { border-color: #555 !important; }
 
+         /* PDF mode — ใช้แทน @media print ตอน html2canvas */
+          .is-pdf .no-print { display: none !important; }
+          .is-pdf .a4-page {
+            width: 210mm !important;
+            height: 300mm !important;
+            padding: 10mm 12mm !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
+          }
+          .is-pdf .a4-page * {
+            color: #000 !important;
+            font-weight: 700 !important;
+            background: transparent !important;
+          }
+         .is-pdf .a4-page .bill-row { height: 33px !important; line-height: 20px !important; }
+        .is-pdf .mt-10 { margin-top: 4px !important; }
+        .is-pdf .a4-page td { vertical-align: middle !important; padding: 0 2px !important; }
+        .is-pdf .a4-page .text-xs   { font-size: 11px !important; }
+        .is-pdf .a4-page .text-sm   { font-size: 13px !important; }
+        .is-pdf .a4-page .text-base { font-size: 14px !important; }
+        .is-pdf .a4-page .text-lg   { font-size: 14px !important; }
+          .is-pdf .bill-footer,
+          .is-pdf .bill-footer .border-r { border-color: #000 !important; }
         @media print {
-          @page { size: A4 portrait; margin: 0mm; }
+          @page { size: 210mm 300mm; margin: 0mm; }
           html, body {
             width: 210mm;
-            height: 300mm;
+            height: auto;
             margin: 0;
             padding: 0;
             -webkit-print-color-adjust: exact;
@@ -226,6 +295,7 @@ export default function BillPrintPage({
           .bill-footer .border-r {
             border-color: #000 !important;
           }
+          .mt-10 { margin-top: 4px !important; }
         }
       `}</style>
 
@@ -235,9 +305,15 @@ export default function BillPrintPage({
           onClick={() => window.print()}
           className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1"/>
-            <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1"/>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            fill="currentColor"
+            viewBox="0 0 16 16"
+          >
+            <path d="M2.5 8a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1" />
+            <path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4zm1 5a2 2 0 0 0-2 2v1H2a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v-1a2 2 0 0 0-2-2zm7 2v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1" />
           </svg>
           พิมพ์
         </button>
@@ -246,9 +322,15 @@ export default function BillPrintPage({
           onClick={handleDownloadPDF}
           className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/>
-            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            fill="currentColor"
+            viewBox="0 0 16 16"
+          >
+            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5" />
+            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z" />
           </svg>
           ดาวน์โหลด PDF
         </button>
@@ -261,8 +343,10 @@ export default function BillPrintPage({
         </button>
       </div>
 
-
-      <div id="print-body" className="pt-6 pb-0 flex flex-col items-center gap-6">
+      <div
+        id="print-body"
+        className="pt-6 pb-0 flex flex-col items-center gap-6"
+      >
         {pages.map((pageRolls, pageIdx) => {
           const slots: (Roll | null)[] = Array(COLS * ROWS_PER_COL).fill(null);
           pageRolls.forEach((r, i) => {
@@ -295,20 +379,26 @@ export default function BillPrintPage({
                 </div>
 
                 {/* Info — ไม่มีกรอบ */}
-                <div className="flex items-baseline justify-between mb-2 shrink-0 text-[15px] print-sm mt-10">
+                <div className="flex items-baseline justify-between mb-2 shrink-0 text-[15px] print-sm mt-2">
                   <div>
                     <span className="font-bold">ผู้สั่ง Order by :</span>
-                    <span className="font-bold ml-1 whitespace-nowrap">{ordererName}</span>
+                    <span className="font-bold ml-1 whitespace-nowrap">
+                      {ordererName}
+                    </span>
                   </div>
                   <div className="shrink-0 ml-8 text-right">
                     <span className="font-bold">ผู้รับ Received by</span>
-                    <span className="font-bold ml-1 whitespace-nowrap">{trimCompanyName(receiverName)}</span>
+                    <span className="font-bold ml-1 whitespace-nowrap">
+                      {trimCompanyName(receiverName)}
+                    </span>
                   </div>
                 </div>
                 <div className="flex justify-between mb-2 shrink-0 text-[15px] print-sm">
                   <div className="flex-1 min-w-0">
                     <span className="font-bold">รหัสผ้า Code :</span>
-                    <span className="font-bold ml-1 whitespace-nowrap">{fabricCode}</span>
+                    <span className="font-bold ml-1 whitespace-nowrap">
+                      {fabricCode}
+                    </span>
                   </div>
                   <div className="shrink-0 text-right ml-4">
                     <span className="font-bold">วันที่ Date :</span>
@@ -319,7 +409,9 @@ export default function BillPrintPage({
                 </div>
 
                 {/* Table + Footer */}
-                <div className=" flex flex-col h-full flex-1">                  {/* Table — flex-1 เต็มพื้นที่ */}
+                <div className=" flex flex-col h-full flex-1">
+                  {" "}
+                  {/* Table — flex-1 เต็มพื้นที่ */}
                   <div className="overflow-hidden shrink-0">
                     <table className="bill-table w-full border-collapse text-sm">
                       <thead>
@@ -379,7 +471,6 @@ export default function BillPrintPage({
                       </tbody>
                     </table>
                   </div>
-
                   {/* Footer */}
                   <div className="bill-footer flex-1 border border-gray-400 flex mt-2">
                     {/* Left: Sample */}
@@ -394,18 +485,34 @@ export default function BillPrintPage({
                     <div className="flex-1 flex flex-col justify-between px-4 py-2">
                       <div className="flex items-center gap-3">
                         <div className="text-center leading-tight">
-                          <div className="text-sm print-sm font-medium">รวม</div>
-                          <div className="text-xs text-gray-500 print-xs">Total</div>
+                          <div className="text-sm print-sm font-medium">
+                            รวม
+                          </div>
+                          <div className="text-xs text-gray-500 print-xs">
+                            Total
+                          </div>
                         </div>
-                        <span className="text-[20px] font-bold print-big">{totalFold}</span>
+                        <span className="text-[20px] font-bold print-big">
+                          {totalFold}
+                        </span>
                         <div className="text-center leading-tight">
-                          <div className="text-sm print-sm font-medium">พับ</div>
-                          <div className="text-xs text-gray-500 print-xs">Pieces</div>
+                          <div className="text-sm print-sm font-medium">
+                            พับ
+                          </div>
+                          <div className="text-xs text-gray-500 print-xs">
+                            Pieces
+                          </div>
                         </div>
-                        <span className="text-[20px] font-bold ml-2 print-big">{totalYard.toLocaleString()}</span>
+                        <span className="text-[20px] font-bold ml-2 print-big">
+                          {totalYard.toLocaleString()}
+                        </span>
                         <div className="text-center leading-tight">
-                          <div className="text-sm print-sm font-medium">หลา</div>
-                          <div className="text-xs text-gray-500 print-xs">Yards</div>
+                          <div className="text-sm print-sm font-medium">
+                            หลา
+                          </div>
+                          <div className="text-xs text-gray-500 print-xs">
+                            Yards
+                          </div>
                         </div>
                       </div>
                       <div>
