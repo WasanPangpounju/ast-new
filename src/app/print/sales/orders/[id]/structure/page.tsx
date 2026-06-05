@@ -312,20 +312,21 @@ export default function StructurePrintPage({
           nextjs-portal { display: none !important; }
           html, body {
             margin: 0 !important; padding: 0 !important;
-            width: 9in !important; height: 5.5in !important;
+            height: 100% !important;
             overflow: hidden !important;
           }
           .min-h-screen { min-height: 0 !important; height: auto !important; }
           .p-8 { padding: 0 !important; }
-          @page { size: 9in 5.5in landscape; margin: 0; }
+          @page { size: 9in 5.5in; margin: 0; }
           #print-body {
             page-break-after: avoid; page-break-inside: avoid;
             break-after: avoid; break-inside: avoid;
             width: 9in !important;
+            max-width: 100% !important;
             height: 5.5in !important;
-            max-width: none !important;
+            max-height: 100vh !important;
             margin: 0 !important;
-            padding: 30mm 5mm 5mm !important;
+            padding: 8mm 5mm 5mm !important;
             box-sizing: border-box !important;
             box-shadow: none !important;
             overflow: hidden !important;
@@ -341,13 +342,17 @@ export default function StructurePrintPage({
           #print-body .gap-8  { gap: 1.5rem !important; }
           #print-body .gap-16 { gap: 2rem !important; }
           #print-body .pb-6   { padding-bottom: 0.3rem !important; }
+          #print-body .mt-8   { margin-top: 0 !important; }
           #print-body .mt-6   { margin-top: 0 !important; }
+          #print-body .mt-5   { margin-top: 0 !important; }
           #print-body .mt-4   { margin-top: 0 !important; }
+          #print-body .mt-3   { margin-top: 0 !important; }
           #print-body .mt-2   { margin-top: 0 !important; }
           #print-body .mt-1   { margin-top: 0 !important; }
           #print-body .mb-2   { margin-bottom: 0 !important; }
           #print-body .mb-1   { margin-bottom: 0 !important; }
           #print-body .mt-1\.5 { margin-top: 0 !important; }
+          #print-body .print-sig { margin-top: auto !important; padding-top: 0 !important; }
           #print-body .border-dashed { border-style: dashed !important; }
           #print-body .border-b { border-bottom-width: 1px !important; }
           #print-body .border-t-2 { border-top-width: 2px !important; }
@@ -365,6 +370,7 @@ export default function StructurePrintPage({
       .a4-page * {
         -webkit-text-size-adjust: none;
         text-size-adjust: none;
+        min-width: 0;
         color: #000;
         background-color: transparent;
       }
@@ -422,10 +428,10 @@ export default function StructurePrintPage({
       </div>
 
       {/* Document */}
-      <div className="bg-gray-400 print:bg-white print:p-0 min-h-screen p-8">
+      <div className="bg-gray-400 print:bg-white print:p-0 min-h-screen print:min-h-0 print:h-auto p-8">
         <div
           id="print-body"
-          className="a4-page max-w-5xl mx-auto p-6 print:p-3 shadow-xl print:shadow-none"
+          className="a4-page max-w-5xl mx-auto p-6 print:p-3 shadow-xl print:shadow-none flex flex-col min-h-132"
         >
           {/* Header */}
           <div className="flex items-baseline justify-between mb-2 font-bold text-base">
@@ -453,7 +459,7 @@ export default function StructurePrintPage({
                     <div className="w-full">
                       {yarnCount.structParts.length >= 2 && (
                         <div className="flex justify-center items-center gap-3 mb-2">
-                          <div className="text-center whitespace-nowrap">
+                          <div className="text-center whitespace-nowrap pb-1">
                             {hRatio1 && (
                               <div className="text-sm text-gray-500">
                                 {hRatio1}
@@ -492,7 +498,7 @@ export default function StructurePrintPage({
                           </span>
                         </div>
                       ) : yarnCount.wParts.length === 1 ? (
-                        <div className="text-center border-t-2 border-gray-800 pt-2 font-bold text-xl whitespace-nowrap">
+                        <div className="text-center border-t-2 border-gray-800 pt-1 font-bold text-xl whitespace-nowrap">
                           {yarnCount.wParts[0]}
                         </div>
                       ) : null}
@@ -517,7 +523,7 @@ export default function StructurePrintPage({
           {/* Fields */}
           <div className="flex gap-8 mt-3 text-base">
             {/* Left column */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-w-0">
               <Field label="จำนวนด้ายยืน" value={nd(fa?.yarnHCount) ?? ""} />
               <Field label="ชนิดด้ายยืน" value={warpYarnLine} />
               <Field label="ชนิดด้ายพุ่ง" value={weftYarnLine} />
@@ -533,7 +539,7 @@ export default function StructurePrintPage({
               <Field label="ชนิดเครื่องทอ" value={null} className="mt-1.5" />
             </div>
             {/* Right column */}
-            <div className="flex-1 flex flex-col">
+            <div className="flex-1 flex flex-col min-w-0">
               <Field label="รหัสผ้า" value={nd(order.fabricId) ?? ""} />
               <Field
                 label="หน้าผ้ากว้าง"
@@ -589,10 +595,7 @@ export default function StructurePrintPage({
           ) : null}
 
           {/* Signatures */}
-          <div
-            className="grid grid-cols-2 gap-8"
-            style={{ marginTop: "auto", paddingTop: "60px" }}
-          >
+          <div className="print-sig grid grid-cols-2 gap-8 mt-auto pt-16">
             <div>
               <div className="border-b border-gray-500 pb-6"></div>
               <p className="text-base mt-1 text-center">ผู้สั่งงาน</p>
