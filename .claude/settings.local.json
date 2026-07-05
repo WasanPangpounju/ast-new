@@ -60,7 +60,11 @@
       "Bash(npx dotenv -e .env -- npx tsx -e ' *)",
       "PowerShell(psql *)",
       "PowerShell(cd \"C:\\\\Users\\\\Friendly Dev\\\\project\\\\ast-new\"; $env:DATABASE_URL = \"postgresql://postgres:password@localhost:5432/ast_new\"; npx tsx -e \"import { prisma } from './src/lib/prisma'; prisma.fabricOut.findFirst\\({ where: { vatNo: 6681, vatType: 'A' }, select: { customerName: true, receiveName: true } }\\).then\\(r => { console.log\\(JSON.stringify\\(r\\)\\); return prisma.`$disconnect\\(\\); }\\).catch\\(e => console.error\\(e.message\\)\\)\")",
-      "Bash(Select-Object Name, BaseName)"
+      "Bash(Select-Object Name, BaseName)",
+      "Bash(npx eslint *)",
+      "Skill(run)",
+      "Bash(chromium-cli --help)",
+      "Bash(node -e \"console.log\\(require.resolve\\('playwright'\\)\\)\")"
     ]
   }
 }

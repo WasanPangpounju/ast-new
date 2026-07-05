@@ -22,6 +22,28 @@ interface DeadlineRow {
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
+function formatCreateDateDisplay(iso: string): string {
+  if (!iso) return "";
+  const d = dayjs(iso);
+  return `${d.format("DD/MM/")}${d.year() + 543}`;
+}
+
+// Parses "DD/MM/YYYY" (Buddhist year) into an ISO "YYYY-MM-DD" (CE) string.
+// Returns null for incomplete input, malformed input, or dates that don't exist.
+function parseCreateDateInput(text: string): string | null {
+  const m = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const day = parseInt(m[1], 10);
+  const month = parseInt(m[2], 10);
+  const ceYear = parseInt(m[3], 10) - 543;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const d = new Date(ceYear, month - 1, day);
+  if (d.getFullYear() !== ceYear || d.getMonth() !== month - 1 || d.getDate() !== day)
+    return null;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${ceYear}-${pad(month)}-${pad(day)}`;
+}
+
 function buildFabricStruct(
   warpYarn1: string,
   warpCount1: string,
@@ -312,6 +334,10 @@ export default function CreateOrderPage() {
 
   // Header
   const [createDate, setCreateDate] = useState(TODAY);
+  const [createDateText, setCreateDateText] = useState(
+    formatCreateDateDisplay(TODAY),
+  );
+  const createDateInputRef = useRef<HTMLInputElement>(null);
   const [vat, setVat] = useState("SOX");
 
   // Customer
@@ -440,6 +466,32 @@ export default function CreateOrderPage() {
   //     weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4,
   //   ))
   // }, [warpYarn1, warpCount1, warpYarn2, weftYarn1, weftCount1, weftYarn2, weftYarn3, weftYarn4])
+
+  function handleCreateDateTextChange(v: string) {
+    setCreateDateText(v);
+    const iso = parseCreateDateInput(v);
+    if (iso) setCreateDate(iso);
+  }
+
+  function handleCreateDateTextBlur() {
+    if (!parseCreateDateInput(createDateText)) {
+      setCreateDateText(formatCreateDateDisplay(createDate));
+    }
+  }
+
+  function openCreateDatePicker() {
+    const el = createDateInputRef.current;
+    if (!el) return;
+    if (typeof (el as unknown as { showPicker?: () => void }).showPicker === "function") {
+      try {
+        (el as unknown as { showPicker: () => void }).showPicker();
+        return;
+      } catch {
+        // fall through to focus
+      }
+    }
+    el.focus();
+  }
 
   function updateDeadline(i: number, field: keyof DeadlineRow, value: string) {
     setDeadlines((prev) =>
@@ -642,16 +694,25 @@ export default function CreateOrderPage() {
                   <div className="relative">
                     <input
                       type="text"
-                      readOnly
-                      value={createDate ? `${dayjs(createDate).format("DD/MM/")}${dayjs(createDate).year() + 543}` : ""}
+                      value={createDateText}
+                      onChange={(e) => handleCreateDateTextChange(e.target.value)}
+                      onBlur={handleCreateDateTextBlur}
+                      onDoubleClick={openCreateDatePicker}
                       placeholder="วว/ดด/ปปปป"
+                      style={{ position: "relative", zIndex: 1 }}
                       className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                     />
                     <input
+                      ref={createDateInputRef}
                       type="date"
                       value={createDate}
-                      onChange={(e) => setCreateDate(e.target.value)}
+                      onChange={(e) => {
+                        setCreateDate(e.target.value);
+                        setCreateDateText(formatCreateDateDisplay(e.target.value));
+                      }}
                       aria-label="วันที่"
+                      tabIndex={-1}
+                      style={{ pointerEvents: "none" }}
                       className="absolute inset-0 opacity-0 w-full cursor-pointer"
                     />
                   </div>
