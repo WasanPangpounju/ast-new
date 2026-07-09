@@ -61,13 +61,26 @@ export default function SalesOrdersReviewPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [month, setMonth] = useState('')
   const [year, setYear] = useState('')
+  const [warpYarnType, setWarpYarnType] = useState('')
+  const [weftYarnType, setWeftYarnType] = useState('')
+  const [warpCount, setWarpCount] = useState('')
+  const [weftCount, setWeftCount] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [applied, setApplied] = useState({
     q: '',
     status: '',
     month: '',
     year: '',
+    warpYarnType: '',
+    weftYarnType: '',
+    warpCount: '',
+    weftCount: '',
+    dateFrom: '',
+    dateTo: '',
   })
   const [updatingId, setUpdatingId] = useState<number | null>(null)
+  const [orFallback, setOrFallback] = useState(false)
 
   const totalPages = Math.ceil(total / 20)
 
@@ -82,9 +95,15 @@ export default function SalesOrdersReviewPage() {
     } else if (applied.year && !applied.month) {
       p.set('year', applied.year)
     }
+    if (applied.warpYarnType) p.set('warpYarnType', applied.warpYarnType)
+    if (applied.weftYarnType) p.set('weftYarnType', applied.weftYarnType)
+    if (applied.warpCount) p.set('warpCount', applied.warpCount)
+    if (applied.weftCount) p.set('weftCount', applied.weftCount)
+    if (applied.dateFrom) p.set('dateFrom', applied.dateFrom)
+    if (applied.dateTo) p.set('dateTo', applied.dateTo)
     fetch(`/api/sales/orders?${p}`)
       .then(r => r.json())
-      .then(d => { setOrders(d.orders ?? []); setTotal(d.total ?? 0) })
+      .then(d => { setOrders(d.orders ?? []); setTotal(d.total ?? 0); setOrFallback(!!d.usedOrFallback) })
       .finally(() => setLoading(false))
   }, [page, applied])
 
@@ -116,7 +135,10 @@ export default function SalesOrdersReviewPage() {
 
   function applyFilter() {
     setPage(1)
-    setApplied({ q, status: statusFilter, month, year })
+    setApplied({
+      q, status: statusFilter, month, year,
+      warpYarnType, weftYarnType, warpCount, weftCount, dateFrom, dateTo,
+    })
   }
 
   function clearFilter() {
@@ -124,8 +146,17 @@ export default function SalesOrdersReviewPage() {
     setStatusFilter('')
     setMonth('')
     setYear('')
+    setWarpYarnType('')
+    setWeftYarnType('')
+    setWarpCount('')
+    setWeftCount('')
+    setDateFrom('')
+    setDateTo('')
     setPage(1)
-    setApplied({ q: '', status: '', month: '', year: '' })
+    setApplied({
+      q: '', status: '', month: '', year: '',
+      warpYarnType: '', weftYarnType: '', warpCount: '', weftCount: '', dateFrom: '', dateTo: '',
+    })
   }
 
   function openPrint(orderId: number, type: 'purchaseorder' | 'structure') {
@@ -212,6 +243,59 @@ export default function SalesOrdersReviewPage() {
               {applied.year ? ` ${applied.year}` : ''}
             </span>
           )}
+          {orFallback && (
+            <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded-lg border border-orange-200">
+              ไม่พบผลตรงทุกเงื่อนไข กำลังแสดงผลแบบ OR (ตรงเงื่อนไขใดเงื่อนไขหนึ่ง)
+            </span>
+          )}
+        </div>
+
+        {/* Row 3: yarn structure + date range */}
+        <div className="flex flex-wrap gap-2 items-center mt-2">
+          <input
+            value={warpYarnType}
+            onChange={e => setWarpYarnType(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && applyFilter()}
+            placeholder="ชนิดด้ายยืน 1"
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
+          />
+          <input
+            value={weftYarnType}
+            onChange={e => setWeftYarnType(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && applyFilter()}
+            placeholder="ชนิดด้ายพุ่ง 1"
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
+          />
+          <input
+            value={warpCount}
+            onChange={e => setWarpCount(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && applyFilter()}
+            placeholder="จำนวนด้ายยืน (เส้น)"
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-40"
+          />
+          <input
+            value={weftCount}
+            onChange={e => setWeftCount(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && applyFilter()}
+            placeholder="จำนวนด้ายพุ่ง (เส้น)"
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-40"
+          />
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 whitespace-nowrap">วันที่ :</span>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="text-xs text-gray-400">ถึง</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
       </div>
 

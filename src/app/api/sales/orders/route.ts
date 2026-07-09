@@ -24,20 +24,28 @@ export async function GET(request: NextRequest) {
   const status = searchParams.get('status') ?? ''
   const month = searchParams.get('month') ?? ''
   const year = searchParams.get('year') ?? ''
+  const warpYarnType = searchParams.get('warpYarnType') ?? ''
+  const weftYarnType = searchParams.get('weftYarnType') ?? ''
+  const warpCount = searchParams.get('warpCount') ?? ''
+  const weftCount = searchParams.get('weftCount') ?? ''
+  const dateFrom = searchParams.get('dateFrom') ?? ''
+  const dateTo = searchParams.get('dateTo') ?? ''
   const page = Math.max(1, Number(searchParams.get('page') ?? 1))
   const limit = 20
 
-  const conditions: any[] = [{ deletedAt: null }]
+  // Each active filter becomes its own condition; combined with AND first,
+  // then automatically retried with OR if the AND combination yields no rows.
+  const filterConditions: any[] = []
 
   if (q) {
-    conditions.push({
+    filterConditions.push({
       OR: [
         { purchaseOrder: { contains: q, mode: 'insensitive' } },
         { customerName: { contains: q, mode: 'insensitive' } },
       ],
     })
   }
-  if (status) conditions.push({ status })
+  if (status) filterConditions.push({ status })
   if (year) {
     const thYear = parseInt(year) - 543
     if (month) {
@@ -45,17 +53,40 @@ export async function GET(request: NextRequest) {
       const start = new Date(`${thYear}-${pad}-01`)
       const end = new Date(start)
       end.setMonth(end.getMonth() + 1)
-      conditions.push({ createDate: { gte: start, lt: end } })
+      filterConditions.push({ createDate: { gte: start, lt: end } })
     } else {
       const start = new Date(`${thYear}-01-01`)
       const end = new Date(`${thYear + 1}-01-01`)
-      conditions.push({ createDate: { gte: start, lt: end } })
+      filterConditions.push({ createDate: { gte: start, lt: end } })
     }
   }
+  if (warpYarnType) {
+    filterConditions.push({ fabricAstStructure: { is: { yarnHType: { contains: warpYarnType, mode: 'insensitive' } } } })
+  }
+  if (weftYarnType) {
+    filterConditions.push({ fabricAstStructure: { is: { yarnWType: { contains: weftYarnType, mode: 'insensitive' } } } })
+  }
+  if (warpCount) {
+    filterConditions.push({ fabricAstStructure: { is: { yarnHCount1: { contains: warpCount, mode: 'insensitive' } } } })
+  }
+  if (weftCount) {
+    filterConditions.push({ fabricAstStructure: { is: { yarnWCount1: { contains: weftCount, mode: 'insensitive' } } } })
+  }
+  if (dateFrom || dateTo) {
+    const start = dateFrom ? new Date(dateFrom) : undefined
+    const end = new Date(dateTo || dateFrom)
+    end.setDate(end.getDate() + 1)
+    const range: { gte?: Date; lt?: Date } = { lt: end }
+    if (start) range.gte = start
+    filterConditions.push({ createDate: range })
+  }
 
-  const where = conditions.length === 1 ? conditions[0] : { AND: conditions }
+  const baseCondition = { deletedAt: null }
+  let where = filterConditions.length === 0
+    ? baseCondition
+    : { AND: [baseCondition, ...filterConditions] }
 
-  const [orders, total] = await Promise.all([
+  let [orders, total] = await Promise.all([
     prisma.astPurchaseOrder.findMany({
       where,
       orderBy: { createDate: 'desc' },
@@ -69,7 +100,27 @@ export async function GET(request: NextRequest) {
     prisma.astPurchaseOrder.count({ where }),
   ])
 
-  return Response.json({ orders, total, page, limit })
+  // Fallback: multiple filters combined with AND found nothing → retry with OR
+  let usedOrFallback = false
+  if (total === 0 && filterConditions.length > 1) {
+    where = { AND: [baseCondition, { OR: filterConditions }] }
+    usedOrFallback = true
+    ;[orders, total] = await Promise.all([
+      prisma.astPurchaseOrder.findMany({
+        where,
+        orderBy: { createDate: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        include: {
+          fabricAst: { select: { fabricW: true, payment: true } },
+          fabricAstStructure: { select: { yarnWRatio2: true } },
+        },
+      }),
+      prisma.astPurchaseOrder.count({ where }),
+    ])
+  }
+
+  return Response.json({ orders, total, page, limit, usedOrFallback })
 }
 
 export async function POST(request: NextRequest) {
