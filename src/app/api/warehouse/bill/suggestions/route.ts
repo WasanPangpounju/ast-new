@@ -1,0 +1,38 @@
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import type { NextRequest } from 'next/server'
+
+export async function GET(request: NextRequest) {
+  const session = await auth()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const q = (request.nextUrl.searchParams.get('q') ?? '').trim()
+  if (!q) return Response.json({ data: [] })
+
+  const [customers, receivers] = await Promise.all([
+    prisma.fabricOut.findMany({
+      where: { deletedAt: null, customerName: { contains: q, mode: 'insensitive' } },
+      select: { customerName: true },
+      distinct: ['customerName'],
+      orderBy: { customerName: 'asc' },
+      take: 10,
+    }),
+    prisma.fabricOut.findMany({
+      where: { deletedAt: null, receiveName: { contains: q, mode: 'insensitive' } },
+      select: { receiveName: true },
+      distinct: ['receiveName'],
+      orderBy: { receiveName: 'asc' },
+      take: 10,
+    }),
+  ])
+
+  const merged = Array.from(
+    new Set(
+      [...customers.map((c) => c.customerName), ...receivers.map((r) => r.receiveName)].filter(
+        (v): v is string => !!v,
+      ),
+    ),
+  ).slice(0, 10)
+
+  return Response.json({ data: merged })
+}

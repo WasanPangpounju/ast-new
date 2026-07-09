@@ -74,6 +74,8 @@ export default function BillListPage() {
   const [search, setSearch] = useState("");
   const [applied, setApplied] = useState("");
   const [noStockOnly, setNoStockOnly] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const [searchDropdown, setSearchDropdown] = useState(false);
 
   const [manageBill, setManageBill] = useState<Bill | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('bill');
@@ -111,6 +113,21 @@ export default function BillListPage() {
   }, [page, applied, noStockOnly]);
 
   useEffect(() => { fetchBills(); }, [fetchBills]);
+
+  // Search box suggestions (customer / receiver names) debounce
+  useEffect(() => {
+    if (!search || search.length < 1) {
+      setSearchSuggestions([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch("/api/warehouse/bill/suggestions?q=" + encodeURIComponent(search))
+        .then((r) => r.json())
+        .then((d) => setSearchSuggestions(d.data ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const totalPages = Math.ceil(total / 20);
 
@@ -334,18 +351,39 @@ export default function BillListPage() {
       </div>
 
       <div className="bg-white border border-gray-200 p-4 mb-4 shadow-sm flex flex-wrap gap-3">
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="ค้นหาลูกค้า, เลขที่บิล..."
-          onKeyDown={(e) => e.key === "Enter" && (setPage(1), setApplied(search))}
-          className="flex-1 border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-40"
-        />
+        <div className="relative flex-1 min-w-40">
+          <input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setSearchDropdown(true); }}
+            onFocus={() => { if (search) setSearchDropdown(true); }}
+            onBlur={() => setTimeout(() => setSearchDropdown(false), 200)}
+            placeholder="ค้นหาลูกค้า, เลขที่บิล..."
+            onKeyDown={(e) => e.key === "Enter" && (setSearchDropdown(false), setPage(1), setApplied(search))}
+            className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {searchDropdown && searchSuggestions.length > 0 && (
+            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
+              {searchSuggestions.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onMouseDown={() => {
+                    setSearch(v);
+                    setSearchDropdown(false);
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0"
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button type="button" onClick={() => { setPage(1); setApplied(search); }}
           className="px-6 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium">
           ค้นหา
         </button>
-        <button type="button" onClick={() => { setSearch(""); setApplied(""); setNoStockOnly(false); setPage(1); }}
+        <button type="button" onClick={() => { setSearch(""); setApplied(""); setNoStockOnly(false); setPage(1); setSearchDropdown(false); }}
           className="px-4 py-1.5 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600">
           เคลียร์
         </button>
