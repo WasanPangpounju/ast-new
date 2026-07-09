@@ -64,7 +64,12 @@
       "Bash(npx eslint *)",
       "Skill(run)",
       "Bash(chromium-cli --help)",
-      "Bash(node -e \"console.log\\(require.resolve\\('playwright'\\)\\)\")"
+      "Bash(node -e \"console.log\\(require.resolve\\('playwright'\\)\\)\")",
+      "Bash(ls .claude/skills)",
+      "Bash(find . -maxdepth 3 -iname \"SKILL.md\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(pkill -f \"next dev -p 3100\")",
+      "Bash(break)"
     ]
   }
 }

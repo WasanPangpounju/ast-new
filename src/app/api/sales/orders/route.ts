@@ -60,11 +60,24 @@ export async function GET(request: NextRequest) {
       filterConditions.push({ createDate: { gte: start, lt: end } })
     }
   }
+  // yarnHType/yarnWType are unpopulated on legacy migrated orders — the yarn type
+  // text (e.g. "CP 40") only exists inside the free-text fabricStructure field
+  // (format: "warpType * weftType / warpCount * weftCount"), so fall back to it.
   if (warpYarnType) {
-    filterConditions.push({ fabricAstStructure: { is: { yarnHType: { contains: warpYarnType, mode: 'insensitive' } } } })
+    filterConditions.push({
+      OR: [
+        { fabricAstStructure: { is: { yarnHType: { contains: warpYarnType, mode: 'insensitive' } } } },
+        { fabricStructure: { contains: warpYarnType, mode: 'insensitive' } },
+      ],
+    })
   }
   if (weftYarnType) {
-    filterConditions.push({ fabricAstStructure: { is: { yarnWType: { contains: weftYarnType, mode: 'insensitive' } } } })
+    filterConditions.push({
+      OR: [
+        { fabricAstStructure: { is: { yarnWType: { contains: weftYarnType, mode: 'insensitive' } } } },
+        { fabricStructure: { contains: weftYarnType, mode: 'insensitive' } },
+      ],
+    })
   }
   if (warpCount) {
     filterConditions.push({ fabricAstStructure: { is: { yarnHCount1: { contains: warpCount, mode: 'insensitive' } } } })
@@ -104,7 +117,6 @@ export async function GET(request: NextRequest) {
   let usedOrFallback = false
   if (total === 0 && filterConditions.length > 1) {
     where = { AND: [baseCondition, { OR: filterConditions }] }
-    usedOrFallback = true
     ;[orders, total] = await Promise.all([
       prisma.astPurchaseOrder.findMany({
         where,
@@ -118,6 +130,7 @@ export async function GET(request: NextRequest) {
       }),
       prisma.astPurchaseOrder.count({ where }),
     ])
+    usedOrFallback = total > 0
   }
 
   return Response.json({ orders, total, page, limit, usedOrFallback })
