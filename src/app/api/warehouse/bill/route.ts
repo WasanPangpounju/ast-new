@@ -40,7 +40,10 @@ export async function GET(request: NextRequest) {
     const noStockOnly = searchParams.get('noStockOnly') === '1'
 
     const baseWhere = search
-      ? `deleted_at IS NULL AND "customerName" ILIKE '%${search.replace(/'/g, "''")}%'`
+      ? (() => {
+          const esc = search.replace(/'/g, "''")
+          return `deleted_at IS NULL AND ("customerName" ILIKE '%${esc}%' OR "receiveName" ILIKE '%${esc}%')`
+        })()
       : `deleted_at IS NULL`
 
     const [bills, totalRaw] = await Promise.all([
