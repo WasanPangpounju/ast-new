@@ -66,6 +66,8 @@ export default function BillCreatePage() {
 
   // Receiver (ผู้รับ)
   const [receiver, setReceiver] = useState("");
+  const [receiverResults, setReceiverResults] = useState<string[]>([]);
+  const [receiverDropdown, setReceiverDropdown] = useState(false);
 
   // Deposit options
   const [isDeposit, setIsDeposit] = useState(false);
@@ -198,6 +200,21 @@ export default function BillCreatePage() {
     }, 300);
     return () => clearTimeout(t);
   }, [orderer]);
+
+  // Receiver search debounce
+  useEffect(() => {
+    if (!receiver || receiver.length < 1) {
+      setReceiverResults([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      fetch("/api/warehouse/bill/suggestions?field=receiveName&q=" + encodeURIComponent(receiver))
+        .then((r) => r.json())
+        .then((d) => setReceiverResults(d.data ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [receiver]);
 
   // Alt purchase order (แทนผู้สั่งซื้อ) search debounce
   useEffect(() => {
@@ -776,16 +793,40 @@ export default function BillCreatePage() {
           </div>
 
           {/* Receiver - editable, auto-filled from orderer */}
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium text-gray-700 mb-1">
               ผู้รับ (Received by)
             </label>
             <input
               value={receiver}
-              onChange={(e) => setReceiver(e.target.value)}
+              onChange={(e) => {
+                setReceiver(e.target.value);
+                setReceiverDropdown(true);
+              }}
+              onFocus={() => {
+                if (receiver) setReceiverDropdown(true);
+              }}
+              onBlur={() => setTimeout(() => setReceiverDropdown(false), 200)}
               placeholder="ชื่อผู้รับ (ถ้าต่างจากผู้สั่ง แก้ได้)"
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {receiverDropdown && receiverResults.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
+                {receiverResults.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onMouseDown={() => {
+                      setReceiver(name);
+                      setReceiverDropdown(false);
+                    }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0"
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Remark */}

@@ -7,7 +7,19 @@ export async function GET(request: NextRequest) {
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const q = (request.nextUrl.searchParams.get('q') ?? '').trim()
+  const field = request.nextUrl.searchParams.get('field')
   if (!q) return Response.json({ data: [] })
+
+  if (field === 'receiveName') {
+    const receivers = await prisma.fabricOut.findMany({
+      where: { deletedAt: null, receiveName: { contains: q, mode: 'insensitive' } },
+      select: { receiveName: true },
+      distinct: ['receiveName'],
+      orderBy: { receiveName: 'asc' },
+      take: 10,
+    })
+    return Response.json({ data: receivers.map((r) => r.receiveName).filter((v): v is string => !!v) })
+  }
 
   const [customers, receivers] = await Promise.all([
     prisma.fabricOut.findMany({
