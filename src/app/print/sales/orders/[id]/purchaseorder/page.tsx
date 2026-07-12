@@ -327,7 +327,6 @@ export default function PurchaseOrderPrintPage({
         className="a4-page mx-auto bg-white"
       >
         {/* Header */}
-
         <div className="flex gap-3 mb-2">
           <div className="flex-shrink-0">
             <div className="w-20 h-20 bg-blue-700 flex items-center justify-center text-white font-bold text-xl rounded">
@@ -371,8 +370,8 @@ export default function PurchaseOrderPrintPage({
                 {customer?.address ?? "-"}
               </span>
             </div>
-            <div className="flex gap-2">
-              <span className="font-bold w-32 flex-shrink-0">
+            <div className="flex gap-2 text-sm">
+              <span className="font-bold w-32 flex-shrink-0 whitespace-nowrap text-[0.8rem]">
                 เลขประจำตัวผู้เสียภาษี
               </span>
               <span className="font-mono">{customer?.tax ?? "-"}</span>
@@ -389,7 +388,7 @@ export default function PurchaseOrderPrintPage({
               <span className="font-bold w-32 flex-shrink-0">วันที่</span>
               <span>{fmtDate(order.createDate)}</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 text-sm">
               <span className="font-bold w-32 flex-shrink-0">
                 เงื่อนไขการชำระเงิน
               </span>
@@ -462,7 +461,7 @@ export default function PurchaseOrderPrintPage({
                     <>
                       {/* แถว ratio + struct: "25:1-->2เส้น  OE20  x  (OE20+OE7)  12:1" */}
                       {structParts.length >= 2 && (
-                        <div className="print-struct-row  grid grid-cols-3 text-center items-center mb-2">
+                        <div className="print-struct-row  grid grid-cols-3 text-center items-center mb-4">
                           <span className="whitespace-nowrap">
                             {hRatio ? (
                               <div className="text-sm text-gray-500">
@@ -487,32 +486,32 @@ export default function PurchaseOrderPrintPage({
                         </div>
                       )}
                       {structParts.length === 1 && (
-                        <div className="print-struct-row text-center mb-1">{structParts[0]}</div>
+                        <div className="print-struct-row text-center mb-2.5">{structParts[0]}</div>
                       )}
 
                       {/* เส้นแบ่ง + แถว W */}
                       {wParts.length >= 2 ? (
-                        <div className="print-struct-row grid grid-cols-3 text-center border-t border-gray-400 pt-1 mb-1">
+                        <div className="print-struct-row grid grid-cols-3 text-center border-t border-gray-400 pt-2 mb-3.5">
                           <span>{wParts[0]}</span>
                           <span>x</span>
                           <span>{wParts[1]}</span>
                         </div>
                       ) : wParts.length === 1 ? (
-                        <div className="text-center border-t border-gray-400 pt-1 mb-1">
+                        <div className="text-center border-t border-gray-400 pt-2 mb-3.5">
                           {wParts[0]}
                         </div>
                       ) : null}
 
                       {/* pattern: "25:1-->2เส้น กันลม 63" */}
                       {pattern && (
-                        <div className="text-center my-1">
+                        <div className="text-center my-3">
                           {hRatio ? `${hRatio} ` : ""}
                           {pattern}
                           {fa?.fabricW ? ` ${fa.fabricW}"` : ""}
                         </div>
                       )}
 
-                      <div className="my-1">
+                      <div className="my-3">
                         <strong>รหัสผ้า</strong> {order.fabricId ?? "-"}
                       </div>
                     </>
@@ -559,8 +558,8 @@ export default function PurchaseOrderPrintPage({
             </div>
           </div>
 
-          {/* Totals right – w-3/5 caps width; flex-1 min-w-0 labels shrink if needed */}
-          <div className="w-3/5 shrink-0 space-y-1 text-sm">
+          {/* Totals right – w-2/5 caps width; flex-1 min-w-0 labels shrink if needed */}
+          <div className="w-2/5 shrink-0 space-y-1 text-sm mr-10">
             <div className="flex items-baseline gap-2 py-1">
               <span className="flex-1 min-w-0">รวมเป็นเงิน</span>
               <strong className="whitespace-nowrap tabular-nums">{fmt2(baseTotal)}</strong>

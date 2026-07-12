@@ -81,8 +81,8 @@ function Field({
   className?: string;
 }) {
   return (
-    <div className={`flex items-baseline gap-2 py-0.5 ${className}`}>
-      <span className="font-bold text-base whitespace-nowrap w-36 shrink-0">
+    <div className={`flex items-baseline gap-2 py-[0.2rem] ${className}`}>
+      <span className="font-bold text-base whitespace-nowrap w-40 shrink-0">
         {label} :
       </span>
       <span className="text-base flex-1 border-b border-dashed border-gray-400 pb-1.5 min-w-0">
@@ -345,11 +345,11 @@ export default function StructurePrintPage({
             flex-direction: column !important;
             justify-content: space-between !important;
           }
-          #print-body .text-base { font-size: 10pt !important; line-height: 1.35 !important; }
-          #print-body .text-sm  { font-size: 8pt !important; }
-          #print-body .text-lg  { font-size: 11.5pt !important; }
-          #print-body .text-xl  { font-size: 13pt !important; }
-          #print-body .w-36 { width: 100px !important; }
+          #print-body .text-base { font-size: 13pt !important; line-height: 1.35 !important; }
+          #print-body .text-sm  { font-size: 9.5pt !important; }
+          #print-body .text-lg  { font-size: 14pt !important; }
+          #print-body .text-xl  { font-size: 15.5pt !important; }
+          #print-body .w-40 { width: 118px !important; }
           #print-body .gap-8  { gap: 1.5rem !important; }
           #print-body .gap-16 { gap: 2rem !important; }
           #print-body .pb-6   { padding-bottom: 0.3rem !important; }
@@ -388,6 +388,10 @@ export default function StructurePrintPage({
       .a4-page .bg-white {
         background-color: #fff !important;
       }
+      .a4-page .text-sm  { font-size: 0.9rem; }
+      .a4-page .text-base { font-size: 1.25rem; }
+      .a4-page .text-lg  { font-size: 1.3rem; }
+      .a4-page .text-xl  { font-size: 1.45rem; }
       `}</style>
 
       {/* Print button bar */}
@@ -445,7 +449,7 @@ export default function StructurePrintPage({
           className="a4-page max-w-5xl mx-auto p-6 print:p-3 shadow-xl print:shadow-none flex flex-col min-h-132"
         >
           {/* Header */}
-          <div className="flex items-baseline justify-between mb-2 font-bold text-base">
+          <div className="flex items-baseline justify-between mb-4 font-bold text-base">
             <span>
               ชื่อลูกค้า:{" "}
               {order.customerName
