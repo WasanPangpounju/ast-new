@@ -81,7 +81,7 @@ function Field({
   className?: string;
 }) {
   return (
-    <div className={`flex items-baseline gap-2 py-[0.2rem] ${className}`}>
+    <div className={`flex items-baseline gap-2 py-[0.1rem] ${className}`}>
       <span className="font-bold text-base whitespace-nowrap w-40 shrink-0">
         {label} :
       </span>
@@ -610,7 +610,7 @@ export default function StructurePrintPage({
           ) : null}
 
           {/* Signatures */}
-          <div className="print-sig grid grid-cols-2 gap-8 mt-auto pt-16">
+          <div className="print-sig grid grid-cols-2 gap-8 mt-auto pt-10">
             <div>
               <div className="border-b border-gray-500 pb-6"></div>
               <p className="text-base mt-1 text-center">ผู้สั่งงาน</p>
