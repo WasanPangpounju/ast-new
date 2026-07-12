@@ -371,7 +371,7 @@ export default function PurchaseOrderPrintPage({
               </span>
             </div>
             <div className="flex gap-2 text-sm">
-              <span className="font-bold w-32 flex-shrink-0 whitespace-nowrap text-[0.8rem]">
+              <span className="font-bold w-32 flex-shrink-0 whitespace-nowrap text-[0.87rem]">
                 เลขประจำตัวผู้เสียภาษี
               </span>
               <span className="font-mono">{customer?.tax ?? "-"}</span>
