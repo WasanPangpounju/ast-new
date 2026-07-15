@@ -322,7 +322,7 @@ export default function StructurePrintPage({
           .no-print { display: none !important; }
           nextjs-portal { display: none !important; }
           html, body {
-            margin: 0 !important; padding: 0 !important;
+            margin: 0 !important; 
             height: 100% !important;
             overflow: hidden !important;
           }
@@ -337,7 +337,7 @@ export default function StructurePrintPage({
             height: 5.5in !important;
             max-height: 100vh !important;
             margin: 0 !important;
-            padding: 8mm 5mm 5mm !important;
+            padding: 8mm 10mm 5mm !important;
             box-sizing: border-box !important;
             box-shadow: none !important;
             overflow: hidden !important;
@@ -446,10 +446,10 @@ export default function StructurePrintPage({
       <div className="bg-gray-400 print:bg-white print:p-0 min-h-screen print:min-h-0 print:h-auto p-8">
         <div
           id="print-body"
-          className="a4-page max-w-5xl mx-auto p-6 print:p-3 shadow-xl print:shadow-none flex flex-col min-h-132"
+          className="a4-page max-w-5xl mx-auto p-6 px-10 print:p-3 shadow-xl print:shadow-none flex flex-col min-h-132"
         >
           {/* Header */}
-          <div className="flex items-baseline justify-between mb-4 font-bold text-base">
+          <div className="flex pr-12 items-baseline justify-between mb-4 font-bold text-base">
             <span>
               ชื่อลูกค้า:{" "}
               {order.customerName
