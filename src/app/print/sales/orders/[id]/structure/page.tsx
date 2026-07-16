@@ -337,7 +337,7 @@ export default function StructurePrintPage({
             height: 5.5in !important;
             max-height: 100vh !important;
             margin: 0 !important;
-            padding: 8mm 10mm 5mm !important;
+            padding: 8mm 6mm 5mm !important;
             box-sizing: border-box !important;
             box-shadow: none !important;
             overflow: hidden !important;
