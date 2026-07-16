@@ -85,7 +85,7 @@ function Field({
       <span className="font-bold text-base whitespace-nowrap w-40 shrink-0">
         {label} :
       </span>
-      <span className="text-base flex-1 border-b border-dashed border-gray-400 pb-1.5 min-w-0">
+      <span className="text-base flex-1 border-b border-dashed border-gray-400 pb-1.5 min-w-0 wrap-break-word">
         {value}
       </span>
     </div>
@@ -328,7 +328,10 @@ export default function StructurePrintPage({
           }
           .min-h-screen { min-height: 0 !important; height: auto !important; }
           .p-8 { padding: 0 !important; }
-          @page { size: 9in 5.5in; margin: 0; }
+          @page { size: 7.5in 5.5in;  margin-top: 0;
+            margin-bottom: 0;
+            margin-left: 5mm;
+            margin-right: 5mm; }
           #print-body {
             page-break-after: avoid; page-break-inside: avoid;
             break-after: avoid; break-inside: avoid;
@@ -337,7 +340,7 @@ export default function StructurePrintPage({
             height: 5.5in !important;
             max-height: 100vh !important;
             margin: 0 !important;
-            padding: 8mm 6mm 5mm !important;
+            padding: 6mm 5mm 5mm !important;
             box-sizing: border-box !important;
             box-shadow: none !important;
             overflow: hidden !important;
