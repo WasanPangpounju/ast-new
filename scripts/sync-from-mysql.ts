@@ -250,7 +250,7 @@ async function main() {
       if (!po) continue
       structData.push({
         purchaseOrder: po,
-        yarnHType:   s(s_.yarnHType),
+        yarnHType:   s(s_.yarnHType1),
         yarnHType2:  s(s_.yarnHType2),
         subNameH1:   s(s_.subNameH1),
         subNameH2:   s(s_.subNameH2),
@@ -258,7 +258,7 @@ async function main() {
         yarnHCount2: s(s_.yarnHCount2),
         yarnHRatio1: s(s_.yarnHRatio1),
         yarnHRatio2: s(s_.yarnHRatio2),
-        yarnWType:   s(s_.yarnWType),
+        yarnWType:   s(s_.yarnWType1),
         yarnWType2:  s(s_.yarnWType2),
         yarnWType3:  s(s_.yarnWType3),
         yarnWType4:  s(s_.yarnWType4),

@@ -137,8 +137,8 @@ async function main() {
         update: { yarnWRatio2: s.yarnWRatio2 ?? null },
         create: {
           purchaseOrder: po,
-          yarnHType: s.yarnHType ?? null,
-          yarnWType: s.yarnWType ?? null,
+          yarnHType: s.yarnHType1 ?? null,
+          yarnWType: s.yarnWType1 ?? null,
           yarnWRatio2: s.yarnWRatio2 ?? null,
           yarnHRatio1: s.yarnHRatio1 ?? null,
           yarnHRatio2: s.yarnHRatio2 ?? null,
