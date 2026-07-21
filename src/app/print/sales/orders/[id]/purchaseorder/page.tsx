@@ -429,24 +429,76 @@ export default function PurchaseOrderPrintPage({
                     ?.replace(/\([^)]+\)/g, "")
                     .trim();
 
-                  const raw = order.fabricStructure || "";
-                  const slashIdx = raw.search(/(?<!\/)\/(?!\/)(?![^(]*\))/);
-                  const structRaw =
-                    slashIdx >= 0 ? raw.slice(0, slashIdx).trim() : raw.trim();
-                  const wRaw =
-                    slashIdx >= 0 ? raw.slice(slashIdx + 1).trim() : "";
+                  const nd = (v: string | null | undefined) =>
+                    !v || v.trim() === "no data" ? null : v.trim();
 
-                  const structParts = structRaw
-                    .split("*")
-                    .map((s: string) => s.trim())
-                    .filter(Boolean);
-                  const wRawCounts = wRaw
-                    .split(/(?<!\/)\/(?!\/)(?![^(]*\))/)[0]
-                    .trim();
-                  const wParts = wRawCounts
-                    .split("*")
-                    .map((s: string) => s.trim())
-                    .filter(Boolean);
+                  // Prefer the structured columns the edit form writes
+                  // directly (yarnHType/yarnHType2 = warp, yarnWType..4 =
+                  // weft, yarnHCount1/yarnWCount1 = counts) — fabricStructure
+                  // is just a derived text rendering of these and is only
+                  // the source of truth for legacy migrated orders that
+                  // never got the structured fields populated.
+                  const hType = nd(fas?.yarnHType);
+                  const wType = nd(fas?.yarnWType);
+                  let structParts: string[];
+                  let wParts: string[];
+                  if (hType && wType) {
+                    const warpParts = [hType, nd(fas?.yarnHType2)].filter(
+                      (v): v is string => !!v,
+                    );
+                    const weftParts = [
+                      wType,
+                      nd(fas?.yarnWType2),
+                      nd(fas?.yarnWType3),
+                      nd(fas?.yarnWType4),
+                    ].filter((v): v is string => !!v);
+                    structParts = [
+                      warpParts.join(" + "),
+                      weftParts.join(" + "),
+                    ];
+                    wParts = [
+                      nd(fas?.yarnHCount1),
+                      nd(fas?.yarnWCount1),
+                    ].filter((v): v is string => !!v);
+                  } else {
+                    const raw = order.fabricStructure || "";
+                    // The real "/" separator always has spaces around it
+                    // (" / "). Slashes without surrounding spaces are part
+                    // of a token, e.g. ply notation ("10/2") or doubled
+                    // yarn marks ("20//"), so they must not split.
+                    const singleSlashIdx = (s: string) => {
+                      for (let i = 0; i < s.length; i++) {
+                        if (
+                          s[i] === "/" &&
+                          /\s/.test(s[i - 1] ?? "") &&
+                          /\s/.test(s[i + 1] ?? "")
+                        ) {
+                          return i;
+                        }
+                      }
+                      return -1;
+                    };
+                    const slashIdx = singleSlashIdx(raw);
+                    const structRaw =
+                      slashIdx >= 0
+                        ? raw.slice(0, slashIdx).trim()
+                        : raw.trim();
+                    const wRaw =
+                      slashIdx >= 0 ? raw.slice(slashIdx + 1).trim() : "";
+
+                    structParts = structRaw
+                      .split("*")
+                      .map((s: string) => s.trim())
+                      .filter(Boolean);
+                    const wSlashIdx = singleSlashIdx(wRaw);
+                    const wRawCounts = (
+                      wSlashIdx >= 0 ? wRaw.slice(0, wSlashIdx) : wRaw
+                    ).trim();
+                    wParts = wRawCounts
+                      .split("*")
+                      .map((s: string) => s.trim())
+                      .filter(Boolean);
+                  }
 
                   const hRatio =
                     fas?.yarnHRatio1 && fas.yarnHRatio1 !== "no data"

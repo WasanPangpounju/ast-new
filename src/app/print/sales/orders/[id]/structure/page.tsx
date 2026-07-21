@@ -212,11 +212,43 @@ export default function StructurePrintPage({
   const note = nd(order.productionNote) ?? nd(order.note) ?? "";
 
   const yarnCount = (() => {
+    // Prefer the structured columns the edit form writes directly
+    // (yarnHType/yarnHType2 = warp, yarnWType..4 = weft, yarnHCount1/
+    // yarnWCount1 = counts) — fabricStructure is just a derived text
+    // rendering of these and is only the source of truth for legacy
+    // migrated orders that never got the structured fields populated.
+    const hType = nd(s?.yarnHType);
+    const wType = nd(s?.yarnWType);
+    if (hType && wType) {
+      const warpParts = [hType, nd(s?.yarnHType2)].filter(
+        (v): v is string => !!v,
+      );
+      const weftParts = [
+        wType,
+        nd(s?.yarnWType2),
+        nd(s?.yarnWType3),
+        nd(s?.yarnWType4),
+      ].filter((v): v is string => !!v);
+      const structParts = [warpParts.join(" + "), weftParts.join(" + ")];
+      const wParts = [nd(s?.yarnHCount1), nd(s?.yarnWCount1)].filter(
+        (v): v is string => !!v,
+      );
+      return { structParts, wParts };
+    }
+
     const raw = nd(order.fabricStructure);
     if (!raw) return null;
-    // Find first single slash (not //) by masking // as null bytes (preserves positions)
-    const singleSlashIdx = (s: string) =>
-      s.replace(/\/\//g, "\0\0").indexOf("/");
+    // The real "/" separator always has spaces around it (" / "). Slashes
+    // without surrounding spaces are part of a token, e.g. ply notation
+    // ("10/2") or doubled yarn marks ("20//"), so they must not split.
+    const singleSlashIdx = (s: string) => {
+      for (let i = 0; i < s.length; i++) {
+        if (s[i] === "/" && /\s/.test(s[i - 1] ?? "") && /\s/.test(s[i + 1] ?? "")) {
+          return i;
+        }
+      }
+      return -1;
+    };
     const si = singleSlashIdx(raw);
     if (si < 0) {
       return {
@@ -328,10 +360,10 @@ export default function StructurePrintPage({
           }
           .min-h-screen { min-height: 0 !important; height: auto !important; }
           .p-8 { padding: 0 !important; }
-          @page { size: 7.5in 5.5in;  margin-top: 0;
+          @page { size: 8.5in 5.5in;  margin-top: 0;
             margin-bottom: 0;
-            margin-left: 5mm;
-            margin-right: 5mm; }
+            margin-left: 0.5mm;
+            margin-right: 0.5mm; }
           #print-body {
             page-break-after: avoid; page-break-inside: avoid;
             break-after: avoid; break-inside: avoid;
