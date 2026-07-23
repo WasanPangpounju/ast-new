@@ -135,6 +135,94 @@ function CompAC({ value, onChange }: { value: string; onChange: (v: string) => v
   );
 }
 
+function FabricPatternAC({ value, onChange, placeholder }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const [sugs, setSugs] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") { setOpen(false); return; }
+    if (e.key === " ") {
+      const q = value.trim();
+      if (!q) return;
+      fetch(`/api/sales/autocomplete/fabric-patterns?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => { setSugs(d.patterns ?? []); setOpen(true); });
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <input value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+      {open && sugs.length > 0 && (
+        <div className="absolute z-30 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto">
+          {sugs.map((s) => (
+            <button key={s} type="button" onClick={() => { onChange(s); setOpen(false); }}
+              className="w-full text-left px-2 py-1 text-xs hover:bg-blue-50 truncate">{s}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StackTypeAC({ value, onChange, placeholder }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const [sugs, setSugs] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") { setOpen(false); return; }
+    if (e.key === " ") {
+      const q = value.trim();
+      if (!q) return;
+      fetch(`/api/sales/autocomplete/stack-types?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => { setSugs(d.types ?? []); setOpen(true); });
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <input value={value} onChange={(e) => onChange(e.target.value)} onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+      {open && sugs.length > 0 && (
+        <div className="absolute z-30 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto">
+          {sugs.map((s) => (
+            <button key={s} type="button" onClick={() => { onChange(s); setOpen(false); }}
+              className="w-full text-left px-2 py-1 text-xs hover:bg-blue-50 truncate">{s}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function YarnRow({ label, required, yarn, comp, count, ratio, onYarn, onComp, onCount, onRatio, side, grayRatio = false }: {
   label: string; required?: boolean; yarn: string; comp: string; count: string; ratio: string;
   onYarn: (v: string) => void; onComp: (v: string) => void; onCount: (v: string) => void; onRatio: (v: string) => void;
@@ -527,7 +615,7 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
                   </div>
                   <div>
                     <Label text="ลายผ้า" required />
-                    <Input value={fabricPattern} onChange={setFabricPattern} placeholder="ลายผ้า" />
+                    <FabricPatternAC value={fabricPattern} onChange={setFabricPattern} placeholder="ลายผ้า" />
                   </div>
                 </div>
 
@@ -609,7 +697,7 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
                 <div className="grid grid-cols-3 gap-4">
                   <div><Label text="เบอร์หวี" /><Input value={phewNumber} onChange={setPhewNumber} placeholder="เบอร์" /></div>
                   <div><Label text="หน้าหวี (นิ้ว)" /><Input value={phewW} onChange={setPhewW} placeholder="นิ้ว" type="number" /></div>
-                  <div><Label text="การลงผ้า" /><Input value={stackType} onChange={setStackType} placeholder="การลงผ้า" /></div>
+                  <div><Label text="การลงผ้า" /><StackTypeAC value={stackType} onChange={setStackType} placeholder="การลงผ้า" /></div>
                 </div>
 
                 {/* Order quantity */}
@@ -717,7 +805,7 @@ export default function EditOrderPage({ params }: { params: Promise<{ id: string
                   <div />
                   <div><Label text="SURCHARGE" /><Input value={surcharge} onChange={setSurcharge} placeholder="Surcharge" /></div>
                   <div />
-                  <div><Label text="คอมมิชชั่น" /><Input value={commission} onChange={setCommission} placeholder="คอมมิชชั่น" type="number" /></div>
+                  <div><Label text="คอมมิชชั่น" /><Input value={commission} onChange={setCommission} placeholder="คอมมิชชั่น" /></div>
                   <div><Label text="ส่วนลด/หลา" /><Input value={discountYard} onChange={setDiscountYard} placeholder="บาท/หลา" type="number" /></div>
                   <div><Label text="PO ลูกค้า" /><Input value={po} onChange={setPo} placeholder="เลขที่ PO" /></div>
                 </div>

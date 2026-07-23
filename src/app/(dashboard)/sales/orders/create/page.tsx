@@ -250,6 +250,148 @@ function CompAC({
   );
 }
 
+// ─── Fabric pattern autocomplete ──────────────────────────────────────────────
+
+function FabricPatternAC({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [sugs, setSugs] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      setOpen(false);
+      return;
+    }
+    if (e.key === " ") {
+      const q = value.trim();
+      if (!q) return;
+      fetch(`/api/sales/autocomplete/fabric-patterns?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          setSugs(d.patterns ?? []);
+          setOpen(true);
+        });
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+      {open && sugs.length > 0 && (
+        <div className="absolute z-30 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto">
+          {sugs.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => {
+                onChange(s);
+                setOpen(false);
+              }}
+              className="w-full text-left px-2 py-1 text-xs hover:bg-blue-50 truncate"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Stack type autocomplete ──────────────────────────────────────────────────
+
+function StackTypeAC({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [sugs, setSugs] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Escape") {
+      setOpen(false);
+      return;
+    }
+    if (e.key === " ") {
+      const q = value.trim();
+      if (!q) return;
+      fetch(`/api/sales/autocomplete/stack-types?q=${encodeURIComponent(q)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          setSugs(d.types ?? []);
+          setOpen(true);
+        });
+    }
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+      />
+      {open && sugs.length > 0 && (
+        <div className="absolute z-30 w-full mt-0.5 bg-white border border-gray-200 rounded shadow-lg max-h-40 overflow-y-auto">
+          {sugs.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => {
+                onChange(s);
+                setOpen(false);
+              }}
+              className="w-full text-left px-2 py-1 text-xs hover:bg-blue-50 truncate"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Yarn row ─────────────────────────────────────────────────────────────────
 
 function YarnRow({
@@ -784,7 +926,7 @@ export default function CreateOrderPage() {
                 </div>
                 <div>
                   <Label text="ลายผ้า" required />
-                  <Input
+                  <FabricPatternAC
                     value={fabricPattern}
                     onChange={setFabricPattern}
                     placeholder="ลายผ้า"
@@ -988,7 +1130,7 @@ export default function CreateOrderPage() {
                 </div>
                 <div>
                   <Label text="การลงผ้า" />
-                  <Input
+                  <StackTypeAC
                     value={stackType}
                     onChange={setStackType}
                     placeholder="การลงผ้า"
@@ -1213,7 +1355,6 @@ export default function CreateOrderPage() {
                     value={commission}
                     onChange={setCommission}
                     placeholder="คอมมิชชั่น"
-                    type="number"
                   />
                 </div>
                 <div>
