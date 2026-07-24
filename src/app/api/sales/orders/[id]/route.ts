@@ -91,7 +91,7 @@ export async function PUT(
         priceM: priceM !== undefined ? (priceM ? parseFloat(priceM) : null) : undefined,
         discountP: discountP !== undefined ? (discountP ? parseFloat(discountP) : null) : undefined,
         discountYard: discountYard !== undefined ? (discountYard ? parseFloat(discountYard) : null) : undefined,
-        commission: commission !== undefined ? (commission ? parseFloat(commission) : null) : undefined,
+        commission: commission !== undefined ? (commission?.trim() ? commission.trim() : null) : undefined,
         billNo: billNo !== undefined ? (billNo ? parseInt(billNo, 10) : null) : undefined,
         machineNumber: machineNumber?.trim() ?? undefined,
         surcharge: surcharge?.trim() ?? undefined,

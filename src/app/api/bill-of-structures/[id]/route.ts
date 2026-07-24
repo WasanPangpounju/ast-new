@@ -75,7 +75,7 @@ export async function PUT(
           discountP: discountP ? parseFloat(discountP) : null,
           machineNumber: machineNumber?.trim() ?? null,
           surcharge: surcharge?.trim() ?? null,
-          commission: commission ? parseFloat(commission) : null,
+          commission: commission?.trim() ? commission.trim() : null,
           po: po?.trim() ?? null,
           note: note?.trim() ?? null,
           productionNote: productionNote?.trim() ?? null,

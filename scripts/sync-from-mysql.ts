@@ -232,7 +232,7 @@ async function main() {
       priceM:         f(o.priceM),
       discountP:      f(o.discountP),
       discountYard:   f(o.discountYard),
-      commission:     f(o.commission),
+      commission:     s(o.commission),
       createDate:     d(o.createDate),
       status:         s(o.status),
       deadline:       s(o.deadline),

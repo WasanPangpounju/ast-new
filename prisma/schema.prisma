@@ -129,7 +129,7 @@ model AstPurchaseOrder {
   priceM          Float?    @map("price_m")
   discountP       Float?    @map("discount_p")
   discountYard    Float?    @map("discount_yard")
-  commission      Float?
+  commission      String?
   billNo          Int?      @map("bill_no")
   machineNumber   String?   @map("machine_number")
   surcharge       String?
@@ -650,7 +650,7 @@ model AstBillOfStructure {
   // Other
   machineNumber   String?   @map("machine_number")
   surcharge       String?
-  commission      Float?
+  commission      String?
   po              String?
   note            String?
   productionNote  String?   @map("production_note")

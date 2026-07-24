@@ -69,7 +69,23 @@
       "Bash(find . -maxdepth 3 -iname \"SKILL.md\")",
       "Bash(echo \"EXIT:$?\")",
       "Bash(pkill -f \"next dev -p 3100\")",
-      "Bash(break)"
+      "Bash(break)",
+      "Bash(find src/app/api/warehouse/customers -type f)",
+      "Bash(find src/app/api/warehouse/stock/search -type f)",
+      "Bash(rm \"C:\\\\Users\\\\Friendly Dev\\\\project\\\\ast-new\\\\scripts\\\\_tmp-test-suggestions.ts\")",
+      "Bash(rm -f \"C:\\\\Users\\\\FRIEND~1\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-Friendly-Dev-project-ast-new\\\\c3f06642-6a75-4364-a28b-5655611eb6ca\\\\scratchpad\\\\test-suggestions.ts\")",
+      "Bash(taskkill //F //IM node.exe //FI \"WINDOWTITLE eq *dev*\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill *)",
+      "Bash(grep -Hm1 '^description:' .claude/skills/*/SKILL.md)",
+      "Bash(find . -maxdepth 2 -iname \"middleware.ts\" -not -path \"./node_modules/*\")",
+      "Bash(cat src/middleware.ts)",
+      "Bash(cat middleware.ts)",
+      "Bash(find . -maxdepth 2 -iname \"*.prisma\" -o -iname \"prisma\" -maxdepth 2)",
+      "Bash(ls prisma *)",
+      "Bash(find . -path ./node_modules -prune -o -iname \"schema.prisma\" -print)",
+      "Bash(git log *)",
+      "PowerShell(Get-Process *)"
     ]
   }
 }

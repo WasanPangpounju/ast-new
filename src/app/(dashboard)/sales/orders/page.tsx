@@ -11,7 +11,7 @@ interface Order {
   priceM: number | null
   discountP: number | null
   discountYard: number | null
-  commission: number | null
+  commission: string | null
   orderSumM: number | null
   orderSumYard: number | null
   status: string | null
