@@ -1,40 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
-
-// Normalize fabric structure: trim whitespace, collapse spaces,
-// then unify *, x, / separators → /
-const NS = (col: string) =>
-  `TRIM(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(REGEXP_REPLACE(TRIM(COALESCE(${col}, '')), '\\s+', ' ', 'g'), '\\s*\\*\\s*', '/', 'g'), '\\s+[xX]\\s+', '/', 'g'), '\\s*/\\s*', '/', 'g'))`
-
-// Normalize fabric width: digits only from first segment
-const NW = (col: string) =>
-  `COALESCE(REGEXP_REPLACE(SPLIT_PART(TRIM(COALESCE(${col}, '')), '/', 1), '[^0-9.]', '', 'g'), '')`
-
-// Normalize fabric pattern: trim and collapse spaces
-const NP = (col: string) =>
-  `COALESCE(TRIM(REGEXP_REPLACE(COALESCE(${col}, ''), '\\s+', ' ', 'g')), '')`
-
-// Use stock* override fields (from old system) when set, otherwise fall back to direct fields.
-// This mirrors the old Laravel logic: stockFabricW overrides fabricW, etc.
-const EFF_STRUCT  = `CASE WHEN "stockFabricStruct"  IS NULL OR "stockFabricStruct"  = '' THEN "fabricStruct"  ELSE "stockFabricStruct"  END`
-const EFF_WIDTH   = `CASE WHEN "stockFabricW"       IS NULL OR "stockFabricW"       = '' THEN "fabricW"       ELSE "stockFabricW"       END`
-const EFF_PATTERN = `CASE WHEN "stockFabricPattern" IS NULL OR "stockFabricPattern" = '' THEN "fabricPattern" ELSE "stockFabricPattern" END`
-const EFF_CUSTOMER = `COALESCE(NULLIF(TRIM(CASE WHEN "stockCustomer" IS NULL OR "stockCustomer" = '' THEN "customerName" ELSE "stockCustomer" END), ''), 'AST')`
-
-const NORM_OUTS_CTE = `
-  norm_outs AS (
-    SELECT
-      ${NS(EFF_STRUCT)}   AS n_struct,
-      ${NW(EFF_WIDTH)}    AS n_width,
-      ${NP(EFF_PATTERN)}  AS n_pattern,
-      ${EFF_CUSTOMER}     AS n_customer,
-      COUNT(*)::int         AS out_fold,
-      SUM("sumYard")::float AS out_yard
-    FROM fabricouts
-    WHERE deleted_at IS NULL
-    GROUP BY 1, 2, 3, 4
-  )`
+import { NS, NW, NP, NORM_OUTS_CTE } from '@/lib/fabricOutMatch'
 
 export async function GET(request: NextRequest) {
   try {

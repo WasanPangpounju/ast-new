@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
+import { NS, NW, NP, EFF_STRUCT, EFF_WIDTH, EFF_PATTERN, EFF_CUSTOMER } from '@/lib/fabricOutMatch'
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +39,9 @@ export async function GET(request: NextRequest) {
         ORDER BY MAX("createDate") DESC
       `) as Promise<any[]>,
 
-      // Bill entries (fabricouts) matching this fabric group via effective fields
+      // Bill entries (fabricouts) matching this fabric group — same normalized
+      // struct+width+pattern+customer match as the "ใช้ไป" summary query, so the
+      // two views never disagree on the same fabric group.
       prisma.$queryRawUnsafe(`
         SELECT
           "vatType",
@@ -50,15 +53,11 @@ export async function GET(request: NextRequest) {
           SUM("sumYard")::float   AS "totalYard"
         FROM fabricouts
         WHERE deleted_at IS NULL
-          AND TRIM(COALESCE(
-                CASE WHEN "stockFabricStruct" IS NULL OR "stockFabricStruct" = ''
-                THEN "fabricStruct" ELSE "stockFabricStruct" END, '')) = '${esc(fabricStruct)}'
-          AND TRIM(COALESCE(
-                CASE WHEN "stockFabricPattern" IS NULL OR "stockFabricPattern" = ''
-                THEN "fabricPattern" ELSE "stockFabricPattern" END, '')) = '${esc(fabricPattern)}'
-          AND COALESCE(NULLIF(TRIM(
-                CASE WHEN "stockCustomer" IS NULL OR "stockCustomer" = ''
-                THEN "customerName" ELSE "stockCustomer" END), ''), 'AST') = '${esc(customer)}'
+          AND ${NS(EFF_STRUCT)}   = ${NS(`'${esc(fabricStruct)}'`)}
+          AND ${NW(EFF_WIDTH)}    = ${NW(`'${esc(fabricW)}'`)}
+          AND ${NP(EFF_PATTERN)}  = ${NP(`'${esc(fabricPattern)}'`)}
+          AND ${NP(`'${esc(fabricPattern)}'`)} <> ''
+          AND ${EFF_CUSTOMER}     = COALESCE(NULLIF(TRIM('${esc(customer)}'), ''), 'AST')
         GROUP BY "vatType", "vatNo"
         ORDER BY MAX("createDate") DESC
       `) as Promise<any[]>,
