@@ -116,8 +116,11 @@ async function main() {
   // ── 2. TRUNCATE — full หรือ targeted ขึ้นกับ --tables flag ───────────────
   // หมายเหตุ:
   //   - orderdeadlines, ordershippeds, fabricimports, productions, inventories,
-  //     ast_bill_of_structures, material_outsides, material_returns, packages
-  //     เป็นตาราง PG-only (ไม่มีใน MySQL) → รักษาข้อมูล
+  //     ast_bill_of_structures, material_returns, packages เป็นตาราง PG-only (ไม่มีใน MySQL) → รักษาข้อมูล
+  //   - material_outsides: MySQL "ast" DB มีตารางนี้จริง (ดู scripts/backfill-material-outsides.ts
+  //     สำหรับ one-time backfill ของข้อมูลเก่า) แต่ sync รอบปกตินี้ไม่ truncate/sync มันด้วย
+  //     เพราะข้อมูลใหม่ถูกบันทึกตรงผ่าน /api/warehouse/material/outside ในแอปนี้แล้ว
+  //     ไม่ใช่ผ่าน MySQL อีกต่อไป — sync ซ้ำจะเสี่ยงเขียนทับ id ที่แอปสร้างเอง
   //   - วิธี: drop FK จาก PG-only tables → TRUNCATE → re-add FK
   //     เพราะ PostgreSQL ไม่อนุญาต TRUNCATE parent table ที่มี FK child อยู่นอก set
   console.log('🗑️  Truncating PostgreSQL tables...')
