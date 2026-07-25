@@ -2,6 +2,21 @@ import type { Prisma } from '@/generated/prisma/client/client'
 
 type TxClient = Prisma.TransactionClient
 
+/** Thrown for expected validation failures (not found, exceeds quota, already cancelled) —
+ *  routes catch this and respond with `status`; anything else is an unexpected 500. */
+export class PackageReturnError extends Error {
+  constructor(message: string, public status: number) {
+    super(message)
+    this.name = 'PackageReturnError'
+  }
+}
+
+export function computeReturnStatus(qtyReturned: number, qtyDue: number): 'PENDING' | 'PARTIALLY_RETURNED' | 'RETURNED' {
+  if (qtyReturned <= 0) return 'PENDING'
+  if (qtyReturned >= qtyDue) return 'RETURNED'
+  return 'PARTIALLY_RETURNED'
+}
+
 /** Exact-match (trimmed) lookup of Supplier by name — 100% of current Material/MaterialOutside
  *  supplierName values match a Supplier.name, but that isn't guaranteed for future free-text input,
  *  so an unmatched name falls back to needsSupplierAssignment instead of failing the transaction. */
