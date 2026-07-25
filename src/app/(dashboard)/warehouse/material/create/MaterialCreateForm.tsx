@@ -21,11 +21,11 @@ interface FormState {
   pallet: string;
   box: string;
   sack: string;
-  // ── packaging type tags (UI only)
+  paperBar: string;
+  // ── packaging type tags (sent to API)
   palletType: string;
   sackType: string;
   spoolType: string;
-  paperBar: string;
   // ── quantities
   spool: string;
   yarnSum: string;
@@ -38,7 +38,7 @@ interface FormState {
   weightKgNet: string;  // calculated
   averageP: string;     // calculated
   averageKg: string;    // calculated
-  // ── return packaging (UI only)
+  // ── return packaging (sent to API)
   returnPallet: boolean;
   returnBox: boolean;
   returnSack: boolean;
@@ -221,8 +221,17 @@ export default function MaterialCreateForm({ emp }: Props) {
         averageKg:      parseFloat(form.averageKg)      || undefined,
         averageP:       parseFloat(form.averageP)       || undefined,
         pallet:         parseInt(form.pallet)  || undefined,
+        palletType:     form.palletType.trim() || undefined,
         box:            parseInt(form.box)     || undefined,
         sack:           parseInt(form.sack)    || undefined,
+        sackType:       form.sackType.trim()   || undefined,
+        paperBar:       parseInt(form.paperBar) || undefined,
+        spoolType:      form.spoolType.trim()  || undefined,
+        returnPallet:   form.returnPallet,
+        returnBox:      form.returnBox,
+        returnSack:     form.returnSack,
+        returnSpool:    form.returnSpool,
+        returnPaperBar: form.returnPaperBar,
         emp:            form.emp.trim()  || undefined,
         note:           form.note.trim() || undefined,
       };

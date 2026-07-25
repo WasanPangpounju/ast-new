@@ -424,10 +424,20 @@ model Material {
   weightKgPackage Float
 
   // บรรจุภัณฑ์
-  pallet   Int? // จำนวน pallet
-  box      Int? // จำนวน box
-  sack     Int? // จำนวน sack
-  paperBar Int? // จำนวนกระดาษกั้น
+  pallet     Int? // จำนวน pallet
+  palletType String? // "wood" | "steel"
+  box        Int? // จำนวน box
+  sack       Int? // จำนวน sack
+  sackType   String? // "p" (ปอ) | "plastic"
+  paperBar   Int? // จำนวนกระดาษกั้น
+  spoolType  String? // "spool_plastic" | "spool_paper" | "spoolC_plastic" | "spoolC_paper"
+
+  // การคืนบรรจุภัณฑ์ (สมมาตรกับ MaterialOutside)
+  returnPallet   Boolean @default(false)
+  returnBox      Boolean @default(false)
+  returnSack     Boolean @default(false)
+  returnSpool    Boolean @default(false)
+  returnPaperBar Boolean @default(false)
 
   // น้ำหนัก pounds (เก็บไว้เพื่อ traceability จากระบบเดิม)
   weightPNet     Float? // น้ำหนัก pounds ต่อ spool
