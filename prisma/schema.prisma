@@ -20,7 +20,6 @@ model User {
   deletedAt   DateTime?        @map("deleted_at")
   permissions UserPermission[]
 
-
   @@map("users")
 }
 
@@ -82,8 +81,9 @@ model Supplier {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  packages       Package[]
-  fabricReturns  FabricReturn[]
+  packages                 Package[]
+  fabricReturns            FabricReturn[]
+  packageReturnObligations PackageReturnObligation[]
 
   @@map("suppliers")
 }
@@ -255,38 +255,38 @@ model FabricAstStructure {
 // ─── FABRIC OPERATIONS ───────────────────────────────
 
 model FabricOut {
-  id            Int       @id @default(autoincrement())
+  id                 Int       @id @default(autoincrement())
   /// Random base64 session token — groups all rolls in one delivery
-  refId         String
+  refId              String
   /// SO number string e.g. "SO5807/28" — direct match to ast_purchaseorders.purchaseOrder
-  purchaseOrder String?
+  purchaseOrder      String?
   /// Global serial number across all fabricout records
-  no            String?
+  no                 String?
   /// Invoice series: 'A' | 'B' | 'C'
-  vatType       String
+  vatType            String
   /// Running invoice number per series, starting at 1001
-  vatNo         Int
+  vatNo              Int
   /// Sequential roll number within this delivery (1, 2, 3…)
-  fold          Int
+  fold               Int
   /// Yards in this specific roll
-  sumYard       Float
-  fabricStruct  String?
-  fabricPattern String?
-  fabricW       String?
-  customerName  String?
-  receiveName   String?
-  orderId       Int?
-  createDate    DateTime  @default(now())
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt        DateTime? @map("deleted_at")
-  isDeposit        Boolean   @default(false)
-  altFabricStruct  String?
-  altPurchaseOrder String?
-  stockCustomer       String?
-  stockFabricStruct   String?
-  stockFabricPattern  String?
-  stockFabricW        String?
+  sumYard            Float
+  fabricStruct       String?
+  fabricPattern      String?
+  fabricW            String?
+  customerName       String?
+  receiveName        String?
+  orderId            Int?
+  createDate         DateTime  @default(now())
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+  isDeposit          Boolean   @default(false)
+  altFabricStruct    String?
+  altPurchaseOrder   String?
+  stockCustomer      String?
+  stockFabricStruct  String?
+  stockFabricPattern String?
+  stockFabricW       String?
 
   order AstPurchaseOrder? @relation(fields: [orderId], references: [id])
 
@@ -414,7 +414,7 @@ model Production {
 
 model Material {
   // รับเส้นด้ายเข้าคลัง (แทน table `materials` ใน MySQL เดิม)
-  id              Int       @id @default(autoincrement())
+  id              Int    @id @default(autoincrement())
   lot             String
   spool           Int
   yarnType        String
@@ -424,29 +424,31 @@ model Material {
   weightKgPackage Float
 
   // บรรจุภัณฑ์
-  pallet          Int?      // จำนวน pallet
-  box             Int?      // จำนวน box
-  sack            Int?      // จำนวน sack
+  pallet   Int? // จำนวน pallet
+  box      Int? // จำนวน box
+  sack     Int? // จำนวน sack
+  paperBar Int? // จำนวนกระดาษกั้น
 
   // น้ำหนัก pounds (เก็บไว้เพื่อ traceability จากระบบเดิม)
-  weightPNet      Float?    // น้ำหนัก pounds ต่อ spool
-  weightPSum      Float?    // น้ำหนัก pounds รวม
-  weightPPackage  Float?    // น้ำหนัก pounds รวมทั้งหีบห่อ
-  averageKg       Float?    // เฉลี่ย kg ต่อ spool
-  averageP        Float?    // เฉลี่ย pounds ต่อ spool
+  weightPNet     Float? // น้ำหนัก pounds ต่อ spool
+  weightPSum     Float? // น้ำหนัก pounds รวม
+  weightPPackage Float? // น้ำหนัก pounds รวมทั้งหีบห่อ
+  averageKg      Float? // เฉลี่ย kg ต่อ spool
+  averageP       Float? // เฉลี่ย pounds ต่อ spool
 
   // พนักงานรับผิดชอบ
-  emp             String?   // ชื่อพนักงานที่รับเข้า (จาก MySQL column `emp`)
+  emp String? // ชื่อพนักงานที่รับเข้า (จาก MySQL column `emp`)
 
-  importStatus    String    @default("pending")
-  note            String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
+  importStatus String    @default("pending")
+  note         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 
-  requisitions    MaterialRequisition[]
-  outsides        MaterialOutside[]
-  returns         MaterialReturn[]
+  requisitions             MaterialRequisition[]
+  outsides                 MaterialOutside[]
+  returns                  MaterialReturn[]
+  packageReturnObligations PackageReturnObligation[]
 
   @@map("materials")
 }
@@ -489,12 +491,18 @@ model MaterialOutside {
   returnSack      Boolean   @default(false)
   returnSpool     Boolean   @default(false)
   returnPaperBar  Boolean   @default(false)
+  pallet          Int? // จำนวน pallet ที่เบิกออก
+  box             Int? // จำนวน box ที่เบิกออก
+  sack            Int? // จำนวน sack ที่เบิกออก
+  paperBar        Int? // จำนวนกระดาษกั้นที่เบิกออก
   recipient       String?
   usageNote       String?
   paymentComment  String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
+
+  packageReturnObligations PackageReturnObligation[]
 
   @@map("material_outsides")
 }
@@ -670,15 +678,15 @@ model AstBillOfStructure {
 }
 
 model BosDeadline {
-  id        Int                @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   bosId     Int
   dt        DateTime?
   label     String?
   qty       Float?
   unit      String?
   pct       Float?
-  createdAt DateTime           @default(now()) @map("created_at")
-  updatedAt DateTime           @updatedAt @map("updated_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   bos AstBillOfStructure @relation(fields: [bosId], references: [id])
 
@@ -687,23 +695,106 @@ model BosDeadline {
 }
 
 model FabricReturn {
-  id            Int       @id @default(autoincrement())
+  id            Int      @id @default(autoincrement())
   supplierId    Int
   fabricCode    String
   qty           Float
-  unit          String    @default("หลา")
-  returnQty     Float     @default(0)
+  unit          String   @default("หลา")
+  returnQty     Float    @default(0)
   receivedQty   Float?
   totalReturned Float?
   returnDate    DateTime
   note          String?
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  supplier  Supplier  @relation(fields: [supplierId], references: [id])
+  supplier Supplier @relation(fields: [supplierId], references: [id])
 
   @@index([supplierId])
   @@map("fabric_returns")
+}
+
+// ─── PACKAGE RETURNS ─────────────────────────────────
+
+/// 5 ชนิดบรรจุภัณฑ์ที่คืนได้ — ตรงกับ checkbox 5 ตัวในฟอร์ม (พาเลท/กล่อง/กระสอบ/หลอด/กระดาษกั้น)
+enum PackagingCategory {
+  PALLET
+  BOX
+  SACK
+  SPOOL
+  PAPER_BAR
+}
+
+/// state เดียว มีความหมายเดียว ไม่ซ้อนทับกับข้อมูลอื่น
+enum PackageReturnStatus {
+  PENDING // ยังไม่คืนเลย
+  PARTIALLY_RETURNED // คืนบางส่วน
+  RETURNED // คืนครบแล้ว
+}
+
+/// ต้นทางของยอดค้างคืน
+enum PackageReturnSourceType {
+  MATERIAL_IMPORT // เกิดจาก Material (นำเข้าวัตถุดิบ)
+  MATERIAL_OUTSIDE // เกิดจาก MaterialOutside (เบิกวัตถุดิบภายนอก)
+}
+
+model PackageReturnObligation {
+  id Int @id @default(autoincrement())
+
+  // ── ซัพพลายเออร์: FK จริง, nullable — ต้อง save obligation ได้แม้ยังไม่ได้เลือก supplier ──
+  supplierId              Int?
+  supplier                Supplier? @relation(fields: [supplierId], references: [id])
+  /// true เมื่อสร้าง obligation ตอน supplierId เป็น null — ใช้เป็นคิวให้ admin มา assign supplier ทีหลัง
+  needsSupplierAssignment Boolean   @default(false)
+
+  // ── ชนิดบรรจุภัณฑ์ + ชนิดย่อย ──
+  category PackagingCategory
+  /// ชนิดย่อย: wood|steel (PALLET), p|plastic (SACK), spool_plastic|spool_paper|spoolC_plastic|spoolC_paper (SPOOL)
+  /// null สำหรับ BOX และ PAPER_BAR (ฟอร์มปัจจุบันไม่มี selector ชนิดย่อยให้ 2 ชนิดนี้)
+  variant  String?
+
+  // ── ต้นทาง: รองรับ 2 ฝั่ง — เก็บ FK จริงทั้งคู่ (เลือกใช้ตาม sourceType) ──
+  sourceType        PackageReturnSourceType
+  materialId        Int?
+  material          Material?               @relation(fields: [materialId], references: [id])
+  materialOutsideId Int?
+  materialOutside   MaterialOutside?        @relation(fields: [materialOutsideId], references: [id])
+
+  // ── ยอด ──
+  qtyDue      Int // จำนวนที่ต้องคืน ณ ตอนเกิดรายการ — คงที่ ไม่แก้ย้อนหลังหลังสร้าง
+  qtyReturned Int                 @default(0) // denormalized running total (sync กับ PackageReturnEntry ในทรานแซกชันเดียวกันเสมอ)
+  status      PackageReturnStatus @default(PENDING)
+
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete
+
+  entries PackageReturnEntry[]
+
+  @@index([supplierId, status])
+  @@index([materialId])
+  @@index([materialOutsideId])
+  @@map("package_return_obligations")
+}
+
+model PackageReturnEntry {
+  id Int @id @default(autoincrement())
+
+  obligationId Int
+  obligation   PackageReturnObligation @relation(fields: [obligationId], references: [id])
+
+  qty        Int // จำนวนที่คืนจริงครั้งนี้ (> 0 เสมอ — validate ที่ API)
+  returnedAt DateTime @default(now())
+  emp        String? // ผู้บันทึกการคืน
+  note       String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete: ยกเลิกรายการคืน = set deletedAt + reverse ผลที่ obligation
+
+  @@index([obligationId])
+  @@map("package_return_entries")
 }
 
 // ─── LEGACY (DO NOT USE FOR NEW FEATURES) ────────────
