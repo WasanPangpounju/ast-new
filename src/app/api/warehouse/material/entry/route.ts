@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 import type { Prisma } from '@/generated/prisma/client/client'
+import { resolveSupplierId, buildImportObligationsData } from '@/lib/package-return-obligations'
 
 const itemSchema = z.object({
   lot: z.string().min(1),
@@ -53,8 +54,19 @@ export async function POST(request: NextRequest) {
   const { items } = parsed.data
 
   try {
-    const created = await prisma.material.createManyAndReturn({
-      data: items.map(item => ({ ...item })),
+    const created = await prisma.$transaction(async tx => {
+      const materials = []
+      for (const item of items) {
+        const material = await tx.material.create({ data: { ...item } })
+        materials.push(material)
+
+        const { supplierId, needsSupplierAssignment } = await resolveSupplierId(tx, material.supplierName)
+        const obligationsData = buildImportObligationsData(material, supplierId, needsSupplierAssignment)
+        if (obligationsData.length > 0) {
+          await tx.packageReturnObligation.createMany({ data: obligationsData })
+        }
+      }
+      return materials
     })
     return Response.json({ success: true, count: created.length, ids: created.map(r => r.id) })
   } catch (err: unknown) {
