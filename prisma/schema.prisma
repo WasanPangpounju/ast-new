@@ -742,10 +742,15 @@ model PackageReturnObligation {
   id Int @id @default(autoincrement())
 
   // ── ซัพพลายเออร์: FK จริง, nullable — ต้อง save obligation ได้แม้ยังไม่ได้เลือก supplier ──
+  /// ใช้เฉพาะ sourceType = MATERIAL_IMPORT — คู่กับ recipientName (ใช้เฉพาะ MATERIAL_OUTSIDE) ไม่ใช้พร้อมกัน เลือกฟิลด์ไหนตาม sourceType
   supplierId              Int?
   supplier                Supplier? @relation(fields: [supplierId], references: [id])
   /// true เมื่อสร้าง obligation ตอน supplierId เป็น null — ใช้เป็นคิวให้ admin มา assign supplier ทีหลัง
   needsSupplierAssignment Boolean   @default(false)
+
+  /// ชื่อผู้รับ/โรงงานปลายทาง — free text (ตาม MaterialOutside.recipient, ไม่ reuse Customer entity — ดู material-outside-counterparty-investigation.md)
+  /// ใช้เฉพาะ sourceType = MATERIAL_OUTSIDE — คู่กับ supplierId (ใช้เฉพาะ MATERIAL_IMPORT) ไม่ใช้พร้อมกัน เลือกฟิลด์ไหนตาม sourceType
+  recipientName String?
 
   // ── ชนิดบรรจุภัณฑ์ + ชนิดย่อย ──
   category PackagingCategory
