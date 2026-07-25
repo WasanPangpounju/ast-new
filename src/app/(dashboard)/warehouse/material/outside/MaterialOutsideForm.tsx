@@ -18,6 +18,10 @@ interface FormState {
   averageKg:       string;
   note:            string;
   withdrawDate:    string;
+  pallet:          string;
+  box:             string;
+  sack:            string;
+  paperBar:        string;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -43,6 +47,10 @@ interface PendingItem {
   averageKg:       number;
   note:            string;
   withdrawDate:    string;
+  pallet:          number;
+  box:             number;
+  sack:            number;
+  paperBar:        number;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -162,6 +170,7 @@ function makeEmpty(t: string): FormState {
     weightWithdrawnP: "", weightWithdrawn: "",
     averageP: "", averageKg: "",
     note: "", withdrawDate: t,
+    pallet: "", box: "", sack: "", paperBar: "",
     returnPallet: false, returnBox: false, returnSack: false,
     returnSpool: false, returnPaperBar: false,
     recipient: "", usageNote: "", paymentComment: "",
@@ -178,9 +187,11 @@ export default function MaterialOutsideForm() {
   const [supOptions, setSupOptions]   = useState<string[]>([]);
   const [yarnOptions, setYarnOptions] = useState<string[]>([]);
   const [lotOptions, setLotOptions]   = useState<string[]>([]);
-  const supTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const yarnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lotTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recipientOptions, setRecipientOptions] = useState<string[]>([]);
+  const supTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const yarnTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lotTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recipientTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formRef   = useRef(form);
 
   useEffect(() => { formRef.current = form; }, [form]);
@@ -242,6 +253,19 @@ export default function MaterialOutsideForm() {
     if (lotTimer.current) clearTimeout(lotTimer.current);
     lotTimer.current = setTimeout(() => {
       fetchLots(formRef.current.yarnType, formRef.current.supplierName, v);
+    }, 300);
+  }
+
+  function onRecipientChange(v: string) {
+    patch({ recipient: v });
+    if (recipientTimer.current) clearTimeout(recipientTimer.current);
+    recipientTimer.current = setTimeout(async () => {
+      if (!v.trim()) { setRecipientOptions([]); return; }
+      try {
+        const res = await fetch(`/api/warehouse/material/outside/recipients?q=${encodeURIComponent(v)}`);
+        const data = await res.json();
+        setRecipientOptions(data.data ?? []);
+      } catch { setRecipientOptions([]); }
     }, 300);
   }
 
@@ -343,6 +367,10 @@ export default function MaterialOutsideForm() {
       averageKg:       parseFloat(form.averageKg) || 0,
       note:            form.note,
       withdrawDate:    form.withdrawDate,
+      pallet:          parseInt(form.pallet)   || 0,
+      box:             parseInt(form.box)      || 0,
+      sack:            parseInt(form.sack)     || 0,
+      paperBar:        parseInt(form.paperBar) || 0,
       returnPallet:    form.returnPallet,
       returnBox:       form.returnBox,
       returnSack:      form.returnSack,
@@ -356,7 +384,7 @@ export default function MaterialOutsideForm() {
       ...makeEmpty(prev.withdrawDate),
     }));
     setErrors({});
-    setSupOptions([]); setYarnOptions([]); setLotOptions([]);
+    setSupOptions([]); setYarnOptions([]); setLotOptions([]); setRecipientOptions([]);
   }
 
   // ── Save all pending ────────────────────────────────────────────────────────
@@ -385,6 +413,10 @@ export default function MaterialOutsideForm() {
             averageP:        item.averageP        || undefined,
             averageKg:       item.averageKg       || undefined,
             note:            item.note            || undefined,
+            pallet:          item.pallet          || undefined,
+            box:             item.box             || undefined,
+            sack:            item.sack            || undefined,
+            paperBar:        item.paperBar        || undefined,
             returnPallet:    item.returnPallet,
             returnBox:       item.returnBox,
             returnSack:      item.returnSack,
@@ -572,6 +604,28 @@ export default function MaterialOutsideForm() {
         {/* ── ส่งคืนบรรจุภัณฑ์ ─────────────────────────────────────── */}
         <SectionLabel color="amber">ส่งคืนบรรจุภัณฑ์</SectionLabel>
         <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Field label="จำนวนพาเลท">
+              <input type="number" min="0" value={form.pallet}
+                onChange={(e) => patch({ pallet: e.target.value })}
+                placeholder="จำนวน" className={inp} />
+            </Field>
+            <Field label="จำนวนกล่อง">
+              <input type="number" min="0" value={form.box}
+                onChange={(e) => patch({ box: e.target.value })}
+                placeholder="จำนวน" className={inp} />
+            </Field>
+            <Field label="จำนวนกระสอบ">
+              <input type="number" min="0" value={form.sack}
+                onChange={(e) => patch({ sack: e.target.value })}
+                placeholder="จำนวน" className={inp} />
+            </Field>
+            <Field label="จำนวนกระดาษกั้น">
+              <input type="number" min="0" value={form.paperBar}
+                onChange={(e) => patch({ paperBar: e.target.value })}
+                placeholder="จำนวน" className={inp} />
+            </Field>
+          </div>
           <div className="flex gap-3 overflow-x-auto pb-1">
             {([
               { key: "returnPallet",   label: "พาเลท" },
@@ -593,10 +647,13 @@ export default function MaterialOutsideForm() {
           </div>
           <div className="grid grid-cols-1 gap-3">
             <Field label="ผู้รับวัตถุดิบ">
-              <input value={form.recipient}
-                onChange={(e) => patch({ recipient: e.target.value })}
+              <AutocompleteInput
+                value={form.recipient}
+                onChange={onRecipientChange}
+                onSelect={(v) => { patch({ recipient: v }); setRecipientOptions([]); }}
+                options={recipientOptions}
                 placeholder="ผู้รับวัตถุดิบ"
-                className={inp} />
+              />
             </Field>
             <Field label="การนำไปใช้">
               <textarea value={form.usageNote}
@@ -620,7 +677,7 @@ export default function MaterialOutsideForm() {
             + เพิ่มรายการใหม่
           </button>
           <button type="button"
-            onClick={() => { setForm(makeEmpty(initDate)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); }}
+            onClick={() => { setForm(makeEmpty(initDate)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); setRecipientOptions([]); }}
             className="px-4 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
             เคลียร์ข้อมูล
           </button>
