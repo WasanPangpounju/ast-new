@@ -1,6 +1,6 @@
 "use client";
 import { Fragment, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -29,6 +29,13 @@ interface Entry {
   returnedAt: string;
   emp: string | null;
   note: string | null;
+}
+
+interface ObligationResponse {
+  data: Obligation[];
+  total: number;
+  page: number;
+  totalPages: number;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -105,17 +112,20 @@ export default function PackageReturnsRecord({ emp }: { emp: string }) {
         ))}
       </div>
 
-      <ObligationTable sourceType={tab} emp={emp} />
+      <ObligationTable key={tab} sourceType={tab} emp={emp} />
     </div>
   );
 }
 
 // ─── Obligation Table (per tab) ─────────────────────────────────────────────────
 
+const LIMIT = 20;
+
 function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: string }) {
   const qc = useQueryClient();
 
   const [statusFilter, setStatusFilter] = useState<"" | Status>("");
+  const [page, setPage] = useState(1);
   const [formOpenFor, setFormOpenFor] = useState<number | null>(null);
   const [qtyInput, setQtyInput] = useState<Record<number, string>>({});
   const [empInput, setEmpInput] = useState<Record<number, string>>({});
@@ -124,21 +134,31 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
   const [rowError, setRowError] = useState<Record<number, string>>({});
   const [historyOpenFor, setHistoryOpenFor] = useState<number | null>(null);
 
-  const queryKey = ["package-returns-obligations", sourceType, statusFilter];
+  const queryKey = ["package-returns-obligations", sourceType, statusFilter, page];
 
-  const { data, isFetching, isError, error } = useQuery<{ data: Obligation[] }>({
+  const { data, isFetching, isError, error } = useQuery<ObligationResponse>({
     queryKey,
     queryFn: async () => {
-      const params = new URLSearchParams({ sourceType });
+      const params = new URLSearchParams({ sourceType, page: String(page), limit: String(LIMIT) });
       if (statusFilter) params.set("status", statusFilter);
       const res = await fetch(`/api/warehouse/package-returns/obligations?${params.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "โหลดข้อมูลไม่สำเร็จ");
       return json;
     },
+    placeholderData: keepPreviousData,
   });
 
   const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const from = total === 0 ? 0 : (page - 1) * LIMIT + 1;
+  const to = Math.min(page * LIMIT, total);
+
+  function handleStatusFilterChange(value: "" | Status) {
+    setStatusFilter(value);
+    setPage(1);
+  }
 
   function openForm(row: Obligation) {
     setFormOpenFor(row.id);
@@ -177,7 +197,7 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "บันทึกการคืนไม่สำเร็จ");
 
-      qc.setQueryData<{ data: Obligation[] }>(queryKey, (old) => {
+      qc.setQueryData<ObligationResponse>(queryKey, (old) => {
         if (!old) return old;
         const updated = old.data.map((o) => {
           if (o.id !== obligationId) return o;
@@ -189,9 +209,13 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
         const filtered = statusFilter
           ? updated.filter((o) => o.status === statusFilter)
           : updated.filter((o) => o.status !== "RETURNED");
-        return { data: filtered };
+        return { ...old, data: filtered };
       });
 
+      // The optimistic patch above can't recompute total/totalPages (a row may have
+      // moved off this page's filter), so refetch this obligation list in the background —
+      // rows already shown stay visible while it settles, no full-page reload.
+      qc.invalidateQueries({ queryKey: ["package-returns-obligations", sourceType] });
       qc.invalidateQueries({ queryKey: ["package-returns-entries", obligationId] });
       setFormOpenFor(null);
     } catch (err: unknown) {
@@ -204,10 +228,10 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
   return (
     <div className="bg-white shadow-sm border border-gray-200 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200 bg-gray-50">
-        <span className="text-xs text-gray-500">ทั้งหมด {rows.length.toLocaleString()} รายการ</span>
+        <span className="text-xs text-gray-500">ทั้งหมด {total.toLocaleString()} รายการ</span>
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as "" | Status)}
+          onChange={(e) => handleStatusFilterChange(e.target.value as "" | Status)}
           className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="">ทั้งหมด (ไม่รวมคืนครบแล้ว)</option>
@@ -264,7 +288,7 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
                 return (
                   <Fragment key={row.id}>
                     <tr className={`hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
-                      <td className="px-3 py-2 text-center text-gray-400">{i + 1}</td>
+                      <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.createdAt)}</td>
                       <td className="px-3 py-2 text-gray-700 max-w-[150px] truncate" title={counterparty ?? ""}>
                         {counterparty ?? "-"}
@@ -364,6 +388,29 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {totalPages >= 1 && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+          <p className="text-xs text-gray-500">
+            {total === 0
+              ? "ไม่มีข้อมูล"
+              : `แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} รายการ`}
+            {isFetching && <span className="ml-2 text-blue-500">กำลังโหลด...</span>}
+          </p>
+          <div className="flex gap-1">
+            <button type="button" onClick={() => setPage(1)} disabled={page === 1}
+              className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">«</button>
+            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+              className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">‹</button>
+            <span className="px-3 py-1 text-xs border border-gray-300 bg-white">{page} / {totalPages}</span>
+            <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+              className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">›</button>
+            <button type="button" onClick={() => setPage(totalPages)} disabled={page === totalPages}
+              className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">»</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

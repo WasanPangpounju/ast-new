@@ -228,6 +228,35 @@ async function main() {
     : '❌ Test 6 FAIL')
   allPass &&= test6Pass
 
+  // ── Test 7: pagination — no overlap between pages, totalPages matches total/limit ──
+  // (Doesn't assert an exact total — the dev DB already has ~164 backfilled PENDING rows
+  // plus whatever earlier tests in this run left behind, so exact counts aren't stable.)
+  console.log('\n=== Test 7: pagination (limit=3, PENDING, MATERIAL_IMPORT) ===')
+  for (let i = 0; i < 7; i++) {
+    const o = await createImportObligation(1)
+    createdObligationIds.push(o.id)
+  }
+
+  const page1 = await listObligations(cookie, { sourceType: 'MATERIAL_IMPORT', status: 'PENDING', limit: '3', page: '1' })
+  const page2 = await listObligations(cookie, { sourceType: 'MATERIAL_IMPORT', status: 'PENDING', limit: '3', page: '2' })
+  const ids7Page1 = (page1.json.data as Array<{ id: number }>).map(o => o.id)
+  const ids7Page2 = (page2.json.data as Array<{ id: number }>).map(o => o.id)
+  const overlap = ids7Page1.some(id => ids7Page2.includes(id))
+  const total7 = page1.json.total as number
+  const expectedTotalPages = Math.ceil(total7 / 3)
+
+  const test7Pass = page1.status === 200 && page2.status === 200
+    && page1.json.page === 1 && page2.json.page === 2
+    && ids7Page1.length === 3 && ids7Page2.length === 3
+    && !overlap
+    && page1.json.total === page2.json.total
+    && page1.json.totalPages === expectedTotalPages
+  console.log(`page1 ids=${JSON.stringify(ids7Page1)}, page2 ids=${JSON.stringify(ids7Page2)}, total=${total7}, totalPages=${page1.json.totalPages}`)
+  console.log(test7Pass
+    ? '✅ Test 7 PASS (pages disjoint, totalPages = ceil(total/limit))'
+    : '❌ Test 7 FAIL')
+  allPass &&= test7Pass
+
   // ── Cleanup ──
   console.log('\n=== Cleanup ===')
   await prisma.packageReturnEntry.deleteMany({ where: { obligationId: { in: createdObligationIds } } })

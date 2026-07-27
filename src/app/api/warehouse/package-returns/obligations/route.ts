@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const sourceTypeParam = searchParams.get('sourceType')
     const statusParam = searchParams.get('status')
+    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1)
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20', 10) || 20))
 
     if (sourceTypeParam && !SOURCE_TYPES.includes(sourceTypeParam as PackageReturnSourceType)) {
       return Response.json({ error: 'Invalid sourceType' }, { status: 400 })
@@ -39,26 +41,37 @@ export async function GET(request: NextRequest) {
       ...(status ? { status } : { status: { not: 'RETURNED' } }),
     }
 
-    const obligations = await prisma.packageReturnObligation.findMany({
-      where,
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        category: true,
-        variant: true,
-        qtyDue: true,
-        qtyReturned: true,
-        status: true,
-        sourceType: true,
-        recipientName: true,
-        createdAt: true,
-        supplier: { select: { id: true, name: true } },
-        material: { select: { id: true, lot: true } },
-        materialOutside: { select: { id: true, withdrawId: true } },
-      },
-    })
+    const [obligations, total] = await Promise.all([
+      prisma.packageReturnObligation.findMany({
+        where,
+        orderBy: { createdAt: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          category: true,
+          variant: true,
+          qtyDue: true,
+          qtyReturned: true,
+          status: true,
+          sourceType: true,
+          recipientName: true,
+          createdAt: true,
+          supplier: { select: { id: true, name: true } },
+          material: { select: { id: true, lot: true } },
+          materialOutside: { select: { id: true, withdrawId: true } },
+        },
+      }),
+      prisma.packageReturnObligation.count({ where }),
+    ])
 
-    return Response.json({ success: true, data: obligations })
+    return Response.json({
+      success: true,
+      data: obligations,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    })
   } catch (err: unknown) {
     if (err instanceof PermissionError) {
       return Response.json({ error: err.message }, { status: err.status })
