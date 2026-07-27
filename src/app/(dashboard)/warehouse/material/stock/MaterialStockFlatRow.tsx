@@ -1,13 +1,14 @@
 import type { MaterialStockCompanyRow } from "@/types/material";
-import { numFmt, StatusBadge, WeightPair } from "./MaterialStockGroupRow";
+import { numFmt, StatusBadge, WeightValue, type WeightUnit } from "./MaterialStockGroupRow";
 
 interface Props {
   row: MaterialStockCompanyRow;
   rowNumber: number;
   striped: boolean;
+  weightUnit: WeightUnit;
 }
 
-export default function MaterialStockFlatRow({ row, rowNumber, striped }: Props) {
+export default function MaterialStockFlatRow({ row, rowNumber, striped, weightUnit }: Props) {
   return (
     <tr className={`transition-colors ${striped ? "bg-gray-50" : "bg-white"} ${row.remainingSpool <= 0 ? "opacity-50" : ""}`}>
       <td className="px-3 py-2 text-center text-gray-400">{rowNumber}</td>
@@ -23,7 +24,7 @@ export default function MaterialStockFlatRow({ row, rowNumber, striped }: Props)
       <td className="px-3 py-2 text-right text-gray-700">{numFmt(Number(row.totalWeightKg))}</td>
       <td className="px-3 py-2 text-right text-orange-600">{numFmt(Number(row.usedWeightKg))}</td>
       <td className="px-3 py-2 text-right font-semibold text-gray-900">
-        <WeightPair kg={Number(row.remainingWeightKg)} lb={row.remainingWeightLb} />
+        <WeightValue kg={Number(row.remainingWeightKg)} lb={row.remainingWeightLb} unit={weightUnit} />
       </td>
       <td className="px-3 py-2 text-center">
         <StatusBadge remaining={row.remainingSpool} total={row.totalSpool} />

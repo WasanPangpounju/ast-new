@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import type { MaterialStockGroup, MaterialStockCompanyRow } from "@/types/material";
-import MaterialStockGroupRow, { numFmt, WeightPair } from "./MaterialStockGroupRow";
+import MaterialStockGroupRow, { numFmt, WeightValue, type WeightUnit } from "./MaterialStockGroupRow";
 import MaterialStockFlatRow from "./MaterialStockFlatRow";
 import AutocompleteInput, { type AutocompleteOption } from "@/components/AutocompleteInput";
 
@@ -33,6 +33,7 @@ export default function MaterialStockList() {
   const [appliedQ, setAppliedQ] = useState("");
   const [appliedType, setAppliedType] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>("kg");
   const [expandedOverride, setExpandedOverride] = useState<Record<string, boolean>>({});
   const [suggestions, setSuggestions] = useState<AutocompleteOption[]>([]);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,9 +120,24 @@ export default function MaterialStockList() {
   return (
     <div className="p-4 max-w-full">
       {/* Header */}
-      <div className="mb-4">
-        <h1 className="text-3xl font-semibold text-gray-900">สต็อกวัตถุดิบ</h1>
-        <p className="text-sm text-gray-500">{total.toLocaleString()} {mode === "grouped" ? "ชนิด" : "รายการ"}</p>
+      <div className="mb-4 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-semibold text-gray-900">สต็อกวัตถุดิบ</h1>
+          <p className="text-sm text-gray-500">{total.toLocaleString()} {mode === "grouped" ? "ชนิด" : "รายการ"}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">หน่วยน้ำหนัก:</span>
+          <div className="inline-flex rounded-lg border border-gray-300 overflow-hidden">
+            <button type="button" onClick={() => setWeightUnit("kg")}
+              className={`px-3 py-1 text-xs font-medium ${weightUnit === "kg" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+              กิโลกรัม
+            </button>
+            <button type="button" onClick={() => setWeightUnit("lb")}
+              className={`px-3 py-1 text-xs font-medium border-l border-gray-300 ${weightUnit === "lb" ? "bg-blue-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50"}`}>
+              ปอนด์
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -133,8 +149,8 @@ export default function MaterialStockList() {
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
           <p className="text-xs text-gray-500 mb-0.5">น้ำหนักคงเหลือรวม</p>
-          <p className="text-xl font-bold text-gray-900">{numFmt(totalWeight)} kg</p>
-          <p className="text-xs text-gray-400">{numFmt(totalWeightLb)} lb</p>
+          <p className="text-xl font-bold text-gray-900">{numFmt(weightUnit === "kg" ? totalWeight : totalWeightLb)}</p>
+          <p className="text-xs text-gray-400">{weightUnit === "kg" ? "กิโลกรัม" : "ปอนด์"}</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
           <p className="text-xs text-gray-500 mb-0.5">จำนวนชนิดวัตถุดิบ</p>
@@ -182,7 +198,7 @@ export default function MaterialStockList() {
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">Spool คงเหลือ</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">น้ำหนักรวม (kg)</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">ใช้ไปแล้ว (kg)</th>
-                <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">คงเหลือ (kg / lb)</th>
+                <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">คงเหลือ ({weightUnit})</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-20">สถานะ</th>
               </tr>
             </thead>
@@ -207,6 +223,7 @@ export default function MaterialStockList() {
                     striped={i % 2 !== 0}
                     expanded={isExpanded(group)}
                     onToggle={() => toggle(group)}
+                    weightUnit={weightUnit}
                   />
                 ))
               ) : (
@@ -216,6 +233,7 @@ export default function MaterialStockList() {
                     row={row}
                     rowNumber={(page - 1) * LIMIT + i + 1}
                     striped={i % 2 !== 0}
+                    weightUnit={weightUnit}
                   />
                 ))
               )}
@@ -227,7 +245,7 @@ export default function MaterialStockList() {
                   <td className="px-3 py-2 text-right text-sm text-gray-900">{totalSpool.toLocaleString()}</td>
                   <td colSpan={2} className="px-3 py-2 text-right text-xs text-gray-600">รวมน้ำหนักคงเหลือ</td>
                   <td className="px-3 py-2 text-right text-sm text-gray-900">
-                    <WeightPair kg={totalWeight} lb={totalWeightLb} />
+                    <WeightValue kg={totalWeight} lb={totalWeightLb} unit={weightUnit} />
                   </td>
                   <td />
                 </tr>
