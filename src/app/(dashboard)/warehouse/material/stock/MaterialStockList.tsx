@@ -1,25 +1,41 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import type { MaterialStockGroup } from "@/types/material";
+import type { MaterialStockGroup, MaterialStockCompanyRow } from "@/types/material";
 import MaterialStockGroupRow, { numFmt } from "./MaterialStockGroupRow";
+import MaterialStockFlatRow from "./MaterialStockFlatRow";
+import AutocompleteInput, { type AutocompleteOption } from "@/components/AutocompleteInput";
 
-interface StockResponse {
-  data: MaterialStockGroup[];
+interface StockResponseBase {
   total: number;
   page: number;
   totalPages: number;
   totalRemainingSpool: number;
   totalRemainingWeightKg: number;
 }
+interface GroupedStockResponse extends StockResponseBase {
+  mode: "grouped";
+  data: MaterialStockGroup[];
+}
+interface FlatStockResponse extends StockResponseBase {
+  mode: "flat";
+  data: MaterialStockCompanyRow[];
+}
+type StockResponse = GroupedStockResponse | FlatStockResponse;
 
 const LIMIT = 20;
+const TYPE_LABELS = { yarnType: "ชนิดด้าย", company: "บริษัท" };
 
 export default function MaterialStockList() {
   const [q, setQ] = useState("");
+  const [searchType, setSearchType] = useState<string | undefined>(undefined);
   const [appliedQ, setAppliedQ] = useState("");
+  const [appliedType, setAppliedType] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
   const [expandedOverride, setExpandedOverride] = useState<Record<string, boolean>>({});
+  const [suggestions, setSuggestions] = useState<AutocompleteOption[]>([]);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [lastAppliedQ, setLastAppliedQ] = useState(appliedQ);
   // A new search context should re-derive which groups auto-expand, not keep stale toggles
   if (appliedQ !== lastAppliedQ) {
@@ -28,10 +44,11 @@ export default function MaterialStockList() {
   }
 
   const { data, isFetching, isError } = useQuery<StockResponse>({
-    queryKey: ["material-stock", appliedQ, page],
+    queryKey: ["material-stock", appliedQ, appliedType, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
       if (appliedQ) p.set("q", appliedQ);
+      if (appliedType) p.set("type", appliedType);
       const res = await fetch(`/api/warehouse/material/stock?${p}`);
       if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
       return res.json();
@@ -39,13 +56,16 @@ export default function MaterialStockList() {
     placeholderData: keepPreviousData,
   });
 
-  const groups = data?.data ?? [];
+  const mode = data?.mode ?? "grouped";
+  const groups = mode === "grouped" ? (data?.data as MaterialStockGroup[] ?? []) : [];
+  const flatRows = mode === "flat" ? (data?.data as MaterialStockCompanyRow[] ?? []) : [];
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
   const totalSpool = data?.totalRemainingSpool ?? 0;
   const totalWeight = Number(data?.totalRemainingWeightKg ?? 0);
   const from = total === 0 ? 0 : (page - 1) * LIMIT + 1;
   const to = Math.min(page * LIMIT, total);
+  const isEmpty = mode === "grouped" ? groups.length === 0 : flatRows.length === 0;
 
   function isExpanded(group: MaterialStockGroup) {
     return expandedOverride[group.yarnType] ?? group.autoExpand;
@@ -54,13 +74,43 @@ export default function MaterialStockList() {
     setExpandedOverride((prev) => ({ ...prev, [group.yarnType]: !isExpanded(group) }));
   }
 
+  function fetchSuggestions(text: string) {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (!text.trim()) { setSuggestions([]); return; }
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/warehouse/material/stock/suggestions?q=${encodeURIComponent(text)}`);
+        const json = await res.json();
+        setSuggestions(json.data ?? []);
+      } catch { setSuggestions([]); }
+    }, 300);
+  }
+
+  function handleChange(v: string) {
+    setQ(v);
+    setSearchType(undefined); // typing invalidates any prior suggestion pick
+    fetchSuggestions(v);
+  }
+
+  function handleSelect(v: string, type?: string) {
+    setQ(v);
+    setSearchType(type);
+    setSuggestions([]);
+    setAppliedQ(v);
+    setAppliedType(type);
+    setPage(1);
+  }
+
   function handleSearch() {
     setAppliedQ(q);
+    setAppliedType(searchType);
     setPage(1);
   }
   function handleClear() {
     setQ("");
+    setSearchType(undefined);
     setAppliedQ("");
+    setAppliedType(undefined);
     setPage(1);
   }
 
@@ -69,7 +119,7 @@ export default function MaterialStockList() {
       {/* Header */}
       <div className="mb-4">
         <h1 className="text-3xl font-semibold text-gray-900">สต็อกวัตถุดิบ</h1>
-        <p className="text-sm text-gray-500">{total.toLocaleString()} ชนิด</p>
+        <p className="text-sm text-gray-500">{total.toLocaleString()} {mode === "grouped" ? "ชนิด" : "รายการ"}</p>
       </div>
 
       {/* Summary cards */}
@@ -94,19 +144,23 @@ export default function MaterialStockList() {
       {/* Search */}
       <div className="bg-white border border-gray-200 p-4 mb-4 shadow-sm rounded-lg">
         <div className="flex gap-2">
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="ค้นหาชนิดด้าย หรือชื่อบริษัท..."
-            className="flex-1 border border-gray-300 px-3 py-1.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="flex-1">
+            <AutocompleteInput
+              value={q}
+              onChange={handleChange}
+              onSelect={handleSelect}
+              options={suggestions}
+              typeLabels={TYPE_LABELS}
+              placeholder="ค้นหาชนิดด้าย หรือชื่อบริษัท..."
+              inputClassName="w-full border border-gray-300 px-3 py-1.5 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
           <button type="button" onClick={handleSearch}
-            className="px-5 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium">
+            className="px-5 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded-lg font-medium h-fit">
             ค้นหา
           </button>
           <button type="button" onClick={handleClear}
-            className="px-4 py-1.5 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600 rounded-lg">
+            className="px-4 py-1.5 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600 rounded-lg h-fit">
             เคลียร์
           </button>
         </div>
@@ -131,7 +185,7 @@ export default function MaterialStockList() {
               </tr>
             </thead>
             <tbody>
-              {isFetching && groups.length === 0 ? (
+              {isFetching && isEmpty ? (
                 <tr><td colSpan={10} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -140,20 +194,31 @@ export default function MaterialStockList() {
                 </td></tr>
               ) : isError ? (
                 <tr><td colSpan={10} className="text-center py-12 text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>
-              ) : groups.length === 0 ? (
+              ) : isEmpty ? (
                 <tr><td colSpan={10} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
-              ) : groups.map((group, i) => (
-                <MaterialStockGroupRow
-                  key={group.yarnType}
-                  group={group}
-                  rowNumber={(page - 1) * LIMIT + i + 1}
-                  striped={i % 2 !== 0}
-                  expanded={isExpanded(group)}
-                  onToggle={() => toggle(group)}
-                />
-              ))}
+              ) : mode === "grouped" ? (
+                groups.map((group, i) => (
+                  <MaterialStockGroupRow
+                    key={group.yarnType}
+                    group={group}
+                    rowNumber={(page - 1) * LIMIT + i + 1}
+                    striped={i % 2 !== 0}
+                    expanded={isExpanded(group)}
+                    onToggle={() => toggle(group)}
+                  />
+                ))
+              ) : (
+                flatRows.map((row, i) => (
+                  <MaterialStockFlatRow
+                    key={`${row.yarnType}-${row.supplierName}`}
+                    row={row}
+                    rowNumber={(page - 1) * LIMIT + i + 1}
+                    striped={i % 2 !== 0}
+                  />
+                ))
+              )}
             </tbody>
-            {groups.length > 0 && (
+            {!isEmpty && (
               <tfoot>
                 <tr className="bg-gray-100 border-t-2 border-gray-300 font-semibold">
                   <td colSpan={5} className="px-3 py-2 text-right text-xs text-gray-600">รวม Spool คงเหลือ</td>
@@ -167,7 +232,7 @@ export default function MaterialStockList() {
           </table>
         </div>
 
-        {isFetching && groups.length > 0 && (
+        {isFetching && !isEmpty && (
           <div className="px-4 py-2 bg-blue-50 text-xs text-blue-500">กำลังโหลด...</div>
         )}
 
@@ -177,7 +242,7 @@ export default function MaterialStockList() {
             <p className="text-xs text-gray-500">
               {total === 0
                 ? "ไม่มีข้อมูล"
-                : `แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} ชนิด`}
+                : `แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} รายการ`}
             </p>
             <div className="flex gap-1">
               <button type="button" onClick={() => setPage(1)} disabled={page === 1}
