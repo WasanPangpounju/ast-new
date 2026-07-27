@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AutocompleteInput from "@/components/AutocompleteInput";
+import ThaiDatePicker from "@/components/ThaiDatePicker";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -272,6 +273,7 @@ export default function MaterialCreateForm({ emp }: Props) {
       const item = {
         supplierName:   form.supplierName.trim(),
         importStatus:   form.importStatus.trim() || undefined,
+        importDate:     form.createDate,
         yarnType:       form.yarnType.trim(),
         lot:            form.lot.trim() || "-",
         spool:          parseInt(form.spool),
@@ -355,9 +357,10 @@ export default function MaterialCreateForm({ emp }: Props) {
               className={inp} />
           </Field>
           <Field label="วันที่">
-            <input type="date" value={form.createDate}
-              onChange={(e) => patch({ createDate: e.target.value })}
-              className={inp} />
+            <ThaiDatePicker
+              value={form.createDate}
+              onChange={(v) => patch({ createDate: v })}
+            />
           </Field>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
