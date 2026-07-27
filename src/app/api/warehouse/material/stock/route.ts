@@ -3,6 +3,11 @@ import type { NextRequest } from 'next/server'
 import type { MaterialStockGroup, MaterialStockCompanyRow } from '@/types/material'
 
 const esc = (s: string) => s.replace(/'/g, "''")
+const KG_TO_LB = 2.20462
+
+function withLb<T extends { remainingWeightKg: number | string }>(row: T): T & { remainingWeightLb: number } {
+  return { ...row, remainingWeightLb: Number(row.remainingWeightKg) * KG_TO_LB }
+}
 
 const AGGREGATE_COLUMNS = `
   SUM(m.spool)::int                                                  AS "totalSpool",
@@ -43,15 +48,17 @@ async function getFlatByCompany(q: string, page: number, limit: number, offset: 
   ])
 
   const total = summary?.total ?? 0
+  const totalRemainingWeightKg = summary?.totalRemainingWeightKg ?? 0
 
   return Response.json({
     mode: 'flat' as const,
-    data: rows,
+    data: rows.map(withLb),
     total,
     page,
     totalPages: Math.max(1, Math.ceil(total / limit)),
     totalRemainingSpool: summary?.totalRemainingSpool ?? 0,
-    totalRemainingWeightKg: summary?.totalRemainingWeightKg ?? 0,
+    totalRemainingWeightKg,
+    totalRemainingWeightLb: totalRemainingWeightKg * KG_TO_LB,
   })
 }
 
@@ -125,12 +132,13 @@ async function getGrouped(q: string, page: number, limit: number, offset: number
   }
 
   const data: MaterialStockGroup[] = groupRows.map(({ matchedByYarn, ...g }) => ({
-    ...g,
+    ...withLb(g),
     autoExpand: Boolean(q) && !matchedByYarn,
-    companies: companiesByYarn.get(g.yarnType) ?? [],
+    companies: (companiesByYarn.get(g.yarnType) ?? []).map(withLb),
   }))
 
   const total = summary?.total ?? 0
+  const totalRemainingWeightKg = summary?.totalRemainingWeightKg ?? 0
 
   return Response.json({
     mode: 'grouped' as const,
@@ -139,7 +147,8 @@ async function getGrouped(q: string, page: number, limit: number, offset: number
     page,
     totalPages: Math.max(1, Math.ceil(total / limit)),
     totalRemainingSpool: summary?.totalRemainingSpool ?? 0,
-    totalRemainingWeightKg: summary?.totalRemainingWeightKg ?? 0,
+    totalRemainingWeightKg,
+    totalRemainingWeightLb: totalRemainingWeightKg * KG_TO_LB,
   })
 }
 

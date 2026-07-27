@@ -1,5 +1,5 @@
 import type { MaterialStockCompanyRow } from "@/types/material";
-import { numFmt, StatusBadge } from "./MaterialStockGroupRow";
+import { numFmt, StatusBadge, WeightPair } from "./MaterialStockGroupRow";
 
 interface Props {
   row: MaterialStockCompanyRow;
@@ -22,7 +22,9 @@ export default function MaterialStockFlatRow({ row, rowNumber, striped }: Props)
       <td className="px-3 py-2 text-right font-semibold text-gray-900">{row.remainingSpool.toLocaleString()}</td>
       <td className="px-3 py-2 text-right text-gray-700">{numFmt(Number(row.totalWeightKg))}</td>
       <td className="px-3 py-2 text-right text-orange-600">{numFmt(Number(row.usedWeightKg))}</td>
-      <td className="px-3 py-2 text-right font-semibold text-gray-900">{numFmt(Number(row.remainingWeightKg))}</td>
+      <td className="px-3 py-2 text-right font-semibold text-gray-900">
+        <WeightPair kg={Number(row.remainingWeightKg)} lb={row.remainingWeightLb} />
+      </td>
       <td className="px-3 py-2 text-center">
         <StatusBadge remaining={row.remainingSpool} total={row.totalSpool} />
       </td>

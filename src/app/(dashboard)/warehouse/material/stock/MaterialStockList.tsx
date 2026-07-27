@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import type { MaterialStockGroup, MaterialStockCompanyRow } from "@/types/material";
-import MaterialStockGroupRow, { numFmt } from "./MaterialStockGroupRow";
+import MaterialStockGroupRow, { numFmt, WeightPair } from "./MaterialStockGroupRow";
 import MaterialStockFlatRow from "./MaterialStockFlatRow";
 import AutocompleteInput, { type AutocompleteOption } from "@/components/AutocompleteInput";
 
@@ -12,6 +12,7 @@ interface StockResponseBase {
   totalPages: number;
   totalRemainingSpool: number;
   totalRemainingWeightKg: number;
+  totalRemainingWeightLb: number;
 }
 interface GroupedStockResponse extends StockResponseBase {
   mode: "grouped";
@@ -63,6 +64,7 @@ export default function MaterialStockList() {
   const totalPages = data?.totalPages ?? 1;
   const totalSpool = data?.totalRemainingSpool ?? 0;
   const totalWeight = Number(data?.totalRemainingWeightKg ?? 0);
+  const totalWeightLb = Number(data?.totalRemainingWeightLb ?? 0);
   const from = total === 0 ? 0 : (page - 1) * LIMIT + 1;
   const to = Math.min(page * LIMIT, total);
   const isEmpty = mode === "grouped" ? groups.length === 0 : flatRows.length === 0;
@@ -131,8 +133,8 @@ export default function MaterialStockList() {
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
           <p className="text-xs text-gray-500 mb-0.5">น้ำหนักคงเหลือรวม</p>
-          <p className="text-xl font-bold text-gray-900">{numFmt(totalWeight)}</p>
-          <p className="text-xs text-gray-400">กิโลกรัม</p>
+          <p className="text-xl font-bold text-gray-900">{numFmt(totalWeight)} kg</p>
+          <p className="text-xs text-gray-400">{numFmt(totalWeightLb)} lb</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
           <p className="text-xs text-gray-500 mb-0.5">จำนวนชนิดวัตถุดิบ</p>
@@ -180,7 +182,7 @@ export default function MaterialStockList() {
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">Spool คงเหลือ</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">น้ำหนักรวม (kg)</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">ใช้ไปแล้ว (kg)</th>
-                <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">คงเหลือ (kg)</th>
+                <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">คงเหลือ (kg / lb)</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-20">สถานะ</th>
               </tr>
             </thead>
@@ -224,7 +226,9 @@ export default function MaterialStockList() {
                   <td colSpan={5} className="px-3 py-2 text-right text-xs text-gray-600">รวม Spool คงเหลือ</td>
                   <td className="px-3 py-2 text-right text-sm text-gray-900">{totalSpool.toLocaleString()}</td>
                   <td colSpan={2} className="px-3 py-2 text-right text-xs text-gray-600">รวมน้ำหนักคงเหลือ</td>
-                  <td className="px-3 py-2 text-right text-sm text-gray-900">{numFmt(totalWeight)}</td>
+                  <td className="px-3 py-2 text-right text-sm text-gray-900">
+                    <WeightPair kg={totalWeight} lb={totalWeightLb} />
+                  </td>
                   <td />
                 </tr>
               </tfoot>

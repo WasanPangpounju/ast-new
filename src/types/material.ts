@@ -41,6 +41,7 @@ export interface MaterialStockCompanyRow {
   totalWeightKg: number
   usedWeightKg: number
   remainingWeightKg: number
+  remainingWeightLb: number
 }
 
 export interface MaterialStockGroup {
@@ -52,6 +53,7 @@ export interface MaterialStockGroup {
   totalWeightKg: number
   usedWeightKg: number
   remainingWeightKg: number
+  remainingWeightLb: number
   autoExpand: boolean
   companies: MaterialStockCompanyRow[]
 }

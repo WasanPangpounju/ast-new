@@ -5,6 +5,15 @@ export function numFmt(n: number | null | undefined, dec = 2) {
   return n.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
+export function WeightPair({ kg, lb }: { kg: number; lb: number }) {
+  return (
+    <div>
+      <div>{numFmt(kg)} kg</div>
+      <div className="text-[10px] font-normal text-gray-400">{numFmt(lb)} lb</div>
+    </div>
+  );
+}
+
 export function StatusBadge({ remaining, total }: { remaining: number; total: number }) {
   if (total === 0) return null;
   const pct = remaining / total;
@@ -45,7 +54,9 @@ export default function MaterialStockGroupRow({ group, rowNumber, striped, expan
         <td className="px-3 py-2 text-right font-semibold text-gray-900">{group.remainingSpool.toLocaleString()}</td>
         <td className="px-3 py-2 text-right font-semibold text-gray-700">{numFmt(Number(group.totalWeightKg))}</td>
         <td className="px-3 py-2 text-right font-semibold text-orange-600">{numFmt(Number(group.usedWeightKg))}</td>
-        <td className="px-3 py-2 text-right font-semibold text-gray-900">{numFmt(Number(group.remainingWeightKg))}</td>
+        <td className="px-3 py-2 text-right font-semibold text-gray-900">
+          <WeightPair kg={Number(group.remainingWeightKg)} lb={group.remainingWeightLb} />
+        </td>
         <td className="px-3 py-2 text-center">
           <StatusBadge remaining={group.remainingSpool} total={group.totalSpool} />
         </td>
@@ -63,7 +74,9 @@ export default function MaterialStockGroupRow({ group, rowNumber, striped, expan
           <td className="px-3 py-2 text-right text-gray-800">{c.remainingSpool.toLocaleString()}</td>
           <td className="px-3 py-2 text-right text-gray-600">{numFmt(Number(c.totalWeightKg))}</td>
           <td className="px-3 py-2 text-right text-orange-500">{numFmt(Number(c.usedWeightKg))}</td>
-          <td className="px-3 py-2 text-right text-gray-800">{numFmt(Number(c.remainingWeightKg))}</td>
+          <td className="px-3 py-2 text-right text-gray-800">
+            <WeightPair kg={Number(c.remainingWeightKg)} lb={c.remainingWeightLb} />
+          </td>
           <td className="px-3 py-2 text-center">
             <StatusBadge remaining={c.remainingSpool} total={c.totalSpool} />
           </td>
