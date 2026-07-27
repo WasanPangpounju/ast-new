@@ -208,7 +208,16 @@ const navItems: NavItem[] = [
         label: "ส่งคืนบรรจุภัณฑ์",
         menuKey: "warehouse.returns",
       },
-     
+      {
+        href: "/warehouse/package-returns",
+        label: "บันทึกคืนบรรจุภัณฑ์",
+        menuKey: "package-returns.record",
+      },
+      {
+        href: "/warehouse/package-returns/needs-supplier",
+        label: "มอบหมายซัพพลายเออร์คืนบรรจุภัณฑ์",
+        menuKey: "package-returns.assign-supplier",
+      },
     ],
   },
   {

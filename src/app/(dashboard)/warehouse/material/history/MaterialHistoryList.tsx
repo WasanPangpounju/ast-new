@@ -25,6 +25,7 @@ interface Material {
   sack: number | null;
   emp: string | null;
   note: string | null;
+  importDate: string | null;
   createdAt: string;
 }
 
@@ -39,7 +40,8 @@ type Tab = "detail" | "edit";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
-function fmtDate(iso: string) {
+function fmtDate(iso: string | null | undefined) {
+  if (!iso) return "-";
   try {
     const d = new Date(iso);
     return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
@@ -307,7 +309,7 @@ export default function MaterialHistoryList() {
                 <tr key={row.id}
                   className={`hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
                   <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
-                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.createdAt)}</td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.importDate ?? row.createdAt)}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[100px] truncate" title={row.lot}>{row.lot}</td>
                   <td className="px-3 py-2 text-gray-800 max-w-[150px] truncate" title={row.yarnType}>{row.yarnType}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate" title={row.supplierName}>{row.supplierName}</td>
@@ -392,7 +394,7 @@ export default function MaterialHistoryList() {
                 ) : (
                   <div className="px-5 py-4 space-y-0">
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">ข้อมูลทั่วไป</p>
-                    <DRow label="วันที่นำเข้า"         value={fmtDate(displayDetail?.createdAt ?? "")} />
+                    <DRow label="วันที่นำเข้า"         value={fmtDate(displayDetail?.importDate ?? displayDetail?.createdAt)} />
                     <DRow label="ชื่อบริษัท"           value={displayDetail?.supplierName} />
                     <DRow label="เลขที่ใบส่งสินค้า"   value={displayDetail?.importStatus} />
                     <DRow label="ชนิดด้าย"             value={displayDetail?.yarnType} />

@@ -42,4 +42,5 @@ next-env.d.ts
 
 /src/generated/prisma
 .aider*
-*.sql
+/material_outsides_after_backfill.sql
+/*.sql

@@ -32,13 +32,32 @@ export interface MaterialRequisitionInput {
   note?: string
 }
 
-export interface MaterialStockRow {
+export interface MaterialStockCompanyRow {
   yarnType: string
   supplierName: string
   totalSpool: number
   usedSpool: number
   remainingSpool: number
   totalWeightKg: number
+  totalWeightLb: number
   usedWeightKg: number
+  usedWeightLb: number
   remainingWeightKg: number
+  remainingWeightLb: number
+}
+
+export interface MaterialStockGroup {
+  yarnType: string
+  supplierCount: number
+  totalSpool: number
+  usedSpool: number
+  remainingSpool: number
+  totalWeightKg: number
+  totalWeightLb: number
+  usedWeightKg: number
+  usedWeightLb: number
+  remainingWeightKg: number
+  remainingWeightLb: number
+  autoExpand: boolean
+  companies: MaterialStockCompanyRow[]
 }

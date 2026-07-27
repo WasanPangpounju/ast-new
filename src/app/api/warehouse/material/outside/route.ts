@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 import type { Prisma } from '@/generated/prisma/client/client'
+import { buildOutsideObligationsData } from '@/lib/package-return-obligations'
 
 const LBS_PER_KG = 2.2046
 
@@ -20,6 +21,10 @@ const outsideSchema = z.object({
   averageKg:       z.number().optional(),
   materialId:      z.number().int().optional(),
   note:            z.string().optional(),
+  pallet:          z.number().int().optional(),
+  box:             z.number().int().optional(),
+  sack:            z.number().int().optional(),
+  paperBar:        z.number().int().optional(),
   returnPallet:    z.boolean().optional(),
   returnBox:       z.boolean().optional(),
   returnSack:      z.boolean().optional(),
@@ -46,6 +51,7 @@ export async function POST(request: NextRequest) {
   const { withdrawId, lot, yarnType, supplierName, spool, weightWithdrawn,
           weightPSum, weightKgSum, weightPPackage, weightKgPackage,
           averageP, averageKg, materialId, note,
+          pallet, box, sack, paperBar,
           returnPallet, returnBox, returnSack, returnSpool, returnPaperBar,
           recipient, usageNote, paymentComment } = parsed.data
 
@@ -70,31 +76,44 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const data = await prisma.materialOutside.create({
-      data: {
-        withdrawId:      withdrawId ?? crypto.randomUUID(),
-        lot:             lot || null,
-        yarnType,
-        supplierName:    supplierName || null,
-        spool,
-        weightWithdrawn,
-        weightPSum:      weightPSum      ?? null,
-        weightKgSum:     weightKgSum     ?? null,
-        weightPPackage:  weightPPackage  ?? null,
-        weightKgPackage: weightKgPackage ?? null,
-        averageP:        averageP        ?? null,
-        averageKg:       averageKg       ?? null,
-        note:            note            || null,
-        returnPallet:    returnPallet    ?? false,
-        returnBox:       returnBox       ?? false,
-        returnSack:      returnSack      ?? false,
-        returnSpool:     returnSpool     ?? false,
-        returnPaperBar:  returnPaperBar  ?? false,
-        recipient:       recipient       || null,
-        usageNote:       usageNote       || null,
-        paymentComment:  paymentComment  || null,
-        ...(resolvedMaterialId != null && { materialId: resolvedMaterialId }),
-      },
+    const data = await prisma.$transaction(async tx => {
+      const outside = await tx.materialOutside.create({
+        data: {
+          withdrawId:      withdrawId ?? crypto.randomUUID(),
+          lot:             lot || null,
+          yarnType,
+          supplierName:    supplierName || null,
+          spool,
+          weightWithdrawn,
+          weightPSum:      weightPSum      ?? null,
+          weightKgSum:     weightKgSum     ?? null,
+          weightPPackage:  weightPPackage  ?? null,
+          weightKgPackage: weightKgPackage ?? null,
+          averageP:        averageP        ?? null,
+          averageKg:       averageKg       ?? null,
+          note:            note            || null,
+          pallet:          pallet          ?? null,
+          box:             box             ?? null,
+          sack:            sack            ?? null,
+          paperBar:        paperBar        ?? null,
+          returnPallet:    returnPallet    ?? false,
+          returnBox:       returnBox       ?? false,
+          returnSack:      returnSack      ?? false,
+          returnSpool:     returnSpool     ?? false,
+          returnPaperBar:  returnPaperBar  ?? false,
+          recipient:       recipient       || null,
+          usageNote:       usageNote       || null,
+          paymentComment:  paymentComment  || null,
+          ...(resolvedMaterialId != null && { materialId: resolvedMaterialId }),
+        },
+      })
+
+      const obligationsData = buildOutsideObligationsData(outside, recipient || null)
+      if (obligationsData.length > 0) {
+        await tx.packageReturnObligation.createMany({ data: obligationsData })
+      }
+
+      return outside
     })
     return Response.json({ success: true, data })
   } catch (err: unknown) {
