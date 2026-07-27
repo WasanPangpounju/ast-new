@@ -451,6 +451,7 @@ model Material {
 
   importStatus String    @default("pending")
   note         String?
+  importDate   DateTime? // วันที่นำเข้าจริง กรอกโดยผู้ใช้ (ต่างจาก createdAt ซึ่งเป็นเวลาบันทึกระบบ)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
