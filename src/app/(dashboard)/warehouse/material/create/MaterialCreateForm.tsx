@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import AutocompleteInput from "@/components/AutocompleteInput";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -143,9 +144,24 @@ export default function MaterialCreateForm({ emp }: Props) {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
+  const [supOptions, setSupOptions] = useState<string[]>([]);
+  const supTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function patch(changes: Partial<FormState>) {
     setForm((prev) => recalc(prev, changes));
+  }
+
+  function onSupplierChange(v: string) {
+    patch({ supplierName: v });
+    if (supTimer.current) clearTimeout(supTimer.current);
+    supTimer.current = setTimeout(async () => {
+      if (!v.trim()) { setSupOptions([]); return; }
+      try {
+        const res = await fetch(`/api/warehouse/material/suppliers?q=${encodeURIComponent(v)}`);
+        const data = await res.json();
+        setSupOptions(data.data ?? []);
+      } catch { setSupOptions([]); }
+    }, 300);
   }
 
   // ── weight converters ───────────────────────────────────────────────────────
@@ -275,10 +291,15 @@ export default function MaterialCreateForm({ emp }: Props) {
         <SectionLabel>ข้อมูลการนำเข้า</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="ชื่อบริษัท" required error={errors.supplierName}>
-            <input id="f-supplierName" value={form.supplierName}
-              onChange={(e) => patch({ supplierName: e.target.value })}
+            <AutocompleteInput
+              id="f-supplierName"
+              value={form.supplierName}
+              onChange={onSupplierChange}
+              onSelect={(v) => { patch({ supplierName: v }); setSupOptions([]); }}
+              options={supOptions}
               placeholder="ชื่อบริษัท"
-              className={`${inp} ${errors.supplierName ? errB : ""}`} />
+              inputClassName={`${inp} ${errors.supplierName ? errB : ""}`}
+            />
           </Field>
           <Field label="เลขที่ใบส่งสินค้า">
             <input value={form.importStatus}
@@ -517,7 +538,7 @@ export default function MaterialCreateForm({ emp }: Props) {
         {/* ── Buttons ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-end gap-3 pt-5 mt-5">
           <button type="button"
-            onClick={() => { setForm(makeEmpty(today, emp)); setErrors({}); }}
+            onClick={() => { setForm(makeEmpty(today, emp)); setErrors({}); setSupOptions([]); }}
             className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600 transition-colors">
             เคลียร์ข้อมูล
           </button>
