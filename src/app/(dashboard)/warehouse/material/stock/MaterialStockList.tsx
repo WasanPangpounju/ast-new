@@ -1,11 +1,18 @@
 "use client";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import type { MaterialStockRow } from "@/types/material";
 
 interface StockResponse {
   data: MaterialStockRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+  totalRemainingSpool: number;
+  totalRemainingWeightKg: number;
 }
+
+const LIMIT = 20;
 
 function numFmt(n: number | null | undefined, dec = 2) {
   if (n == null) return "-";
@@ -23,37 +30,44 @@ function StatusBadge({ remaining, total }: { remaining: number; total: number })
 export default function MaterialStockList() {
   const [q, setQ] = useState("");
   const [appliedQ, setAppliedQ] = useState("");
+  const [page, setPage] = useState(1);
 
   const { data, isFetching, isError } = useQuery<StockResponse>({
-    queryKey: ["material-stock", appliedQ],
+    queryKey: ["material-stock", appliedQ, page],
     queryFn: async () => {
-      const p = new URLSearchParams();
+      const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
       if (appliedQ) p.set("q", appliedQ);
       const res = await fetch(`/api/warehouse/material/stock?${p}`);
       if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
       return res.json();
     },
+    placeholderData: keepPreviousData,
   });
 
   const rows = data?.data ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
+  const totalSpool = data?.totalRemainingSpool ?? 0;
+  const totalWeight = Number(data?.totalRemainingWeightKg ?? 0);
+  const from = total === 0 ? 0 : (page - 1) * LIMIT + 1;
+  const to = Math.min(page * LIMIT, total);
 
   function handleSearch() {
     setAppliedQ(q);
+    setPage(1);
   }
   function handleClear() {
     setQ("");
     setAppliedQ("");
+    setPage(1);
   }
-
-  const totalSpool = rows.reduce((s, r) => s + r.remainingSpool, 0);
-  const totalWeight = rows.reduce((s, r) => s + Number(r.remainingWeightKg), 0);
 
   return (
     <div className="p-4 max-w-full">
       {/* Header */}
       <div className="mb-4">
         <h1 className="text-3xl font-semibold text-gray-900">สต็อกวัตถุดิบ</h1>
-        <p className="text-sm text-gray-500">{rows.length.toLocaleString()} ชนิด</p>
+        <p className="text-sm text-gray-500">{total.toLocaleString()} ชนิด</p>
       </div>
 
       {/* Summary cards */}
@@ -70,7 +84,7 @@ export default function MaterialStockList() {
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
           <p className="text-xs text-gray-500 mb-0.5">จำนวนชนิดวัตถุดิบ</p>
-          <p className="text-xl font-bold text-gray-900">{rows.length.toLocaleString()}</p>
+          <p className="text-xl font-bold text-gray-900">{total.toLocaleString()}</p>
           <p className="text-xs text-gray-400">ชนิด</p>
         </div>
       </div>
@@ -129,7 +143,7 @@ export default function MaterialStockList() {
               ) : rows.map((row, i) => (
                 <tr key={`${row.yarnType}-${row.supplierName}`}
                   className={`transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"} ${row.remainingSpool <= 0 ? "opacity-50" : ""}`}>
-                  <td className="px-3 py-2 text-center text-gray-400">{i + 1}</td>
+                  <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
                   <td className="px-3 py-2 text-gray-800 font-medium max-w-[160px] truncate" title={row.yarnType}>
                     {row.yarnType}
                   </td>
@@ -164,6 +178,28 @@ export default function MaterialStockList() {
 
         {isFetching && rows.length > 0 && (
           <div className="px-4 py-2 bg-blue-50 text-xs text-blue-500">กำลังโหลด...</div>
+        )}
+
+        {/* Pagination */}
+        {totalPages >= 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
+            <p className="text-xs text-gray-500">
+              {total === 0
+                ? "ไม่มีข้อมูล"
+                : `แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} รายการ`}
+            </p>
+            <div className="flex gap-1">
+              <button type="button" onClick={() => setPage(1)} disabled={page === 1}
+                className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">«</button>
+              <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
+                className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">‹</button>
+              <span className="px-3 py-1 text-xs border border-gray-300 bg-white">{page} / {totalPages}</span>
+              <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+                className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">›</button>
+              <button type="button" onClick={() => setPage(totalPages)} disabled={page === totalPages}
+                className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">»</button>
+            </div>
+          </div>
         )}
       </div>
     </div>
