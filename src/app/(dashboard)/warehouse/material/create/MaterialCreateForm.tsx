@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AutocompleteInput from "@/components/AutocompleteInput";
 
@@ -145,7 +145,12 @@ export default function MaterialCreateForm({ emp }: Props) {
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [supOptions, setSupOptions] = useState<string[]>([]);
+  const [yarnOptions, setYarnOptions] = useState<string[]>([]);
   const supTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const yarnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stateRef = useRef(form);
+
+  useEffect(() => { stateRef.current = form; }, [form]);
 
   function patch(changes: Partial<FormState>) {
     setForm((prev) => recalc(prev, changes));
@@ -161,6 +166,22 @@ export default function MaterialCreateForm({ emp }: Props) {
         const data = await res.json();
         setSupOptions(data.data ?? []);
       } catch { setSupOptions([]); }
+    }, 300);
+  }
+
+  function onYarnTypeChange(v: string) {
+    patch({ yarnType: v });
+    if (yarnTimer.current) clearTimeout(yarnTimer.current);
+    yarnTimer.current = setTimeout(async () => {
+      try {
+        const p = new URLSearchParams();
+        if (v.trim()) p.set("q", v);
+        const supplier = stateRef.current.supplierName.trim();
+        if (supplier) p.set("supplierName", supplier);
+        const res = await fetch(`/api/warehouse/material/yarn-types?${p}`);
+        const data = await res.json();
+        setYarnOptions(data.data ?? []);
+      } catch { setYarnOptions([]); }
     }, 300);
   }
 
@@ -315,10 +336,15 @@ export default function MaterialCreateForm({ emp }: Props) {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
           <Field label="ชนิดด้าย" required error={errors.yarnType}>
-            <input id="f-yarnType" value={form.yarnType}
-              onChange={(e) => patch({ yarnType: e.target.value })}
+            <AutocompleteInput
+              id="f-yarnType"
+              value={form.yarnType}
+              onChange={onYarnTypeChange}
+              onSelect={(v) => { patch({ yarnType: v }); setYarnOptions([]); }}
+              options={yarnOptions}
               placeholder="เช่น CP 30/1, R 30"
-              className={`${inp} ${errors.yarnType ? errB : ""}`} />
+              inputClassName={`${inp} ${errors.yarnType ? errB : ""}`}
+            />
           </Field>
           <Field label="ล็อตที่">
             <input value={form.lot}
@@ -538,7 +564,7 @@ export default function MaterialCreateForm({ emp }: Props) {
         {/* ── Buttons ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-end gap-3 pt-5 mt-5">
           <button type="button"
-            onClick={() => { setForm(makeEmpty(today, emp)); setErrors({}); setSupOptions([]); }}
+            onClick={() => { setForm(makeEmpty(today, emp)); setErrors({}); setSupOptions([]); setYarnOptions([]); }}
             className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600 transition-colors">
             เคลียร์ข้อมูล
           </button>
