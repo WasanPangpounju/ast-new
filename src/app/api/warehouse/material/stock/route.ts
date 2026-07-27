@@ -16,24 +16,61 @@ function withLb<T extends { totalWeightKg: number | string; usedWeightKg: number
   }
 }
 
+// Pre-aggregate each source table by materialId before joining, so a material with many
+// requisition/outside/return rows doesn't fan out and double-count the others (each CTE
+// yields at most one row per materialId, matching materials.id 1:1).
+const MATERIAL_STOCK_CTES = `
+  req AS (
+    SELECT "materialId", SUM(spool) AS spool, SUM("weightWithdrawn") AS weight
+    FROM materialrequisitions
+    WHERE "deletedAt" IS NULL AND "materialId" IS NOT NULL
+    GROUP BY "materialId"
+  ),
+  out_w AS (
+    SELECT "materialId", SUM(spool) AS spool, SUM("weightWithdrawn") AS weight
+    FROM material_outsides
+    WHERE "deletedAt" IS NULL AND "materialId" IS NOT NULL
+    GROUP BY "materialId"
+  ),
+  ret AS (
+    SELECT "materialId", SUM(spool) AS spool, SUM("weightReturn") AS weight
+    FROM material_returns
+    WHERE "deletedAt" IS NULL AND "materialId" IS NOT NULL
+    GROUP BY "materialId"
+  )
+`
+
+const MATERIAL_STOCK_JOINS = `
+  LEFT JOIN req   ON req."materialId"   = m.id
+  LEFT JOIN out_w ON out_w."materialId" = m.id
+  LEFT JOIN ret   ON ret."materialId"   = m.id
+`
+
+// remaining = total - เบิกใช้งาน(req) - เบิกภายนอก(out_w) + คืนเข้าสต็อก(ret)
 const AGGREGATE_COLUMNS = `
-  SUM(m.spool)::int                                                  AS "totalSpool",
-  COALESCE(SUM(r.spool), 0)::int                                     AS "usedSpool",
-  (SUM(m.spool) - COALESCE(SUM(r.spool), 0))::int                   AS "remainingSpool",
-  SUM(m."weightKgSum")                                               AS "totalWeightKg",
-  COALESCE(SUM(r."weightWithdrawn"), 0)                              AS "usedWeightKg",
-  (SUM(m."weightKgSum") - COALESCE(SUM(r."weightWithdrawn"), 0))    AS "remainingWeightKg"
+  SUM(m.spool)::int                                                            AS "totalSpool",
+  (COALESCE(SUM(req.spool), 0) + COALESCE(SUM(out_w.spool), 0))::int           AS "usedSpool",
+  (SUM(m.spool)
+    - COALESCE(SUM(req.spool), 0)
+    - COALESCE(SUM(out_w.spool), 0)
+    + COALESCE(SUM(ret.spool), 0))::int                                        AS "remainingSpool",
+  SUM(m."weightKgSum")                                                          AS "totalWeightKg",
+  (COALESCE(SUM(req.weight), 0) + COALESCE(SUM(out_w.weight), 0))              AS "usedWeightKg",
+  (SUM(m."weightKgSum")
+    - COALESCE(SUM(req.weight), 0)
+    - COALESCE(SUM(out_w.weight), 0)
+    + COALESCE(SUM(ret.weight), 0))                                            AS "remainingWeightKg"
 `
 
 async function getFlatByCompany(q: string, page: number, limit: number, offset: number) {
   const companyCte = `
+    WITH ${MATERIAL_STOCK_CTES}
     SELECT
       m."yarnType",
       m."supplierName",
       ${AGGREGATE_COLUMNS}
     FROM materials m
-    LEFT JOIN materialrequisitions r
-      ON r."materialId" = m.id AND r."deletedAt" IS NULL
+    ${MATERIAL_STOCK_JOINS}
     WHERE m."deletedAt" IS NULL
       AND m."supplierName" ILIKE '%${esc(q)}%'
     GROUP BY m."yarnType", m."supplierName"
@@ -86,14 +123,14 @@ async function getGrouped(q: string, page: number, limit: number, offset: number
   const yarnMatchExpr = q ? `bool_or(m."yarnType" ILIKE '%${esc(q)}%')` : 'true'
 
   const groupedCte = `
+    WITH ${MATERIAL_STOCK_CTES}
     SELECT
       m."yarnType",
       COUNT(DISTINCT m."supplierName")::int                              AS "supplierCount",
       ${yarnMatchExpr}                                                    AS "matchedByYarn",
       ${AGGREGATE_COLUMNS}
     FROM materials m
-    LEFT JOIN materialrequisitions r
-      ON r."materialId" = m.id AND r."deletedAt" IS NULL
+    ${MATERIAL_STOCK_JOINS}
     WHERE m."deletedAt" IS NULL
       ${matchFilter}
     GROUP BY m."yarnType"
@@ -117,13 +154,13 @@ async function getGrouped(q: string, page: number, limit: number, offset: number
   const pageYarnTypes = groupRows.map((g) => g.yarnType)
   const companyRows = pageYarnTypes.length
     ? await prisma.$queryRawUnsafe<MaterialStockCompanyRow[]>(`
+        WITH ${MATERIAL_STOCK_CTES}
         SELECT
           m."yarnType",
           m."supplierName",
           ${AGGREGATE_COLUMNS}
         FROM materials m
-        LEFT JOIN materialrequisitions r
-          ON r."materialId" = m.id AND r."deletedAt" IS NULL
+        ${MATERIAL_STOCK_JOINS}
         WHERE m."deletedAt" IS NULL
           AND m."yarnType" IN (${pageYarnTypes.map((t) => `'${esc(t)}'`).join(',')})
         GROUP BY m."yarnType", m."supplierName"
