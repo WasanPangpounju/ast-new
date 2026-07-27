@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
-import type { MaterialStockRow } from '@/types/material'
+import type { MaterialStockGroup, MaterialStockCompanyRow } from '@/types/material'
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams
@@ -10,14 +10,27 @@ export async function GET(request: NextRequest) {
   const offset = (page - 1) * limit
 
   const esc = (s: string) => s.replace(/'/g, "''")
-  const qFilter = q
-    ? `AND (m."yarnType" ILIKE '%${esc(q)}%' OR m."supplierName" ILIKE '%${esc(q)}%')`
+
+  // A group (yarnType) matches if its name matches, or any company under it matches —
+  // group totals always reflect every company, even when the match came from a company name.
+  const matchFilter = q
+    ? `AND (
+        m."yarnType" ILIKE '%${esc(q)}%'
+        OR EXISTS (
+          SELECT 1 FROM materials m2
+          WHERE m2."yarnType" = m."yarnType"
+            AND m2."deletedAt" IS NULL
+            AND m2."supplierName" ILIKE '%${esc(q)}%'
+        )
+      )`
     : ''
+  const yarnMatchExpr = q ? `bool_or(m."yarnType" ILIKE '%${esc(q)}%')` : 'true'
 
   const groupedCte = `
     SELECT
       m."yarnType",
-      m."supplierName",
+      COUNT(DISTINCT m."supplierName")::int                              AS "supplierCount",
+      ${yarnMatchExpr}                                                    AS "matchedByYarn",
       SUM(m.spool)::int                                                  AS "totalSpool",
       COALESCE(SUM(r.spool), 0)::int                                     AS "usedSpool",
       (SUM(m.spool) - COALESCE(SUM(r.spool), 0))::int                   AS "remainingSpool",
@@ -28,13 +41,13 @@ export async function GET(request: NextRequest) {
     LEFT JOIN materialrequisitions r
       ON r."materialId" = m.id AND r."deletedAt" IS NULL
     WHERE m."deletedAt" IS NULL
-      ${qFilter}
-    GROUP BY m."yarnType", m."supplierName"
+      ${matchFilter}
+    GROUP BY m."yarnType"
   `
 
   try {
-    const [rows, [summary]] = await Promise.all([
-      prisma.$queryRawUnsafe<MaterialStockRow[]>(`
+    const [groupRows, [summary]] = await Promise.all([
+      prisma.$queryRawUnsafe<(Omit<MaterialStockGroup, 'companies' | 'autoExpand'> & { matchedByYarn: boolean })[]>(`
         ${groupedCte}
         ORDER BY "remainingSpool" DESC
         LIMIT ${limit} OFFSET ${offset}
@@ -48,10 +61,45 @@ export async function GET(request: NextRequest) {
       `),
     ])
 
+    const pageYarnTypes = groupRows.map((g) => g.yarnType)
+    const companyRows = pageYarnTypes.length
+      ? await prisma.$queryRawUnsafe<MaterialStockCompanyRow[]>(`
+          SELECT
+            m."yarnType",
+            m."supplierName",
+            SUM(m.spool)::int                                                  AS "totalSpool",
+            COALESCE(SUM(r.spool), 0)::int                                     AS "usedSpool",
+            (SUM(m.spool) - COALESCE(SUM(r.spool), 0))::int                   AS "remainingSpool",
+            SUM(m."weightKgSum")                                               AS "totalWeightKg",
+            COALESCE(SUM(r."weightWithdrawn"), 0)                              AS "usedWeightKg",
+            (SUM(m."weightKgSum") - COALESCE(SUM(r."weightWithdrawn"), 0))    AS "remainingWeightKg"
+          FROM materials m
+          LEFT JOIN materialrequisitions r
+            ON r."materialId" = m.id AND r."deletedAt" IS NULL
+          WHERE m."deletedAt" IS NULL
+            AND m."yarnType" IN (${pageYarnTypes.map((t) => `'${esc(t)}'`).join(',')})
+          GROUP BY m."yarnType", m."supplierName"
+          ORDER BY "remainingSpool" DESC
+        `)
+      : []
+
+    const companiesByYarn = new Map<string, MaterialStockCompanyRow[]>()
+    for (const c of companyRows) {
+      const list = companiesByYarn.get(c.yarnType) ?? []
+      list.push(c)
+      companiesByYarn.set(c.yarnType, list)
+    }
+
+    const data: MaterialStockGroup[] = groupRows.map(({ matchedByYarn, ...g }) => ({
+      ...g,
+      autoExpand: Boolean(q) && !matchedByYarn,
+      companies: companiesByYarn.get(g.yarnType) ?? [],
+    }))
+
     const total = summary?.total ?? 0
 
     return Response.json({
-      data: rows,
+      data,
       total,
       page,
       totalPages: Math.max(1, Math.ceil(total / limit)),

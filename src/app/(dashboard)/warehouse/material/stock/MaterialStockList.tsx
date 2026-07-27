@@ -1,10 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import type { MaterialStockRow } from "@/types/material";
+import type { MaterialStockGroup } from "@/types/material";
+import MaterialStockGroupRow, { numFmt } from "./MaterialStockGroupRow";
 
 interface StockResponse {
-  data: MaterialStockRow[];
+  data: MaterialStockGroup[];
   total: number;
   page: number;
   totalPages: number;
@@ -14,23 +15,17 @@ interface StockResponse {
 
 const LIMIT = 20;
 
-function numFmt(n: number | null | undefined, dec = 2) {
-  if (n == null) return "-";
-  return n.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec });
-}
-
-function StatusBadge({ remaining, total }: { remaining: number; total: number }) {
-  if (total === 0) return null;
-  const pct = remaining / total;
-  if (pct <= 0) return <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-600 rounded-full">หมด</span>;
-  if (pct < 0.2) return <span className="px-1.5 py-0.5 text-xs bg-orange-100 text-orange-600 rounded-full">ใกล้หมด</span>;
-  return <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">มีสต็อก</span>;
-}
-
 export default function MaterialStockList() {
   const [q, setQ] = useState("");
   const [appliedQ, setAppliedQ] = useState("");
   const [page, setPage] = useState(1);
+  const [expandedOverride, setExpandedOverride] = useState<Record<string, boolean>>({});
+  const [lastAppliedQ, setLastAppliedQ] = useState(appliedQ);
+  // A new search context should re-derive which groups auto-expand, not keep stale toggles
+  if (appliedQ !== lastAppliedQ) {
+    setLastAppliedQ(appliedQ);
+    setExpandedOverride({});
+  }
 
   const { data, isFetching, isError } = useQuery<StockResponse>({
     queryKey: ["material-stock", appliedQ, page],
@@ -44,13 +39,20 @@ export default function MaterialStockList() {
     placeholderData: keepPreviousData,
   });
 
-  const rows = data?.data ?? [];
+  const groups = data?.data ?? [];
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
   const totalSpool = data?.totalRemainingSpool ?? 0;
   const totalWeight = Number(data?.totalRemainingWeightKg ?? 0);
   const from = total === 0 ? 0 : (page - 1) * LIMIT + 1;
   const to = Math.min(page * LIMIT, total);
+
+  function isExpanded(group: MaterialStockGroup) {
+    return expandedOverride[group.yarnType] ?? group.autoExpand;
+  }
+  function toggle(group: MaterialStockGroup) {
+    setExpandedOverride((prev) => ({ ...prev, [group.yarnType]: !isExpanded(group) }));
+  }
 
   function handleSearch() {
     setAppliedQ(q);
@@ -129,7 +131,7 @@ export default function MaterialStockList() {
               </tr>
             </thead>
             <tbody>
-              {isFetching && rows.length === 0 ? (
+              {isFetching && groups.length === 0 ? (
                 <tr><td colSpan={10} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -138,31 +140,20 @@ export default function MaterialStockList() {
                 </td></tr>
               ) : isError ? (
                 <tr><td colSpan={10} className="text-center py-12 text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>
-              ) : rows.length === 0 ? (
+              ) : groups.length === 0 ? (
                 <tr><td colSpan={10} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
-              ) : rows.map((row, i) => (
-                <tr key={`${row.yarnType}-${row.supplierName}`}
-                  className={`transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"} ${row.remainingSpool <= 0 ? "opacity-50" : ""}`}>
-                  <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
-                  <td className="px-3 py-2 text-gray-800 font-medium max-w-[160px] truncate" title={row.yarnType}>
-                    {row.yarnType}
-                  </td>
-                  <td className="px-3 py-2 text-gray-600 max-w-[180px] truncate" title={row.supplierName}>
-                    {row.supplierName || "-"}
-                  </td>
-                  <td className="px-3 py-2 text-right text-gray-700">{row.totalSpool.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right text-orange-600">{row.usedSpool.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-gray-900">{row.remainingSpool.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">{numFmt(Number(row.totalWeightKg))}</td>
-                  <td className="px-3 py-2 text-right text-orange-600">{numFmt(Number(row.usedWeightKg))}</td>
-                  <td className="px-3 py-2 text-right font-semibold text-gray-900">{numFmt(Number(row.remainingWeightKg))}</td>
-                  <td className="px-3 py-2 text-center">
-                    <StatusBadge remaining={row.remainingSpool} total={row.totalSpool} />
-                  </td>
-                </tr>
+              ) : groups.map((group, i) => (
+                <MaterialStockGroupRow
+                  key={group.yarnType}
+                  group={group}
+                  rowNumber={(page - 1) * LIMIT + i + 1}
+                  striped={i % 2 !== 0}
+                  expanded={isExpanded(group)}
+                  onToggle={() => toggle(group)}
+                />
               ))}
             </tbody>
-            {rows.length > 0 && (
+            {groups.length > 0 && (
               <tfoot>
                 <tr className="bg-gray-100 border-t-2 border-gray-300 font-semibold">
                   <td colSpan={5} className="px-3 py-2 text-right text-xs text-gray-600">รวม Spool คงเหลือ</td>
@@ -176,7 +167,7 @@ export default function MaterialStockList() {
           </table>
         </div>
 
-        {isFetching && rows.length > 0 && (
+        {isFetching && groups.length > 0 && (
           <div className="px-4 py-2 bg-blue-50 text-xs text-blue-500">กำลังโหลด...</div>
         )}
 
@@ -186,7 +177,7 @@ export default function MaterialStockList() {
             <p className="text-xs text-gray-500">
               {total === 0
                 ? "ไม่มีข้อมูล"
-                : `แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} รายการ`}
+                : `แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} ชนิด`}
             </p>
             <div className="flex gap-1">
               <button type="button" onClick={() => setPage(1)} disabled={page === 1}
