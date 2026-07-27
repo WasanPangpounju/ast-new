@@ -39,7 +39,9 @@ export interface MaterialStockCompanyRow {
   usedSpool: number
   remainingSpool: number
   totalWeightKg: number
+  totalWeightLb: number
   usedWeightKg: number
+  usedWeightLb: number
   remainingWeightKg: number
   remainingWeightLb: number
 }
@@ -51,7 +53,9 @@ export interface MaterialStockGroup {
   usedSpool: number
   remainingSpool: number
   totalWeightKg: number
+  totalWeightLb: number
   usedWeightKg: number
+  usedWeightLb: number
   remainingWeightKg: number
   remainingWeightLb: number
   autoExpand: boolean

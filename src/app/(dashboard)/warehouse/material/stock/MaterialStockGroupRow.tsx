@@ -50,8 +50,12 @@ export default function MaterialStockGroupRow({ group, rowNumber, striped, expan
         <td className="px-3 py-2 text-right font-semibold text-gray-900">{group.totalSpool.toLocaleString()}</td>
         <td className="px-3 py-2 text-right font-semibold text-orange-600">{group.usedSpool.toLocaleString()}</td>
         <td className="px-3 py-2 text-right font-semibold text-gray-900">{group.remainingSpool.toLocaleString()}</td>
-        <td className="px-3 py-2 text-right font-semibold text-gray-700">{numFmt(Number(group.totalWeightKg))}</td>
-        <td className="px-3 py-2 text-right font-semibold text-orange-600">{numFmt(Number(group.usedWeightKg))}</td>
+        <td className="px-3 py-2 text-right font-semibold text-gray-700">
+          <WeightValue kg={Number(group.totalWeightKg)} lb={group.totalWeightLb} unit={weightUnit} />
+        </td>
+        <td className="px-3 py-2 text-right font-semibold text-orange-600">
+          <WeightValue kg={Number(group.usedWeightKg)} lb={group.usedWeightLb} unit={weightUnit} />
+        </td>
         <td className="px-3 py-2 text-right font-semibold text-gray-900">
           <WeightValue kg={Number(group.remainingWeightKg)} lb={group.remainingWeightLb} unit={weightUnit} />
         </td>
@@ -70,8 +74,12 @@ export default function MaterialStockGroupRow({ group, rowNumber, striped, expan
           <td className="px-3 py-2 text-right text-gray-700">{c.totalSpool.toLocaleString()}</td>
           <td className="px-3 py-2 text-right text-orange-500">{c.usedSpool.toLocaleString()}</td>
           <td className="px-3 py-2 text-right text-gray-800">{c.remainingSpool.toLocaleString()}</td>
-          <td className="px-3 py-2 text-right text-gray-600">{numFmt(Number(c.totalWeightKg))}</td>
-          <td className="px-3 py-2 text-right text-orange-500">{numFmt(Number(c.usedWeightKg))}</td>
+          <td className="px-3 py-2 text-right text-gray-600">
+            <WeightValue kg={Number(c.totalWeightKg)} lb={c.totalWeightLb} unit={weightUnit} />
+          </td>
+          <td className="px-3 py-2 text-right text-orange-500">
+            <WeightValue kg={Number(c.usedWeightKg)} lb={c.usedWeightLb} unit={weightUnit} />
+          </td>
           <td className="px-3 py-2 text-right text-gray-800">
             <WeightValue kg={Number(c.remainingWeightKg)} lb={c.remainingWeightLb} unit={weightUnit} />
           </td>

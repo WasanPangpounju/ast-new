@@ -5,8 +5,15 @@ import type { MaterialStockGroup, MaterialStockCompanyRow } from '@/types/materi
 const esc = (s: string) => s.replace(/'/g, "''")
 const KG_TO_LB = 2.20462
 
-function withLb<T extends { remainingWeightKg: number | string }>(row: T): T & { remainingWeightLb: number } {
-  return { ...row, remainingWeightLb: Number(row.remainingWeightKg) * KG_TO_LB }
+function withLb<T extends { totalWeightKg: number | string; usedWeightKg: number | string; remainingWeightKg: number | string }>(
+  row: T
+): T & { totalWeightLb: number; usedWeightLb: number; remainingWeightLb: number } {
+  return {
+    ...row,
+    totalWeightLb: Number(row.totalWeightKg) * KG_TO_LB,
+    usedWeightLb: Number(row.usedWeightKg) * KG_TO_LB,
+    remainingWeightLb: Number(row.remainingWeightKg) * KG_TO_LB,
+  }
 }
 
 const AGGREGATE_COLUMNS = `

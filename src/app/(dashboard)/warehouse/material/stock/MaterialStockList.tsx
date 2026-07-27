@@ -196,8 +196,8 @@ export default function MaterialStockList() {
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">Spool ทั้งหมด</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">เบิกไปแล้ว</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">Spool คงเหลือ</th>
-                <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">น้ำหนักรวม (kg)</th>
-                <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">ใช้ไปแล้ว (kg)</th>
+                <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">น้ำหนักรวม ({weightUnit})</th>
+                <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">ใช้ไปแล้ว ({weightUnit})</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">คงเหลือ ({weightUnit})</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-20">สถานะ</th>
               </tr>

@@ -1,5 +1,5 @@
 import type { MaterialStockCompanyRow } from "@/types/material";
-import { numFmt, StatusBadge, WeightValue, type WeightUnit } from "./MaterialStockGroupRow";
+import { StatusBadge, WeightValue, type WeightUnit } from "./MaterialStockGroupRow";
 
 interface Props {
   row: MaterialStockCompanyRow;
@@ -21,8 +21,12 @@ export default function MaterialStockFlatRow({ row, rowNumber, striped, weightUn
       <td className="px-3 py-2 text-right text-gray-700">{row.totalSpool.toLocaleString()}</td>
       <td className="px-3 py-2 text-right text-orange-600">{row.usedSpool.toLocaleString()}</td>
       <td className="px-3 py-2 text-right font-semibold text-gray-900">{row.remainingSpool.toLocaleString()}</td>
-      <td className="px-3 py-2 text-right text-gray-700">{numFmt(Number(row.totalWeightKg))}</td>
-      <td className="px-3 py-2 text-right text-orange-600">{numFmt(Number(row.usedWeightKg))}</td>
+      <td className="px-3 py-2 text-right text-gray-700">
+        <WeightValue kg={Number(row.totalWeightKg)} lb={row.totalWeightLb} unit={weightUnit} />
+      </td>
+      <td className="px-3 py-2 text-right text-orange-600">
+        <WeightValue kg={Number(row.usedWeightKg)} lb={row.usedWeightLb} unit={weightUnit} />
+      </td>
       <td className="px-3 py-2 text-right font-semibold text-gray-900">
         <WeightValue kg={Number(row.remainingWeightKg)} lb={row.remainingWeightLb} unit={weightUnit} />
       </td>
