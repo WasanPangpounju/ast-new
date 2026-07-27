@@ -1,3 +1,8 @@
+// ⚠️ เพิ่ม entry ที่นี่แล้ว อย่าลืมเพิ่ม src/app/(dashboard)/NavLinks.tsx ด้วยเสมอ —
+// NavLinks.tsx เก็บรายการเมนู sidebar ของตัวเองแยกจากไฟล์นี้ ไม่ได้ derive จาก ALL_MENUS
+// ถ้าลืม เมนูจะไม่ขึ้น sidebar แม้ requirePermission()/permission ถูกต้องและเข้าหน้าตรงผ่าน URL ได้
+// (พลาดจุดนี้มาแล้ว 2 ครั้ง: needs-supplier และ package-returns.record)
+
 export type MenuItem = {
   key: string
   label: string
