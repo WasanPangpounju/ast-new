@@ -146,14 +146,33 @@ export default function MaterialCreateForm({ emp }: Props) {
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [supOptions, setSupOptions] = useState<string[]>([]);
   const [yarnOptions, setYarnOptions] = useState<string[]>([]);
+  const [lotOptions, setLotOptions] = useState<string[]>([]);
   const supTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const yarnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lotTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stateRef = useRef(form);
 
   useEffect(() => { stateRef.current = form; }, [form]);
 
   function patch(changes: Partial<FormState>) {
     setForm((prev) => recalc(prev, changes));
+  }
+
+  function fetchLots(yarnType: string, supplierName: string, q = "") {
+    if (!yarnType.trim()) { setLotOptions([]); return; }
+    const p = new URLSearchParams({ yarnType });
+    if (supplierName) p.set("supplierName", supplierName);
+    if (q) p.set("q", q);
+    fetch(`/api/warehouse/material/lots?${p}`)
+      .then((r) => r.json())
+      .then((d) => setLotOptions(d.data ?? []))
+      .catch(() => setLotOptions([]));
+  }
+
+  function scheduleLotFetch(yarnType: string, supplierName: string, q = "") {
+    if (lotTimer.current) clearTimeout(lotTimer.current);
+    if (!yarnType.trim()) { setLotOptions([]); return; }
+    lotTimer.current = setTimeout(() => fetchLots(yarnType, supplierName, q), 300);
   }
 
   function onSupplierChange(v: string) {
@@ -167,6 +186,7 @@ export default function MaterialCreateForm({ emp }: Props) {
         setSupOptions(data.data ?? []);
       } catch { setSupOptions([]); }
     }, 300);
+    scheduleLotFetch(stateRef.current.yarnType, v, stateRef.current.lot);
   }
 
   function onYarnTypeChange(v: string) {
@@ -183,6 +203,12 @@ export default function MaterialCreateForm({ emp }: Props) {
         setYarnOptions(data.data ?? []);
       } catch { setYarnOptions([]); }
     }, 300);
+    scheduleLotFetch(v, stateRef.current.supplierName, stateRef.current.lot);
+  }
+
+  function onLotChange(v: string) {
+    patch({ lot: v });
+    scheduleLotFetch(stateRef.current.yarnType, stateRef.current.supplierName, v);
   }
 
   // ── weight converters ───────────────────────────────────────────────────────
@@ -316,7 +342,7 @@ export default function MaterialCreateForm({ emp }: Props) {
               id="f-supplierName"
               value={form.supplierName}
               onChange={onSupplierChange}
-              onSelect={(v) => { patch({ supplierName: v }); setSupOptions([]); }}
+              onSelect={(v) => { patch({ supplierName: v }); setSupOptions([]); fetchLots(stateRef.current.yarnType, v, stateRef.current.lot); }}
               options={supOptions}
               placeholder="ชื่อบริษัท"
               inputClassName={`${inp} ${errors.supplierName ? errB : ""}`}
@@ -340,17 +366,21 @@ export default function MaterialCreateForm({ emp }: Props) {
               id="f-yarnType"
               value={form.yarnType}
               onChange={onYarnTypeChange}
-              onSelect={(v) => { patch({ yarnType: v }); setYarnOptions([]); }}
+              onSelect={(v) => { patch({ yarnType: v }); setYarnOptions([]); fetchLots(v, stateRef.current.supplierName, stateRef.current.lot); }}
               options={yarnOptions}
               placeholder="เช่น CP 30/1, R 30"
               inputClassName={`${inp} ${errors.yarnType ? errB : ""}`}
             />
           </Field>
           <Field label="ล็อตที่">
-            <input value={form.lot}
-              onChange={(e) => patch({ lot: e.target.value })}
-              placeholder="ล็อตที่"
-              className={inp} />
+            <AutocompleteInput
+              value={form.lot}
+              onChange={onLotChange}
+              onSelect={(v) => { patch({ lot: v }); setLotOptions([]); }}
+              options={lotOptions}
+              placeholder="ล็อตที่ (พิมพ์หรือเลือกจากรายการ)"
+              inputClassName={inp}
+            />
           </Field>
           <Field label="พนักงาน">
             <input value={form.emp}
@@ -564,7 +594,7 @@ export default function MaterialCreateForm({ emp }: Props) {
         {/* ── Buttons ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-end gap-3 pt-5 mt-5">
           <button type="button"
-            onClick={() => { setForm(makeEmpty(today, emp)); setErrors({}); setSupOptions([]); setYarnOptions([]); }}
+            onClick={() => { setForm(makeEmpty(today, emp)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); }}
             className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600 transition-colors">
             เคลียร์ข้อมูล
           </button>
