@@ -10,8 +10,10 @@ const BASE_URL = process.env.TEST_BASE_URL ?? 'http://localhost:3000'
 async function authenticate(): Promise<{ cookie: string; userId: number }> {
   const email = `test-package-return-${Date.now()}@example.test`
   const password = 'test-password-123'
+  // role: 'admin' — entries POST/DELETE now gate on 'package-returns.record' (added alongside
+  // the record-return UI); permission delegation itself is covered by test-package-return-record.ts.
   const user = await prisma.user.create({
-    data: { name: 'Test Runner', email, password: await bcrypt.hash(password, 10) },
+    data: { name: 'Test Runner', email, password: await bcrypt.hash(password, 10), role: 'admin' },
   })
 
   const csrfRes = await fetch(`${BASE_URL}/api/auth/csrf`)

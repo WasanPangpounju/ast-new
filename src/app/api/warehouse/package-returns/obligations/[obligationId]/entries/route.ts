@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
+import { requirePermission, PermissionError } from '@/lib/permissions'
 import { PackageReturnError, computeReturnStatus } from '@/lib/package-return-obligations'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
@@ -18,9 +20,48 @@ interface ObligationRow {
   deletedAt: Date | null
 }
 
+// ─── GET /api/warehouse/package-returns/obligations/[obligationId]/entries ───
+// Return history for one obligation — backs the "ดูประวัติการคืน" panel.
+
+export async function GET(_request: NextRequest, { params }: Params) {
+  try {
+    const session = await auth()
+    await requirePermission(session, 'package-returns.record')
+
+    const { obligationId: obligationIdStr } = await params
+    const obligationId = parseInt(obligationIdStr, 10)
+    if (isNaN(obligationId)) return Response.json({ error: 'Invalid obligationId' }, { status: 400 })
+
+    const entries = await prisma.packageReturnEntry.findMany({
+      where: { obligationId, deletedAt: null },
+      orderBy: { returnedAt: 'desc' },
+      select: { id: true, qty: true, returnedAt: true, emp: true, note: true },
+    })
+
+    return Response.json({ success: true, data: entries })
+  } catch (err: unknown) {
+    if (err instanceof PermissionError) {
+      return Response.json({ error: err.message }, { status: err.status })
+    }
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[package-returns/obligations/[obligationId]/entries GET] error:', msg)
+    return Response.json({ error: msg }, { status: 500 })
+  }
+}
+
 // ─── POST /api/warehouse/package-returns/obligations/[obligationId]/entries ──
 
 export async function POST(request: NextRequest, { params }: Params) {
+  try {
+    const session = await auth()
+    await requirePermission(session, 'package-returns.record')
+  } catch (err: unknown) {
+    if (err instanceof PermissionError) {
+      return Response.json({ error: err.message }, { status: err.status })
+    }
+    throw err
+  }
+
   const { obligationId: obligationIdStr } = await params
   const obligationId = parseInt(obligationIdStr, 10)
   if (isNaN(obligationId)) return Response.json({ error: 'Invalid obligationId' }, { status: 400 })

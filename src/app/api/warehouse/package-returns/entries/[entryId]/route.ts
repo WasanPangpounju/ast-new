@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
+import { requirePermission, PermissionError } from '@/lib/permissions'
 import { PackageReturnError, computeReturnStatus } from '@/lib/package-return-obligations'
 import type { NextRequest } from 'next/server'
 
@@ -15,6 +17,16 @@ interface ObligationRow {
 // Cancels a mistakenly-recorded return entry and reverses its effect on the obligation.
 
 export async function DELETE(_request: NextRequest, { params }: Params) {
+  try {
+    const session = await auth()
+    await requirePermission(session, 'package-returns.record')
+  } catch (err: unknown) {
+    if (err instanceof PermissionError) {
+      return Response.json({ error: err.message }, { status: err.status })
+    }
+    throw err
+  }
+
   const { entryId: entryIdStr } = await params
   const entryId = parseInt(entryIdStr, 10)
   if (isNaN(entryId)) return Response.json({ error: 'Invalid entryId' }, { status: 400 })
