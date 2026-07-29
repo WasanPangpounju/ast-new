@@ -2,16 +2,33 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 
+// Legacy sentinel: FabricReturnPage ("ส่งคืนบรรจุภัณฑ์") reuses this same table/endpoint
+// for packaging-returned-to-supplier logs, tagging rows with yarnType = PACKAGING_SENTINEL
+// and weightReturn = 0. `scope` keeps that legacy data out of real material-stock-return
+// listings (and vice versa) without a schema migration.
+const PACKAGING_SENTINEL = 'บรรจุภัณฑ์'
+
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const page  = Math.max(1, Number(searchParams.get('page') ?? 1))
   const limit = 20
+  const scope    = searchParams.get('scope')    ?? 'material'
   const search   = searchParams.get('search')   ?? ''
   const dateFrom = searchParams.get('dateFrom') ?? ''
   const dateTo   = searchParams.get('dateTo')   ?? ''
 
-  const where: Record<string, unknown> = { deletedAt: null }
-  if (search) where.yarnType = { contains: search, mode: 'insensitive' }
+  const where: Record<string, unknown> = {
+    deletedAt: null,
+    yarnType: scope === 'packaging' ? PACKAGING_SENTINEL : { not: PACKAGING_SENTINEL },
+  }
+  if (search) {
+    where.OR = [
+      { returnId:     { contains: search, mode: 'insensitive' } },
+      { yarnType:      { contains: search, mode: 'insensitive' } },
+      { supplierName:  { contains: search, mode: 'insensitive' } },
+      { lot:           { contains: search, mode: 'insensitive' } },
+    ]
+  }
   if (dateFrom || dateTo) {
     where.returnDate = {
       ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
@@ -100,6 +117,29 @@ export async function POST(request: NextRequest) {
       },
     })
     return Response.json({ success: true, data })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    return Response.json({ error: msg }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const idParam = request.nextUrl.searchParams.get('id')
+  const id = idParam ? parseInt(idParam, 10) : NaN
+  if (isNaN(id)) {
+    return Response.json({ error: 'Invalid id' }, { status: 400 })
+  }
+
+  try {
+    const existing = await prisma.materialReturn.findUnique({ where: { id } })
+    if (!existing || existing.deletedAt !== null) {
+      return Response.json({ error: 'Not found' }, { status: 404 })
+    }
+    await prisma.materialReturn.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    })
+    return Response.json({ success: true })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     return Response.json({ error: msg }, { status: 500 })

@@ -33,6 +33,8 @@ export const ALL_MENUS: MenuItem[] = [
   { key: 'material.requisition-history', label: 'ประวัติการเบิก',           href: '/warehouse/material/requisition-history', group: 'ระบบวัตถุดิบ' },
   { key: 'material.outside',             label: 'เบิกวัตถุดิบภายนอก',       href: '/warehouse/material/outside',       group: 'ระบบวัตถุดิบ' },
   { key: 'material.outside-history',     label: 'ประวัติเบิกภายนอก',        href: '/warehouse/material/outside-history', group: 'ระบบวัตถุดิบ' },
+  { key: 'material.return',              label: 'คืนวัตถุดิบเข้าสต็อก',      href: '/warehouse/material/return',        group: 'ระบบวัตถุดิบ' },
+  { key: 'material.return-history',      label: 'ประวัติการคืน',            href: '/warehouse/material/return-history', group: 'ระบบวัตถุดิบ' },
 
   // ─── ตั้งค่า ────────────────────────────────────────────
   { key: 'admin.users',                  label: 'จัดการผู้ใช้',             href: '/admin/users',                      group: 'ตั้งค่า' },

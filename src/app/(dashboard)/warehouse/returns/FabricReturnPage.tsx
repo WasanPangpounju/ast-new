@@ -274,7 +274,10 @@ export default function FabricReturnPage() {
 
   const fetchRecords = useCallback(() => {
     setLoading(true);
-    const p = new URLSearchParams({ page: String(page) });
+    // scope=packaging: this page logs packaging returned to a supplier, tagged with the
+    // legacy yarnType="บรรจุภัณฑ์" sentinel in the shared material_returns table — must stay
+    // scoped so it doesn't mix with real material-stock-return rows from the newer feature.
+    const p = new URLSearchParams({ page: String(page), scope: "packaging" });
     if (applied.search) p.set("search", applied.search);
     if (applied.dateFrom) p.set("dateFrom", applied.dateFrom);
     if (applied.dateTo) p.set("dateTo", applied.dateTo);
