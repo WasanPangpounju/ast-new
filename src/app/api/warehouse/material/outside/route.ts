@@ -123,6 +123,65 @@ export async function POST(request: NextRequest) {
   }
 }
 
+const patchSchema = z.object({
+  supplierName:    z.string().nullable().optional(),
+  yarnType:        z.string().min(1).optional(),
+  lot:             z.string().nullable().optional(),
+  spool:           z.number().int().positive().optional(),
+  weightWithdrawn: z.number().positive().optional(),
+  weightPSum:      z.number().nullable().optional(),
+  weightKgSum:     z.number().nullable().optional(),
+  weightPPackage:  z.number().nullable().optional(),
+  weightKgPackage: z.number().nullable().optional(),
+  averageP:        z.number().nullable().optional(),
+  averageKg:       z.number().nullable().optional(),
+  note:            z.string().nullable().optional(),
+  pallet:          z.number().int().nullable().optional(),
+  box:             z.number().int().nullable().optional(),
+  sack:            z.number().int().nullable().optional(),
+  paperBar:        z.number().int().nullable().optional(),
+  returnPallet:    z.boolean().optional(),
+  returnBox:       z.boolean().optional(),
+  returnSack:      z.boolean().optional(),
+  returnSpool:     z.boolean().optional(),
+  returnPaperBar:  z.boolean().optional(),
+  recipient:       z.string().nullable().optional(),
+  usageNote:       z.string().nullable().optional(),
+  paymentComment:  z.string().nullable().optional(),
+})
+
+export async function PATCH(request: NextRequest) {
+  const idParam = request.nextUrl.searchParams.get('id')
+  const id = idParam ? parseInt(idParam, 10) : NaN
+  if (isNaN(id)) return Response.json({ error: 'Invalid id' }, { status: 400 })
+
+  let body: unknown
+  try { body = await request.json() } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const parsed = patchSchema.safeParse(body)
+  if (!parsed.success) {
+    return Response.json({ error: parsed.error.flatten() }, { status: 400 })
+  }
+
+  try {
+    const existing = await prisma.materialOutside.findUnique({ where: { id } })
+    if (!existing || existing.deletedAt !== null) {
+      return Response.json({ error: 'Not found' }, { status: 404 })
+    }
+    const updated = await prisma.materialOutside.update({
+      where: { id },
+      data: parsed.data,
+    })
+    return Response.json({ success: true, data: updated })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[material/outside PATCH] error:', msg)
+    return Response.json({ error: msg }, { status: 500 })
+  }
+}
+
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams
   const q         = (params.get('q') ?? '').trim()
