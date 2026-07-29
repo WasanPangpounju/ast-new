@@ -6,22 +6,36 @@ import Link from "next/link";
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface MaterialReturnRecord {
-  id:           number;
-  returnId:     string;
-  lot:          string | null;
-  yarnType:     string;
-  supplierName: string | null;
-  spool:        number;
-  weightReturn: number;
-  note:         string | null;
-  returnDate:   string;
-  createdAt:    string;
+  id:            number;
+  returnId:      string;
+  lot:           string | null;
+  yarnType:      string;
+  supplierName:  string | null;
+  spool:         number;
+  weightReturn:  number;
+  weightReturnP: number;
+  note:          string | null;
+  returnDate:    string;
+  createdAt:     string;
 }
 
 interface ReturnResponse {
   records: MaterialReturnRecord[];
   total:   number;
   page:    number;
+}
+
+type Tab = "detail" | "edit";
+
+interface EditState {
+  supplierName:  string;
+  yarnType:      string;
+  lot:           string;
+  spool:         string;
+  weightReturnP: string;
+  weightReturn:  string;
+  note:          string;
+  returnDate:    string;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -39,7 +53,22 @@ function numFmt(n: number | null | undefined, dec = 3) {
 }
 
 const LIMIT = 20;
+const LBS_PER_KG = 2.2046;
+const fmt3 = (n: number) => (n > 0 ? n.toFixed(3) : "");
 const inp = "w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+function toEditState(r: MaterialReturnRecord): EditState {
+  return {
+    supplierName:  r.supplierName ?? "",
+    yarnType:      r.yarnType,
+    lot:           r.lot ?? "",
+    spool:         String(r.spool),
+    weightReturnP: fmt3(r.weightReturnP),
+    weightReturn:  String(r.weightReturn),
+    note:          r.note ?? "",
+    returnDate:    r.returnDate.slice(0, 10),
+  };
+}
 
 function DRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -64,9 +93,13 @@ export default function MaterialReturnHistoryList() {
   const [page, setPage] = useState(1);
 
   const [selected, setSelected]   = useState<MaterialReturnRecord | null>(null);
+  const [activeTab, setActiveTab] = useState<Tab>("detail");
   const [deleting, setDeleting]   = useState(false);
   const [deleteMsg, setDeleteMsg] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [editState, setEditState]   = useState<EditState | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editMsg, setEditMsg]       = useState<{ ok: boolean; text: string } | null>(null);
 
   // ── list query ──────────────────────────────────────────────────────────────
   const { data, isFetching, isError } = useQuery<ReturnResponse>({
@@ -108,13 +141,25 @@ export default function MaterialReturnHistoryList() {
 
   function openModal(row: MaterialReturnRecord) {
     setSelected(row);
+    setActiveTab("detail");
     setDeleteMsg(null);
+    setEditState(toEditState(row));
+    setEditMsg(null);
     setConfirmDelete(false);
   }
   function closeModal() {
     setSelected(null);
     setDeleteMsg(null);
+    setEditState(null);
+    setEditMsg(null);
     setConfirmDelete(false);
+  }
+  function switchTab(t: Tab) {
+    setActiveTab(t);
+    setDeleteMsg(null);
+    setEditMsg(null);
+    setConfirmDelete(false);
+    if (t === "edit" && selected) setEditState(toEditState(selected));
   }
 
   async function handleDelete() {
@@ -131,6 +176,66 @@ export default function MaterialReturnHistoryList() {
       setDeleteMsg(err instanceof Error ? err.message : "เกิดข้อผิดพลาด");
     } finally {
       setDeleting(false);
+    }
+  }
+
+  // ── Edit handlers ───────────────────────────────────────────────────────────
+
+  function patchEdit(changes: Partial<EditState>) {
+    setEditState((s) => s ? { ...s, ...changes } : s);
+  }
+  function onEditWeightP(v: string) {
+    const p = parseFloat(v) || 0;
+    patchEdit({ weightReturnP: v, weightReturn: p > 0 ? fmt3(p / LBS_PER_KG) : "" });
+  }
+  function onEditWeightKg(v: string) {
+    const k = parseFloat(v) || 0;
+    patchEdit({ weightReturn: v, weightReturnP: k > 0 ? fmt3(k * LBS_PER_KG) : "" });
+  }
+
+  async function handleSaveEdit() {
+    if (!selected || !editState) return;
+    const sp = parseInt(editState.spool);
+    const w  = parseFloat(editState.weightReturn);
+    if (!editState.yarnType.trim() || isNaN(sp) || sp < 1 || isNaN(w) || w <= 0) {
+      setEditMsg({ ok: false, text: "กรุณากรอกข้อมูลให้ครบถ้วน" });
+      return;
+    }
+    setEditSaving(true);
+    setEditMsg(null);
+    try {
+      const res = await fetch(`/api/warehouse/material/return?id=${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          supplierName: editState.supplierName.trim() || null,
+          yarnType:     editState.yarnType.trim(),
+          lot:          editState.lot.trim() || null,
+          spool:        sp,
+          weightReturn: w,
+          note:         editState.note.trim() || null,
+          returnDate:   editState.returnDate || undefined,
+        }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error ?? "บันทึกไม่สำเร็จ");
+      setEditMsg({ ok: true, text: "บันทึกสำเร็จ" });
+      setSelected((prev) => prev ? {
+        ...prev,
+        supplierName: editState.supplierName.trim() || null,
+        yarnType:      editState.yarnType.trim(),
+        lot:           editState.lot.trim() || null,
+        spool:         sp,
+        weightReturn:  w,
+        weightReturnP: w * LBS_PER_KG,
+        note:          editState.note.trim() || null,
+        returnDate:    editState.returnDate ? new Date(editState.returnDate).toISOString() : prev.returnDate,
+      } : null);
+      qc.invalidateQueries({ queryKey: ["material-return"] });
+    } catch (err: unknown) {
+      setEditMsg({ ok: false, text: err instanceof Error ? err.message : "เกิดข้อผิดพลาด" });
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -270,8 +375,27 @@ export default function MaterialReturnHistoryList() {
                 className="text-gray-400 hover:text-gray-600 text-xl leading-none w-7 h-7 flex items-center justify-center">×</button>
             </div>
 
-            {/* ── ดูรายละเอียด ─────────────────────────────────── */}
-            <>
+            {/* Tabs */}
+            <div className="flex border-b border-gray-200 shrink-0">
+              {([
+                { key: "detail", label: "ดูรายละเอียด" },
+                { key: "edit",   label: "แก้ไข" },
+              ] as { key: Tab; label: string }[]).map(({ key, label }) => (
+                <button key={key} type="button"
+                  onClick={() => switchTab(key)}
+                  className={`flex-1 py-2 text-xs font-medium transition-colors ${
+                    activeTab === key
+                      ? "border-b-2 border-blue-600 text-blue-600"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Tab: ดูรายละเอียด ─────────────────────────────────── */}
+            {activeTab === "detail" && (
+              <>
               <div className="overflow-y-auto flex-1 px-5 py-4">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">ข้อมูลวัตถุดิบ</p>
                 <DRow label="วันที่คืน"   value={fmtDate(selected.returnDate)} />
@@ -281,6 +405,7 @@ export default function MaterialReturnHistoryList() {
 
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-2">จำนวน & น้ำหนัก</p>
                 <DRow label="จำนวน (ลูก)"        value={selected.spool.toLocaleString()} />
+                <DRow label="น้ำหนักคืน (lbs)"   value={numFmt(selected.weightReturnP)} />
                 <DRow label="น้ำหนักคืน (kg)"    value={numFmt(selected.weightReturn)} />
 
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-2">อื่นๆ</p>
@@ -317,7 +442,109 @@ export default function MaterialReturnHistoryList() {
                   </div>
                 )}
               </div>
-            </>
+              </>
+            )}
+
+            {/* ── Tab: แก้ไข ───────────────────────────────────────── */}
+            {activeTab === "edit" && editState && (
+              <>
+                <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+
+                  {/* บริษัท */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">บริษัท</label>
+                    <input value={editState.supplierName}
+                      onChange={(e) => patchEdit({ supplierName: e.target.value })}
+                      placeholder="ชื่อบริษัท"
+                      className={inp} />
+                  </div>
+
+                  {/* ชนิดด้าย */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      ชนิดด้าย<span className="text-red-500 ml-0.5">*</span>
+                    </label>
+                    <input value={editState.yarnType}
+                      onChange={(e) => patchEdit({ yarnType: e.target.value })}
+                      placeholder="เช่น CP 30/1, R 30"
+                      className={inp} />
+                  </div>
+
+                  {/* Lot */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Lot</label>
+                    <input value={editState.lot}
+                      onChange={(e) => patchEdit({ lot: e.target.value })}
+                      placeholder="ล็อตที่"
+                      className={inp} />
+                  </div>
+
+                  {/* จำนวน (ลูก) */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      จำนวน (ลูก)<span className="text-red-500 ml-0.5">*</span>
+                    </label>
+                    <input type="number" min="1" value={editState.spool}
+                      onChange={(e) => patchEdit({ spool: e.target.value })}
+                      placeholder="จำนวน" className={inp} />
+                  </div>
+
+                  {/* น้ำหนักที่คืน */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      น้ำหนักที่คืน<span className="text-red-500 ml-0.5">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 gap-3 mt-1">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">ปอนด์</label>
+                        <input type="number" step="0.001" value={editState.weightReturnP}
+                          onChange={(e) => onEditWeightP(e.target.value)}
+                          placeholder="ปอนด์" className={inp} />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">กิโลกรัม</label>
+                        <input type="number" step="0.001" value={editState.weightReturn}
+                          onChange={(e) => onEditWeightKg(e.target.value)}
+                          placeholder="กิโลกรัม" className={inp} />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* วันที่คืน */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">วันที่คืน</label>
+                    <input type="date" value={editState.returnDate}
+                      onChange={(e) => patchEdit({ returnDate: e.target.value })}
+                      className={inp} />
+                  </div>
+
+                  {/* หมายเหตุ */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">หมายเหตุ</label>
+                    <input value={editState.note}
+                      onChange={(e) => patchEdit({ note: e.target.value })}
+                      placeholder="หมายเหตุ (ถ้ามี)" className={inp} />
+                  </div>
+
+                  {editMsg && (
+                    <p className={`text-xs px-3 py-2 ${editMsg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-600"}`}>
+                      {editMsg.text}
+                    </p>
+                  )}
+                </div>
+                <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
+                  <button type="button" onClick={closeModal}
+                    className="px-4 py-1.5 text-xs border border-gray-300 hover:bg-gray-50 text-gray-600">
+                    ยกเลิก
+                  </button>
+                  <button type="button" onClick={handleSaveEdit} disabled={editSaving}
+                    className="px-5 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium">
+                    {editSaving ? "กำลังบันทึก..." : "บันทึก"}
+                  </button>
+                </div>
+              </>
+            )}
+
           </div>
         </div>
       )}

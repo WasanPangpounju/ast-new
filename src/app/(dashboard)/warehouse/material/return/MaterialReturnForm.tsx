@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -8,6 +9,7 @@ interface FormState {
   yarnType:     string;
   lot:          string;
   spool:        string;
+  weightReturnP: string;
   weightReturn: string;
   note:         string;
   returnDate:   string;
@@ -24,6 +26,11 @@ interface PendingItem {
   returnDate:   string;
 }
 
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+const LBS_PER_KG = 2.2046;
+const fmt3 = (n: number) => (n > 0 ? n.toFixed(3) : "");
+
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
 function todayStr() {
@@ -38,6 +45,11 @@ function fmtDate(iso: string) {
 
 let keySeq = 0;
 function nextKey() { return ++keySeq; }
+
+function isFormTouched(f: FormState): boolean {
+  return !!(f.yarnType.trim() || f.lot.trim() || f.supplierName.trim() ||
+    f.spool.trim() || f.weightReturn.trim() || f.note.trim());
+}
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -122,12 +134,13 @@ function AutocompleteInput({
 function makeEmpty(t: string): FormState {
   return {
     supplierName: "", yarnType: "", lot: "", spool: "",
-    weightReturn: "", note: "", returnDate: t,
+    weightReturnP: "", weightReturn: "", note: "", returnDate: t,
   };
 }
 
 export default function MaterialReturnForm() {
   const initDate = todayStr();
+  const router = useRouter();
   const [form, setForm]       = useState<FormState>(() => makeEmpty(initDate));
   const [errors, setErrors]   = useState<Partial<Record<string, string>>>({});
   const [saving, setSaving]   = useState(false);
@@ -203,6 +216,19 @@ export default function MaterialReturnForm() {
     }, 300);
   }
 
+  // ── Weight (kg ↔ lbs two-way bind) ──────────────────────────────────────────
+  // Only weightReturn (kg) is persisted server-side — weightReturnP (lbs) is a
+  // client-only convenience field, converted the same way as MaterialOutsideForm.
+
+  function onWeightReturnP(v: string) {
+    const p = parseFloat(v) || 0;
+    patch({ weightReturnP: v, weightReturn: p > 0 ? fmt3(p / LBS_PER_KG) : "" });
+  }
+  function onWeightReturnKg(v: string) {
+    const k = parseFloat(v) || 0;
+    patch({ weightReturn: v, weightReturnP: k > 0 ? fmt3(k * LBS_PER_KG) : "" });
+  }
+
   // ── Validation ──────────────────────────────────────────────────────────────
   // Business rule: returns are unrestricted (no cap check against outstanding withdrawn
   // balance) — only basic input validity is enforced here.
@@ -239,15 +265,44 @@ export default function MaterialReturnForm() {
     setSupOptions([]); setYarnOptions([]); setLotOptions([]);
   }
 
-  // ── Save all pending ────────────────────────────────────────────────────────
+  // ── Save ─────────────────────────────────────────────────────────────────────
+  // "บันทึก" is always visible/clickable (not gated on pendingItems). It saves
+  // pendingItems PLUS whatever's currently typed in the form (if any) — the
+  // current form is always validated first so nothing typed gets silently
+  // dropped. "+ เพิ่มรายการใหม่" still works the same as before for batching.
 
-  async function handleSaveAll() {
-    if (pendingItems.length === 0) return;
+  async function handleSave() {
+    const touched = isFormTouched(form);
+    if (touched) {
+      if (!validate()) return;
+    } else {
+      setErrors({});
+    }
+    if (!touched && pendingItems.length === 0) {
+      showToast("error", "กรุณากรอกข้อมูลอย่างน้อย 1 รายการ");
+      return;
+    }
+
     setSaving(true);
+    const toSubmit: PendingItem[] = [...pendingItems];
+    let currentKey: number | null = null;
+    if (touched) {
+      currentKey = nextKey();
+      toSubmit.push({
+        key:          currentKey,
+        supplierName: form.supplierName,
+        yarnType:     form.yarnType,
+        lot:          form.lot,
+        spool:        parseInt(form.spool),
+        weightReturn: parseFloat(form.weightReturn),
+        note:         form.note,
+        returnDate:   form.returnDate,
+      });
+    }
+
     let successCount = 0;
     const failedKeys: number[] = [];
-
-    for (const item of pendingItems) {
+    for (const item of toSubmit) {
       try {
         const res = await fetch("/api/warehouse/material/return", {
           method: "POST",
@@ -272,10 +327,16 @@ export default function MaterialReturnForm() {
     setSaving(false);
     if (failedKeys.length === 0) {
       setPendingItems([]);
+      setForm(makeEmpty(form.returnDate));
+      setErrors({});
       showToast("success", `บันทึกสำเร็จ ${successCount} รายการ`);
+      setTimeout(() => router.push("/warehouse/material/return-history"), 1200);
     } else {
-      setPendingItems((prev) => prev.filter((i) => failedKeys.includes(i.key)));
-      showToast("error", `บันทึกสำเร็จ ${successCount}/${pendingItems.length} รายการ — ${failedKeys.length} รายการล้มเหลว`);
+      setPendingItems(toSubmit.filter((i) => failedKeys.includes(i.key) && i.key !== currentKey));
+      if (currentKey !== null && !failedKeys.includes(currentKey)) {
+        setForm(makeEmpty(form.returnDate));
+      }
+      showToast("error", `บันทึกสำเร็จ ${successCount}/${toSubmit.length} รายการ — ${failedKeys.length} รายการล้มเหลว`);
     }
   }
 
@@ -343,18 +404,27 @@ export default function MaterialReturnForm() {
               className={`${inp} ${errors.spool ? errB : ""}`} />
           </Field>
 
-          <Field label="น้ำหนักที่คืน (kg)" required error={errors.weightReturn}>
-            <input type="number" min="0.001" step="0.001" value={form.weightReturn}
-              onChange={(e) => patch({ weightReturn: e.target.value })}
-              placeholder="กิโลกรัม"
-              className={`${inp} ${errors.weightReturn ? errB : ""}`} />
-          </Field>
-
           <Field label="วันที่คืน">
             <input type="date" value={form.returnDate}
               onChange={(e) => patch({ returnDate: e.target.value })}
               title="วันที่คืน"
               className={inp} />
+          </Field>
+        </div>
+
+        {/* ── น้ำหนักที่คืน ─────────────────────────────────────────── */}
+        <SectionLabel>น้ำหนักที่คืน</SectionLabel>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="ปอนด์">
+            <input type="number" min="0.001" step="0.001" value={form.weightReturnP}
+              onChange={(e) => onWeightReturnP(e.target.value)}
+              placeholder="ปอนด์" className={inp} />
+          </Field>
+          <Field label="กิโลกรัม" required error={errors.weightReturn}>
+            <input type="number" min="0.001" step="0.001" value={form.weightReturn}
+              onChange={(e) => onWeightReturnKg(e.target.value)}
+              placeholder="กิโลกรัม"
+              className={`${inp} ${errors.weightReturn ? errB : ""}`} />
           </Field>
         </div>
 
@@ -377,6 +447,15 @@ export default function MaterialReturnForm() {
             onClick={() => { setForm(makeEmpty(initDate)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); }}
             className="px-4 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
             เคลียร์ข้อมูล
+          </button>
+          <button type="button" onClick={handleSave} disabled={saving}
+            className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 transition-colors shadow-sm">
+            {saving
+              ? "กำลังบันทึก..."
+              : (() => {
+                  const total = pendingItems.length + (isFormTouched(form) ? 1 : 0);
+                  return total > 1 ? `บันทึก ${total} รายการ` : "บันทึก";
+                })()}
           </button>
         </div>
 
@@ -427,15 +506,9 @@ export default function MaterialReturnForm() {
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between mt-3">
-              <p className="text-xs text-gray-500">
-                รวม <span className="font-semibold text-gray-800">{pendingItems.length}</span> รายการ
-              </p>
-              <button type="button" onClick={handleSaveAll} disabled={saving}
-                className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 transition-colors shadow-sm">
-                {saving ? "กำลังบันทึก..." : `บันทึก ${pendingItems.length} รายการ`}
-              </button>
-            </div>
+            <p className="text-xs text-gray-500 mt-3">
+              รวม <span className="font-semibold text-gray-800">{pendingItems.length}</span> รายการ — กด &quot;บันทึก&quot; ด้านบนเพื่อบันทึกทั้งหมด
+            </p>
           </div>
         )}
       </div>
