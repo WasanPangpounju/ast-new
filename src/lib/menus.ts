@@ -38,6 +38,8 @@ export const ALL_MENUS: MenuItem[] = [
   { key: 'material.requisition-history', label: 'ประวัติการเบิก',           href: '/warehouse/material/requisition-history', group: 'ระบบวัตถุดิบ' },
   { key: 'material.outside',             label: 'เบิกวัตถุดิบภายนอก',       href: '/warehouse/material/outside',       group: 'ระบบวัตถุดิบ' },
   { key: 'material.outside-history',     label: 'ประวัติเบิกภายนอก',        href: '/warehouse/material/outside-history', group: 'ระบบวัตถุดิบ' },
+  { key: 'material.return',              label: 'คืนวัตถุดิบเข้าสต็อก',      href: '/warehouse/material/return',        group: 'ระบบวัตถุดิบ' },
+  { key: 'material.return-history',      label: 'ประวัติการคืน',            href: '/warehouse/material/return-history', group: 'ระบบวัตถุดิบ' },
   { key: 'material.stock',               label: 'สต็อกวัตถุดิบ',            href: '/warehouse/material/stock',         group: 'ระบบวัตถุดิบ' },
   { key: 'package-returns.assign-supplier', label: 'มอบหมายซัพพลายเออร์คืนบรรจุภัณฑ์', href: '/warehouse/package-returns/needs-supplier', group: 'ระบบวัตถุดิบ' },
   { key: 'package-returns.record',          label: 'บันทึกคืนบรรจุภัณฑ์',              href: '/warehouse/package-returns',         group: 'ระบบวัตถุดิบ' },
