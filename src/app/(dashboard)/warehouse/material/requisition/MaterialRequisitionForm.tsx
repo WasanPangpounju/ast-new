@@ -1,5 +1,6 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,6 +71,11 @@ function fmtDate(iso: string): string {
 
 let keySeq = 0;
 function nextKey() { return ++keySeq; }
+
+function isFormTouched(f: FormState): boolean {
+  return !!(f.supplierName.trim() || f.yarnType.trim() || f.lot.trim() ||
+    f.spool.trim() || f.weightWithdrawn.trim() || f.note.trim());
+}
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -160,6 +166,7 @@ function makeEmpty(t: string, emp: string): FormState {
 
 export default function MaterialRequisitionForm({ emp }: Props) {
   const initDate = todayStr();
+  const router = useRouter();
   const [form, setForm] = useState<FormState>(() => makeEmpty(initDate, emp));
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
@@ -264,6 +271,10 @@ export default function MaterialRequisitionForm({ emp }: Props) {
 
   // ── Add to pending list (no API call) ──────────────────────────────────────
 
+  function clearItemFields(prev: FormState): FormState {
+    return { ...prev, supplierName: "", yarnType: "", lot: "", spool: "", weightWithdrawnP: "", weightWithdrawn: "", note: "" };
+  }
+
   function handleAddPending() {
     if (!validate()) return;
     setPendingItems((prev) => [...prev, {
@@ -278,22 +289,54 @@ export default function MaterialRequisitionForm({ emp }: Props) {
       withdrawDate: form.withdrawDate,
       note: form.note,
     }]);
-    setForm((prev) => ({ ...prev, supplierName: "", yarnType: "", lot: "", spool: "", weightWithdrawnP: "", weightWithdrawn: "", note: "" }));
+    setForm(clearItemFields);
     setErrors({});
     setSupOptions([]);
     setYarnOptions([]);
     setLotOptions([]);
   }
 
-  // ── Save all pending to DB ──────────────────────────────────────────────────
+  // ── Save ─────────────────────────────────────────────────────────────────────
+  // "บันทึก" is always visible/clickable (not gated on pendingItems). It saves
+  // pendingItems PLUS whatever's currently typed in the form (if any) — the
+  // current form is always validated first so nothing typed gets silently
+  // dropped. "+ เพิ่มรายการใหม่" still works the same as before for batching.
 
-  async function handleSaveAll() {
-    if (pendingItems.length === 0) return;
+  async function handleSave() {
+    const touched = isFormTouched(form);
+    if (touched) {
+      if (!validate()) return;
+    } else {
+      setErrors({});
+    }
+    if (!touched && pendingItems.length === 0) {
+      showToast("error", "กรุณากรอกข้อมูลอย่างน้อย 1 รายการ");
+      return;
+    }
+
     setSaving(true);
+    const toSubmit: PendingItem[] = [...pendingItems];
+    let currentKey: number | null = null;
+    if (touched) {
+      currentKey = nextKey();
+      toSubmit.push({
+        key: currentKey,
+        department: form.department,
+        emp: form.emp,
+        supplierName: form.supplierName,
+        yarnType: form.yarnType,
+        lot: form.lot,
+        spool: parseInt(form.spool),
+        weightWithdrawn: parseFloat(form.weightWithdrawn),
+        withdrawDate: form.withdrawDate,
+        note: form.note,
+      });
+    }
+
     let successCount = 0;
     const failedKeys: number[] = [];
 
-    for (const item of pendingItems) {
+    for (const item of toSubmit) {
       try {
         const res = await fetch("/api/warehouse/material/requisition", {
           method: "POST",
@@ -307,6 +350,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
             supplierName:    item.supplierName || undefined,
             yarnType:        item.yarnType     || undefined,
             lot:             item.lot          || undefined,
+            withdrawDate:    item.withdrawDate || undefined,
           }),
         });
         if (!res.ok) throw new Error();
@@ -319,17 +363,20 @@ export default function MaterialRequisitionForm({ emp }: Props) {
     setSaving(false);
     if (failedKeys.length === 0) {
       setPendingItems([]);
+      setForm(clearItemFields);
+      setErrors({});
+      setSupOptions([]); setYarnOptions([]); setLotOptions([]);
       showToast("success", `บันทึกสำเร็จ ${successCount} รายการ`);
+      setTimeout(() => router.push("/warehouse/material/requisition-history"), 1200);
     } else {
-      setPendingItems((prev) => prev.filter((i) => failedKeys.includes(i.key)));
-      showToast("error", `บันทึกสำเร็จ ${successCount}/${pendingItems.length} รายการ — ${failedKeys.length} รายการล้มเหลว`);
+      setPendingItems(toSubmit.filter((i) => failedKeys.includes(i.key) && i.key !== currentKey));
+      if (currentKey !== null && !failedKeys.includes(currentKey)) {
+        setForm(clearItemFields);
+        setErrors({});
+        setSupOptions([]); setYarnOptions([]); setLotOptions([]);
+      }
+      showToast("error", `บันทึกสำเร็จ ${successCount}/${toSubmit.length} รายการ — ${failedKeys.length} รายการล้มเหลว`);
     }
-  }
-
-  // ── Delete last pending (local only) ───────────────────────────────────────
-
-  function handleDeleteLast() {
-    setPendingItems((prev) => prev.slice(0, -1));
   }
 
   // ── Delete specific row (local only) ───────────────────────────────────────
@@ -485,57 +532,65 @@ export default function MaterialRequisitionForm({ emp }: Props) {
           </Field>
         </div>
 
-        {/* ── ส่วนควบคุม ────────────────────────────────────────────── */}
-        <SectionLabel>ส่วนควบคุม</SectionLabel>
-        <div className="flex flex-wrap gap-3">
+        {/* ── ส่วนควบคุม ──────────────────────────────────────────── */}
+        <div className="flex flex-wrap gap-3 pt-6 items-center justify-center">
           <button type="button" onClick={handleAddPending}
-            className="px-4 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors">
+            className="px-5 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors shadow-sm">
             + เพิ่มรายการใหม่
-          </button>
-          <button type="button" onClick={handleDeleteLast}
-            disabled={pendingItems.length === 0}
-            className="px-4 py-2 text-sm border border-red-300 text-red-600 hover:bg-red-50 disabled:opacity-40 transition-colors">
-            ลบรายการล่าสุด
           </button>
           <button type="button"
             onClick={() => { setForm(makeEmpty(initDate, emp)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); }}
-            className="px-4 py-2 text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 transition-colors">
+            className="px-4 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
             เคลียร์ข้อมูล
+          </button>
+          <button type="button" onClick={handleSave} disabled={saving}
+            className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 transition-colors shadow-sm">
+            {saving
+              ? "กำลังบันทึก..."
+              : (() => {
+                  const total = pendingItems.length + (isFormTouched(form) ? 1 : 0);
+                  return total > 1 ? `บันทึก ${total} รายการ` : "บันทึก";
+                })()}
           </button>
         </div>
 
         {/* ── รายการที่รอบันทึก ──────────────────────────────────────── */}
         {pendingItems.length > 0 && (
-          <>
-            <SectionLabel>รายการที่รอบันทึก</SectionLabel>
-            <div className="overflow-x-auto mb-4">
-              <table className="w-full text-xs">
+          <div className="mt-6 bg-blue-50 border border-blue-100 rounded-xl p-4">
+            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider mb-3">
+              รายการที่รอบันทึก ({pendingItems.length})
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-blue-100">
+              <table className="w-full text-xs bg-white">
                 <thead>
-                  <tr className="bg-gray-50">
-                    <th className="px-3 py-2.5 text-center text-gray-500 font-medium w-8">#</th>
-                    <th className="px-3 py-2.5 text-left text-gray-500 font-medium">บริษัท</th>
-                    <th className="px-3 py-2.5 text-left text-gray-500 font-medium">ชนิดด้าย</th>
-                    <th className="px-3 py-2.5 text-right text-gray-500 font-medium">ลูก</th>
-                    <th className="px-3 py-2.5 text-right text-gray-500 font-medium whitespace-nowrap">น้ำหนัก (kg)</th>
-                    <th className="px-3 py-2.5 text-left text-gray-500 font-medium">วันที่</th>
-                    <th className="px-3 py-2.5 w-12"></th>
+                  <tr className="bg-blue-100/60 text-blue-800">
+                    <th className="px-3 py-2.5 text-center font-medium w-8">#</th>
+                    <th className="px-3 py-2.5 text-left font-medium">บริษัท</th>
+                    <th className="px-3 py-2.5 text-left font-medium">ชนิดด้าย</th>
+                    <th className="px-3 py-2.5 text-right font-medium">ลูก</th>
+                    <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">น้ำหนัก (kg)</th>
+                    <th className="px-3 py-2.5 text-left font-medium">วันที่</th>
+                    <th className="px-3 py-2.5 w-12"><span className="sr-only">จัดการ</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {pendingItems.map((item, i) => (
-                    <tr key={item.key} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                    <tr key={item.key} className={`${i % 2 === 0 ? "bg-white" : "bg-blue-50/30"} hover:bg-blue-50/50 transition-colors`}>
                       <td className="px-3 py-2 text-center text-gray-400">{i + 1}</td>
                       <td className="px-3 py-2 text-gray-700 max-w-[140px] truncate" title={item.supplierName}>{item.supplierName}</td>
                       <td className="px-3 py-2 text-gray-800 max-w-[120px] truncate" title={item.yarnType}>{item.yarnType}</td>
                       <td className="px-3 py-2 text-right font-medium text-gray-900">{item.spool.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right font-medium text-gray-900">
+                      <td className="px-3 py-2 text-right font-semibold text-blue-700">
                         {item.weightWithdrawn.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}
                       </td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(item.withdrawDate)}</td>
                       <td className="px-3 py-2 text-center">
-                        <button type="button"
-                          onClick={() => handleDeleteRow(item.key)}
-                          className="px-2 py-0.5 text-xs text-red-500 border border-red-200 hover:bg-red-50">
+                        <button type="button" onClick={() => handleDeleteRow(item.key)}
+                          className="px-2 py-0.5 text-xs text-red-500 border border-red-200 rounded hover:bg-red-50 transition-colors flex items-center gap-1 mx-auto">
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
                           ลบ
                         </button>
                       </td>
@@ -544,17 +599,10 @@ export default function MaterialRequisitionForm({ emp }: Props) {
                 </tbody>
               </table>
             </div>
-
-            <div className="flex items-center justify-between pt-4">
-              <p className="text-xs text-gray-500">
-                รอบันทึก <span className="font-semibold text-gray-800">{pendingItems.length}</span> รายการ
-              </p>
-              <button type="button" onClick={handleSaveAll} disabled={saving}
-                className="px-6 py-2 text-sm bg-green-600 text-white hover:bg-green-700 font-medium disabled:opacity-50 transition-colors">
-                {saving ? "กำลังบันทึก..." : `บันทึก ${pendingItems.length} รายการ`}
-              </button>
-            </div>
-          </>
+            <p className="text-xs text-gray-500 mt-3">
+              รวม <span className="font-semibold text-gray-800">{pendingItems.length}</span> รายการ — กด &quot;บันทึก&quot; ด้านบนเพื่อบันทึกทั้งหมด
+            </p>
+          </div>
         )}
       </div>
     </div>

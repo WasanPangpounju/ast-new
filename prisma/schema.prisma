@@ -549,6 +549,7 @@ model MaterialRequisition {
   spool           Int
   weightWithdrawn Float
   note            String?
+  withdrawDate    DateTime  @default(now())
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
