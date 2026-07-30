@@ -21,6 +21,7 @@ interface Outside {
   averageP:        number | null;
   averageKg:       number | null;
   note:            string | null;
+  withdrawDate:    string;
   pallet:          number | null;
   box:             number | null;
   sack:            number | null;
@@ -64,6 +65,7 @@ interface EditState {
   averageP:        string;
   averageKg:       string;
   note:            string;
+  withdrawDate:    string;
   pallet:          string;
   box:             string;
   sack:            string;
@@ -130,6 +132,7 @@ function toEditState(r: Outside): EditState {
     averageP:        r.averageP  != null ? String(r.averageP)  : "",
     averageKg:       r.averageKg != null ? String(r.averageKg) : "",
     note:            r.note ?? "",
+    withdrawDate:    r.withdrawDate.slice(0, 10),
     pallet:          r.pallet   != null ? String(r.pallet)   : "",
     box:             r.box      != null ? String(r.box)      : "",
     sack:            r.sack     != null ? String(r.sack)     : "",
@@ -365,6 +368,7 @@ export default function OutsideHistoryList() {
           averageP:        editState.averageP  ? parseFloat(editState.averageP)  : null,
           averageKg:       editState.averageKg ? parseFloat(editState.averageKg) : null,
           note:            editState.note.trim() || null,
+          withdrawDate:    editState.withdrawDate || undefined,
           pallet:          editState.pallet   ? parseInt(editState.pallet)   : null,
           box:             editState.box      ? parseInt(editState.box)      : null,
           sack:            editState.sack     ? parseInt(editState.sack)     : null,
@@ -471,7 +475,7 @@ export default function OutsideHistoryList() {
                 <tr key={row.id}
                   className={`hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
                   <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
-                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.createdAt)}</td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.withdrawDate)}</td>
                   <td className="px-3 py-2 text-gray-800 max-w-[120px] truncate" title={row.yarnType}>
                     {row.yarnType}
                   </td>
@@ -557,7 +561,7 @@ export default function OutsideHistoryList() {
             <>
               <div className="overflow-y-auto flex-1 px-5 py-4">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">ข้อมูลวัตถุดิบ</p>
-                <DRow label="วันที่เบิก"   value={fmtDate(selected.createdAt)} />
+                <DRow label="วันที่เบิก"   value={fmtDate(selected.withdrawDate)} />
                 <DRow label="ชนิดด้าย"     value={selected.yarnType} />
                 <DRow label="ชื่อบริษัท"   value={selected.supplierName} />
                 <DRow label="Lot"           value={selected.lot} />
@@ -666,6 +670,12 @@ export default function OutsideHistoryList() {
                         placeholder="จำนวน"
                         className={`${inp} ${editErrors.spool ? errB : ""}`} />
                       {editErrors.spool && <p className="text-xs text-red-500 mt-0.5">{editErrors.spool}</p>}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">วันที่</label>
+                      <input type="date" value={editState.withdrawDate}
+                        onChange={(e) => patchEdit({ withdrawDate: e.target.value })}
+                        className={inp} />
                     </div>
                   </div>
 
