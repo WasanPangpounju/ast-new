@@ -497,6 +497,7 @@ model MaterialOutside {
   materialId      Int?
   material        Material? @relation(fields: [materialId], references: [id])
   note            String?
+  withdrawDate    DateTime  @default(now())
   returnPallet    Boolean   @default(false)
   returnBox       Boolean   @default(false)
   returnSack      Boolean   @default(false)

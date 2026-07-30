@@ -429,6 +429,7 @@ export default function MaterialOutsideForm() {
             averageP:        item.averageP        || undefined,
             averageKg:       item.averageKg       || undefined,
             note:            item.note            || undefined,
+            withdrawDate:    item.withdrawDate     || undefined,
             pallet:          item.pallet          || undefined,
             box:             item.box             || undefined,
             sack:            item.sack            || undefined,

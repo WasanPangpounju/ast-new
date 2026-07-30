@@ -21,6 +21,7 @@ const outsideSchema = z.object({
   averageKg:       z.number().optional(),
   materialId:      z.number().int().optional(),
   note:            z.string().optional(),
+  withdrawDate:    z.string().optional(),
   pallet:          z.number().int().optional(),
   box:             z.number().int().optional(),
   sack:            z.number().int().optional(),
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   const { withdrawId, lot, yarnType, supplierName, spool, weightWithdrawn,
           weightPSum, weightKgSum, weightPPackage, weightKgPackage,
-          averageP, averageKg, materialId, note,
+          averageP, averageKg, materialId, note, withdrawDate,
           pallet, box, sack, paperBar,
           returnPallet, returnBox, returnSack, returnSpool, returnPaperBar,
           recipient, usageNote, paymentComment } = parsed.data
@@ -92,6 +93,7 @@ export async function POST(request: NextRequest) {
           averageP:        averageP        ?? null,
           averageKg:       averageKg       ?? null,
           note:            note            || null,
+          withdrawDate:    withdrawDate ? new Date(withdrawDate) : new Date(),
           pallet:          pallet          ?? null,
           box:             box             ?? null,
           sack:            sack            ?? null,
@@ -136,6 +138,7 @@ const patchSchema = z.object({
   averageP:        z.number().nullable().optional(),
   averageKg:       z.number().nullable().optional(),
   note:            z.string().nullable().optional(),
+  withdrawDate:    z.string().optional(),
   pallet:          z.number().int().nullable().optional(),
   box:             z.number().int().nullable().optional(),
   sack:            z.number().int().nullable().optional(),
@@ -170,9 +173,13 @@ export async function PATCH(request: NextRequest) {
     if (!existing || existing.deletedAt !== null) {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
+    const { withdrawDate, ...rest } = parsed.data
     const updated = await prisma.materialOutside.update({
       where: { id },
-      data: parsed.data,
+      data: {
+        ...rest,
+        ...(withdrawDate !== undefined && { withdrawDate: new Date(withdrawDate) }),
+      },
     })
     return Response.json({ success: true, data: updated })
   } catch (err: unknown) {
