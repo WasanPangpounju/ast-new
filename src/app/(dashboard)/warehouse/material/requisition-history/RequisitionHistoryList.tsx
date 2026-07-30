@@ -14,6 +14,7 @@ interface Requisition {
   weightWithdrawn: number;
   weightWithdrawnP: number;
   note: string | null;
+  withdrawDate: string;
   createdAt: string;
   material: {
     lot: string;
@@ -38,6 +39,7 @@ interface EditState {
   weightWithdrawnP: string;
   weightWithdrawn: string;
   note: string;
+  withdrawDate: string;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -68,6 +70,7 @@ function toEditState(r: Requisition): EditState {
     weightWithdrawnP: fmt3(r.weightWithdrawnP),
     weightWithdrawn:  String(r.weightWithdrawn),
     note:             r.note ?? "",
+    withdrawDate:     r.withdrawDate.slice(0, 10),
   };
 }
 
@@ -214,6 +217,7 @@ export default function RequisitionHistoryList() {
           spool:           sp,
           weightWithdrawn: w,
           note:            editState.note.trim() || null,
+          withdrawDate:    editState.withdrawDate || undefined,
         }),
       });
       const d = await res.json();
@@ -227,6 +231,7 @@ export default function RequisitionHistoryList() {
         weightWithdrawn:  w,
         weightWithdrawnP: w * LBS_PER_KG,
         note:             editState.note.trim() || null,
+        withdrawDate:     d.data.withdrawDate,
       } : null);
       qc.invalidateQueries({ queryKey: ["material-requisition"] });
     } catch (err: unknown) {
@@ -313,7 +318,7 @@ export default function RequisitionHistoryList() {
                 <tr key={row.id}
                   className={`hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
                   <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
-                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.createdAt)}</td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.withdrawDate)}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[100px] truncate">{row.department}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[100px] truncate">{row.emp ?? "-"}</td>
                   <td className="px-3 py-2 text-gray-800 max-w-[120px] truncate" title={row.material?.yarnType ?? ""}>
@@ -401,7 +406,7 @@ export default function RequisitionHistoryList() {
               <>
               <div className="overflow-y-auto flex-1 px-5 py-4">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">ข้อมูลทั่วไป</p>
-                <DRow label="วันที่เบิก"    value={fmtDate(selected.createdAt)} />
+                <DRow label="วันที่เบิก"    value={fmtDate(selected.withdrawDate)} />
                 <DRow label="แผนก"    value={selected.department} />
                 <DRow label="พนักงาน" value={selected.emp} />
                 <DRow label="ชนิดด้าย" value={selected.material?.yarnType} />
@@ -499,6 +504,14 @@ export default function RequisitionHistoryList() {
                     <input type="number" min="1" value={editState.spool}
                       onChange={(e) => patchEdit({ spool: e.target.value })}
                       placeholder="จำนวน" className={inp} />
+                  </div>
+
+                  {/* วันที่เบิก */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">วันที่</label>
+                    <input type="date" value={editState.withdrawDate}
+                      onChange={(e) => patchEdit({ withdrawDate: e.target.value })}
+                      className={inp} />
                   </div>
 
                   {/* น้ำหนักที่เบิก */}
