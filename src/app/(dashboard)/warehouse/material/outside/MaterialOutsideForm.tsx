@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AutocompleteInput from "@/components/AutocompleteInput";
+import ConfirmSubmitModal, { ConfirmRow } from "@/components/ConfirmSubmitModal";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -148,6 +149,8 @@ export default function MaterialOutsideForm() {
   const [form, setForm]       = useState<FormState>(() => makeEmpty(initDate));
   const [errors, setErrors]   = useState<Partial<Record<string, string>>>({});
   const [saving, setSaving]   = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingSubmit, setPendingSubmit] = useState<{ items: PendingItem[]; currentKey: number | null } | null>(null);
   const [toast, setToast]     = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
   const [supOptions, setSupOptions]   = useState<string[]>([]);
@@ -361,7 +364,7 @@ export default function MaterialOutsideForm() {
   // current form is always validated first so nothing typed gets silently
   // dropped. "+ เพิ่มรายการใหม่" still works the same as before for batching.
 
-  async function handleSave() {
+  function handleSave() {
     const touched = isFormTouched(form);
     if (touched) {
       if (!validate()) return;
@@ -373,7 +376,6 @@ export default function MaterialOutsideForm() {
       return;
     }
 
-    setSaving(true);
     const toSubmit: PendingItem[] = [...pendingItems];
     let currentKey: number | null = null;
     if (touched) {
@@ -408,6 +410,46 @@ export default function MaterialOutsideForm() {
       });
     }
 
+    setPendingSubmit({ items: toSubmit, currentKey });
+    setConfirmOpen(true);
+  }
+
+  function buildConfirmRows(): ConfirmRow[] {
+    if (!pendingSubmit) return [];
+    return pendingSubmit.items.map((item) => {
+      const returned = (
+        [
+          [item.returnPallet, "พาเลท"], [item.returnBox, "กล่อง"], [item.returnSack, "กระสอบ"],
+          [item.returnSpool, "หลอด"], [item.returnPaperBar, "กระดาษกั้น"],
+        ] as [boolean, string][]
+      ).filter(([on]) => on).map(([, label]) => label).join(", ");
+
+      return {
+        key: item.key,
+        fields: [
+          { label: "ผู้รับวัตถุดิบ", value: item.recipient },
+          { label: "วันที่", value: fmtDate(item.withdrawDate) },
+          { label: "บริษัท", value: item.supplierName },
+          { label: "ชนิดด้าย", value: item.yarnType },
+          { label: "Lot", value: item.lot },
+          { label: "จำนวน (ลูก)", value: item.spool ? item.spool.toLocaleString() : "" },
+          { label: "น้ำหนักสุทธิ (kg)", value: item.weightWithdrawn ? item.weightWithdrawn.toFixed(3) : "" },
+          { label: "น้ำหนักเฉลี่ย/ลูก (kg)", value: item.averageKg ? item.averageKg.toFixed(3) : "" },
+          { label: "พาเลท/กล่อง/กระสอบ/กระดาษกั้น", value: [item.pallet, item.box, item.sack, item.paperBar].some((v) => v > 0) ? `${item.pallet || 0}/${item.box || 0}/${item.sack || 0}/${item.paperBar || 0}` : "" },
+          { label: "ส่งคืนบรรจุภัณฑ์", value: returned },
+          { label: "การนำไปใช้", value: item.usageNote },
+          { label: "หมายเหตุการเงิน", value: item.paymentComment },
+          { label: "หมายเหตุ", value: item.note },
+        ],
+      };
+    });
+  }
+
+  async function submitReal() {
+    if (!pendingSubmit) return;
+    const { items: toSubmit, currentKey } = pendingSubmit;
+
+    setSaving(true);
     let successCount = 0;
     const failedKeys: number[] = [];
 
@@ -452,6 +494,8 @@ export default function MaterialOutsideForm() {
     }
 
     setSaving(false);
+    setConfirmOpen(false);
+    setPendingSubmit(null);
     if (failedKeys.length === 0) {
       setPendingItems([]);
       setForm(makeEmpty(form.withdrawDate));
@@ -774,6 +818,14 @@ export default function MaterialOutsideForm() {
         )}
       </div>
 
+      <ConfirmSubmitModal
+        open={confirmOpen}
+        title="ยืนยันการเบิกวัตถุดิบออกภายนอก"
+        rows={buildConfirmRows()}
+        submitting={saving}
+        onConfirm={submitReal}
+        onCancel={() => { setConfirmOpen(false); setPendingSubmit(null); }}
+      />
     </div>
   );
 }
