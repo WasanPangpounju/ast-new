@@ -3,11 +3,28 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import AutocompleteInput from "@/components/AutocompleteInput";
 import ThaiDatePicker from "@/components/ThaiDatePicker";
+import ConfirmSubmitModal, { ConfirmRow } from "@/components/ConfirmSubmitModal";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const LBS_PER_KG = 2.2046;
 const fmt = (n: number, d = 4) => (n > 0 ? n.toFixed(d) : "");
+
+const PALLET_TYPE_LABEL: Record<string, string> = { wood: "ไม้", steel: "เหล็ก" };
+const SACK_TYPE_LABEL: Record<string, string> = { p: "ปอ", plastic: "พลาสติก" };
+const SPOOL_TYPE_LABEL: Record<string, string> = {
+  spool_plastic: "หลอดกรวย พลาสติก",
+  spool_paper: "หลอดกรวย กระดาษ",
+  spoolC_plastic: "หลอดทรงกระบอก พลาสติก",
+  spoolC_paper: "หลอดทรงกระบอก กระดาษ",
+};
+
+function fmtDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear() + 543}`;
+  } catch { return iso; }
+}
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 
@@ -143,6 +160,7 @@ export default function MaterialCreateForm({ emp }: Props) {
   const formRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState<FormState>(() => makeEmpty(today, emp));
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [supOptions, setSupOptions] = useState<string[]>([]);
@@ -266,8 +284,45 @@ export default function MaterialCreateForm({ emp }: Props) {
     setTimeout(() => setToast(null), 4500);
   }
 
-  async function handleSave() {
+  function handleSave() {
     if (!validate()) return;
+    setConfirmOpen(true);
+  }
+
+  function buildConfirmRows(): ConfirmRow[] {
+    const returned = (
+      [
+        ["returnPallet", "พาเลท"], ["returnBox", "กล่อง"], ["returnSack", "กระสอบ"],
+        ["returnSpool", "หลอด"], ["returnPaperBar", "กระดาษกั้น"],
+      ] as [keyof FormState, string][]
+    ).filter(([k]) => form[k]).map(([, label]) => label).join(", ");
+
+    return [{
+      key: "item",
+      fields: [
+        { label: "ชื่อบริษัท", value: form.supplierName },
+        { label: "เลขที่ใบส่งสินค้า", value: form.importStatus },
+        { label: "วันที่", value: fmtDate(form.createDate) },
+        { label: "พนักงาน", value: form.emp },
+        { label: "ชนิดด้าย", value: form.yarnType },
+        { label: "ล็อตที่", value: form.lot },
+        { label: "จำนวนหลอดทั้งหมด", value: form.spool ? `${form.spool} หลอด (${SPOOL_TYPE_LABEL[form.spoolType] ?? form.spoolType})` : "" },
+        { label: "จำนวนด้ายทั้งหมด (ลูก)", value: form.yarnSum },
+        { label: "น้ำหนักรวม (kg)", value: form.weightKgSum },
+        { label: "น้ำหนักบรรจุภัณฑ์ (kg)", value: form.weightKgPackage },
+        { label: "น้ำหนักสุทธิ (kg)", value: form.weightKgNet },
+        { label: "น้ำหนักเฉลี่ยต่อลูก (kg)", value: form.averageKg },
+        { label: "พาเลท", value: form.pallet ? `${form.pallet} (${PALLET_TYPE_LABEL[form.palletType] ?? form.palletType})` : "" },
+        { label: "กล่อง", value: form.box },
+        { label: "กระสอบ", value: form.sack ? `${form.sack} (${SACK_TYPE_LABEL[form.sackType] ?? form.sackType})` : "" },
+        { label: "กระดาษกั้น", value: form.paperBar },
+        { label: "ส่งคืนบรรจุภัณฑ์", value: returned },
+        { label: "หมายเหตุ", value: form.note },
+      ],
+    }];
+  }
+
+  async function submitReal() {
     setSaving(true);
     try {
       const item = {
@@ -315,6 +370,7 @@ export default function MaterialCreateForm({ emp }: Props) {
       showToast("error", "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setSaving(false);
+      setConfirmOpen(false);
     }
   }
 
@@ -607,6 +663,16 @@ export default function MaterialCreateForm({ emp }: Props) {
           </button>
         </div>
       </div>
+
+      <ConfirmSubmitModal
+        open={confirmOpen}
+        title="ยืนยันการนำเข้าวัตถุดิบ"
+        rows={buildConfirmRows()}
+        submitting={saving}
+        onConfirm={submitReal}
+        onCancel={() => setConfirmOpen(false)}
+        tone="blue"
+      />
     </div>
   );
 }
