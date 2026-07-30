@@ -214,11 +214,6 @@ const navItems: NavItem[] = [
         menuKey: "material.stock",
       },
       {
-        href: "/warehouse/returns",
-        label: "ส่งคืนบรรจุภัณฑ์",
-        menuKey: "warehouse.returns",
-      },
-      {
         href: "/warehouse/package-returns",
         label: "บันทึกคืนบรรจุภัณฑ์",
         menuKey: "package-returns.record",

@@ -105,11 +105,7 @@ export default function MaterialReturnHistoryList() {
   const { data, isFetching, isError } = useQuery<ReturnResponse>({
     queryKey: ["material-return", appliedQ, appliedDateFrom, appliedDateTo, page],
     queryFn: async () => {
-      // scope=material: the material_returns table is also used by the legacy
-      // FabricReturnPage ("ส่งคืนบรรจุภัณฑ์") feature, which tags its rows with the
-      // yarnType="บรรจุภัณฑ์" sentinel. This page must stay scoped to real material-stock
-      // returns so the two features' history lists don't bleed into each other.
-      const p = new URLSearchParams({ page: String(page), scope: "material" });
+      const p = new URLSearchParams({ page: String(page) });
       if (appliedQ)        p.set("search",   appliedQ);
       if (appliedDateFrom) p.set("dateFrom", appliedDateFrom);
       if (appliedDateTo)   p.set("dateTo",   appliedDateTo);

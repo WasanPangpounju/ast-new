@@ -2,10 +2,10 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 
-// Legacy sentinel: FabricReturnPage ("ส่งคืนบรรจุภัณฑ์") reuses this same table/endpoint
-// for packaging-returned-to-supplier logs, tagging rows with yarnType = PACKAGING_SENTINEL
-// and weightReturn = 0. `scope` keeps that legacy data out of real material-stock-return
-// listings (and vice versa) without a schema migration.
+// Legacy sentinel: the now-removed FabricReturnPage ("ส่งคืนบรรจุภัณฑ์") reused this
+// same table/endpoint for packaging-returned-to-supplier logs, tagging rows with
+// yarnType = PACKAGING_SENTINEL. That feature is gone, but any leftover rows must stay
+// excluded from real material-stock-return listings.
 const PACKAGING_SENTINEL = 'บรรจุภัณฑ์'
 const LBS_PER_KG = 2.2046
 
@@ -13,14 +13,13 @@ export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const page  = Math.max(1, Number(searchParams.get('page') ?? 1))
   const limit = 20
-  const scope    = searchParams.get('scope')    ?? 'material'
   const search   = searchParams.get('search')   ?? ''
   const dateFrom = searchParams.get('dateFrom') ?? ''
   const dateTo   = searchParams.get('dateTo')   ?? ''
 
   const where: Record<string, unknown> = {
     deletedAt: null,
-    yarnType: scope === 'packaging' ? PACKAGING_SENTINEL : { not: PACKAGING_SENTINEL },
+    yarnType: { not: PACKAGING_SENTINEL },
   }
   if (search) {
     where.OR = [
@@ -150,10 +149,8 @@ export async function PATCH(request: NextRequest) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  // Guard both directions of the scope split (see PACKAGING_SENTINEL comment above):
-  // never let this endpoint turn a real material return into a packaging-sentinel row,
-  // and never let it edit an existing packaging-sentinel row (that belongs to
-  // FabricReturnPage's flow, not this one).
+  // Never let this endpoint turn a real material return into a packaging-sentinel row
+  // (see PACKAGING_SENTINEL comment above).
   if (parsed.data.yarnType === PACKAGING_SENTINEL) {
     return Response.json({ error: 'Invalid yarnType' }, { status: 400 })
   }
