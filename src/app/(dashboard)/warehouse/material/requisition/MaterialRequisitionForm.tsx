@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import ConfirmSubmitModal, { ConfirmRow } from "@/components/ConfirmSubmitModal";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -170,6 +171,8 @@ export default function MaterialRequisitionForm({ emp }: Props) {
   const [form, setForm] = useState<FormState>(() => makeEmpty(initDate, emp));
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingSubmit, setPendingSubmit] = useState<{ items: PendingItem[]; currentKey: number | null } | null>(null);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
   const [empList, setEmpList] = useState<string[]>([]);
@@ -302,7 +305,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
   // current form is always validated first so nothing typed gets silently
   // dropped. "+ เพิ่มรายการใหม่" still works the same as before for batching.
 
-  async function handleSave() {
+  function handleSave() {
     const touched = isFormTouched(form);
     if (touched) {
       if (!validate()) return;
@@ -314,7 +317,6 @@ export default function MaterialRequisitionForm({ emp }: Props) {
       return;
     }
 
-    setSaving(true);
     const toSubmit: PendingItem[] = [...pendingItems];
     let currentKey: number | null = null;
     if (touched) {
@@ -333,6 +335,33 @@ export default function MaterialRequisitionForm({ emp }: Props) {
       });
     }
 
+    setPendingSubmit({ items: toSubmit, currentKey });
+    setConfirmOpen(true);
+  }
+
+  function buildConfirmRows(): ConfirmRow[] {
+    if (!pendingSubmit) return [];
+    return pendingSubmit.items.map((item) => ({
+      key: item.key,
+      fields: [
+        { label: "เบิกวัตถุดิบใช้ที่", value: item.department },
+        { label: "พนักงาน", value: item.emp },
+        { label: "วันที่เบิก", value: fmtDate(item.withdrawDate) },
+        { label: "บริษัท", value: item.supplierName },
+        { label: "ชนิดด้าย", value: item.yarnType },
+        { label: "Lot", value: item.lot },
+        { label: "จำนวน (ลูก)", value: item.spool ? item.spool.toLocaleString() : "" },
+        { label: "น้ำหนักที่เบิก (kg)", value: item.weightWithdrawn ? item.weightWithdrawn.toFixed(3) : "" },
+        { label: "หมายเหตุ", value: item.note },
+      ],
+    }));
+  }
+
+  async function submitReal() {
+    if (!pendingSubmit) return;
+    const { items: toSubmit, currentKey } = pendingSubmit;
+
+    setSaving(true);
     let successCount = 0;
     const failedKeys: number[] = [];
 
@@ -361,6 +390,8 @@ export default function MaterialRequisitionForm({ emp }: Props) {
     }
 
     setSaving(false);
+    setConfirmOpen(false);
+    setPendingSubmit(null);
     if (failedKeys.length === 0) {
       setPendingItems([]);
       setForm(clearItemFields);
@@ -605,6 +636,15 @@ export default function MaterialRequisitionForm({ emp }: Props) {
           </div>
         )}
       </div>
+
+      <ConfirmSubmitModal
+        open={confirmOpen}
+        title="ยืนยันการเบิกวัตถุดิบใช้ภายใน"
+        rows={buildConfirmRows()}
+        submitting={saving}
+        onConfirm={submitReal}
+        onCancel={() => { setConfirmOpen(false); setPendingSubmit(null); }}
+      />
     </div>
   );
 }
