@@ -504,9 +504,12 @@ model MaterialOutside {
   returnSpool     Boolean   @default(false)
   returnPaperBar  Boolean   @default(false)
   pallet          Int? // จำนวน pallet ที่เบิกออก
+  palletType      String? // "wood" | "steel"
   box             Int? // จำนวน box ที่เบิกออก
   sack            Int? // จำนวน sack ที่เบิกออก
+  sackType        String? // "p" (ปอ) | "plastic"
   paperBar        Int? // จำนวนกระดาษกั้นที่เบิกออก
+  spoolType       String? // "spool_plastic" | "spool_paper" | "spoolC_plastic" | "spoolC_paper"
   recipient       String?
   usageNote       String?
   paymentComment  String?

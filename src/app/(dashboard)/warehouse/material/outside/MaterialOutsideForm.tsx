@@ -22,9 +22,12 @@ interface FormState {
   note:            string;
   withdrawDate:    string;
   pallet:          string;
+  palletType:      string;
   box:             string;
   sack:            string;
+  sackType:        string;
   paperBar:        string;
+  spoolType:       string;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -51,9 +54,12 @@ interface PendingItem {
   note:            string;
   withdrawDate:    string;
   pallet:          number;
+  palletType:      string;
   box:             number;
   sack:            number;
+  sackType:        string;
   paperBar:        number;
+  spoolType:       string;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -68,6 +74,15 @@ interface PendingItem {
 
 const LBS_PER_KG = 2.2046;
 const fmt3 = (n: number) => (n > 0 ? n.toFixed(3) : "");
+
+const PALLET_TYPE_LABEL: Record<string, string> = { wood: "ไม้", steel: "เหล็ก" };
+const SACK_TYPE_LABEL: Record<string, string> = { p: "ปอ", plastic: "พลาสติก" };
+const SPOOL_TYPE_LABEL: Record<string, string> = {
+  spool_plastic: "หลอดกรวย พลาสติก",
+  spool_paper: "หลอดกรวย กระดาษ",
+  spoolC_plastic: "หลอดทรงกระบอก พลาสติก",
+  spoolC_paper: "หลอดทรงกระบอก กระดาษ",
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -136,7 +151,10 @@ function makeEmpty(t: string): FormState {
     weightWithdrawnP: "", weightWithdrawn: "",
     averageP: "", averageKg: "",
     note: "", withdrawDate: t,
-    pallet: "", box: "", sack: "", paperBar: "",
+    pallet: "", palletType: "wood",
+    box: "",
+    sack: "", sackType: "plastic",
+    paperBar: "", spoolType: "spool_plastic",
     returnPallet: false, returnBox: false, returnSack: false,
     returnSpool: false, returnPaperBar: false,
     recipient: "", usageNote: "", paymentComment: "",
@@ -339,9 +357,12 @@ export default function MaterialOutsideForm() {
       note:            form.note,
       withdrawDate:    form.withdrawDate,
       pallet:          parseInt(form.pallet)   || 0,
+      palletType:      form.palletType,
       box:             parseInt(form.box)      || 0,
       sack:            parseInt(form.sack)     || 0,
+      sackType:        form.sackType,
       paperBar:        parseInt(form.paperBar) || 0,
+      spoolType:       form.spoolType,
       returnPallet:    form.returnPallet,
       returnBox:       form.returnBox,
       returnSack:      form.returnSack,
@@ -396,9 +417,12 @@ export default function MaterialOutsideForm() {
         note:            form.note,
         withdrawDate:    form.withdrawDate,
         pallet:          parseInt(form.pallet)   || 0,
+        palletType:      form.palletType,
         box:             parseInt(form.box)      || 0,
         sack:            parseInt(form.sack)     || 0,
+        sackType:        form.sackType,
         paperBar:        parseInt(form.paperBar) || 0,
+        spoolType:       form.spoolType,
         returnPallet:    form.returnPallet,
         returnBox:       form.returnBox,
         returnSack:      form.returnSack,
@@ -436,6 +460,9 @@ export default function MaterialOutsideForm() {
           { label: "น้ำหนักสุทธิ (kg)", value: item.weightWithdrawn ? item.weightWithdrawn.toFixed(3) : "" },
           { label: "น้ำหนักเฉลี่ย/ลูก (kg)", value: item.averageKg ? item.averageKg.toFixed(3) : "" },
           { label: "พาเลท/กล่อง/กระสอบ/กระดาษกั้น", value: [item.pallet, item.box, item.sack, item.paperBar].some((v) => v > 0) ? `${item.pallet || 0}/${item.box || 0}/${item.sack || 0}/${item.paperBar || 0}` : "" },
+          { label: "ประเภทพาเลท", value: item.pallet ? (PALLET_TYPE_LABEL[item.palletType] ?? item.palletType) : "" },
+          { label: "ประเภทกระสอบ", value: item.sack ? (SACK_TYPE_LABEL[item.sackType] ?? item.sackType) : "" },
+          { label: "ประเภทหลอด", value: item.returnSpool ? (SPOOL_TYPE_LABEL[item.spoolType] ?? item.spoolType) : "" },
           { label: "ส่งคืนบรรจุภัณฑ์", value: returned },
           { label: "การนำไปใช้", value: item.usageNote },
           { label: "หมายเหตุการเงิน", value: item.paymentComment },
@@ -473,9 +500,12 @@ export default function MaterialOutsideForm() {
             note:            item.note            || undefined,
             withdrawDate:    item.withdrawDate     || undefined,
             pallet:          item.pallet          || undefined,
+            palletType:      item.palletType      || undefined,
             box:             item.box             || undefined,
             sack:            item.sack            || undefined,
+            sackType:        item.sackType        || undefined,
             paperBar:        item.paperBar        || undefined,
+            spoolType:       item.spoolType       || undefined,
             returnPallet:    item.returnPallet,
             returnBox:       item.returnBox,
             returnSack:      item.returnSack,
@@ -681,9 +711,22 @@ export default function MaterialOutsideForm() {
                 onChange={(e) => patch({ pallet: e.target.value })}
                 placeholder="จำนวน" className={inp} />
             </Field>
+            <Field label="ประเภทพาเลท">
+              <select value={form.palletType}
+                onChange={(e) => patch({ palletType: e.target.value })}
+                className={inp}>
+                <option value="wood">ไม้</option>
+                <option value="steel">เหล็ก</option>
+              </select>
+            </Field>
             <Field label="จำนวนกล่อง">
               <input type="number" min="0" value={form.box}
                 onChange={(e) => patch({ box: e.target.value })}
+                placeholder="จำนวน" className={inp} />
+            </Field>
+            <Field label="จำนวนกระดาษกั้น">
+              <input type="number" min="0" value={form.paperBar}
+                onChange={(e) => patch({ paperBar: e.target.value })}
                 placeholder="จำนวน" className={inp} />
             </Field>
             <Field label="จำนวนกระสอบ">
@@ -691,10 +734,23 @@ export default function MaterialOutsideForm() {
                 onChange={(e) => patch({ sack: e.target.value })}
                 placeholder="จำนวน" className={inp} />
             </Field>
-            <Field label="จำนวนกระดาษกั้น">
-              <input type="number" min="0" value={form.paperBar}
-                onChange={(e) => patch({ paperBar: e.target.value })}
-                placeholder="จำนวน" className={inp} />
+            <Field label="ประเภทกระสอบ">
+              <select value={form.sackType}
+                onChange={(e) => patch({ sackType: e.target.value })}
+                className={inp}>
+                <option value="p">ปอ</option>
+                <option value="plastic">พลาสติก</option>
+              </select>
+            </Field>
+            <Field label="ประเภทหลอด">
+              <select value={form.spoolType}
+                onChange={(e) => patch({ spoolType: e.target.value })}
+                className={`${inp} col-span-2`}>
+                <option value="spool_plastic">หลอดกรวย พลาสติก</option>
+                <option value="spool_paper">หลอดกรวย กระดาษ</option>
+                <option value="spoolC_plastic">หลอดทรงกระบอก พลาสติก</option>
+                <option value="spoolC_paper">หลอดทรงกระบอก กระดาษ</option>
+              </select>
             </Field>
           </div>
           <div className="flex gap-3 overflow-x-auto pb-1">

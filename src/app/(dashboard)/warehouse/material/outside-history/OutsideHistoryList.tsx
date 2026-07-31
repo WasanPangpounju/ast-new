@@ -23,9 +23,12 @@ interface Outside {
   note:            string | null;
   withdrawDate:    string;
   pallet:          number | null;
+  palletType:      string | null;
   box:             number | null;
   sack:            number | null;
+  sackType:        string | null;
   paperBar:        number | null;
+  spoolType:       string | null;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -67,9 +70,12 @@ interface EditState {
   note:            string;
   withdrawDate:    string;
   pallet:          string;
+  palletType:      string;
   box:             string;
   sack:            string;
+  sackType:        string;
   paperBar:        string;
+  spoolType:       string;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -97,6 +103,15 @@ function numFmt(n: number | null | undefined, dec = 3) {
 function yn(b: boolean) {
   return b ? "ใช่" : "ไม่ใช่";
 }
+
+const PALLET_TYPE_LABEL: Record<string, string> = { wood: "ไม้", steel: "เหล็ก" };
+const SACK_TYPE_LABEL: Record<string, string> = { p: "ปอ", plastic: "พลาสติก" };
+const SPOOL_TYPE_LABEL: Record<string, string> = {
+  spool_plastic: "หลอดกรวย พลาสติก",
+  spool_paper: "หลอดกรวย กระดาษ",
+  spoolC_plastic: "หลอดทรงกระบอก พลาสติก",
+  spoolC_paper: "หลอดทรงกระบอก กระดาษ",
+};
 
 const LIMIT = 20;
 const LBS_PER_KG = 2.2046;
@@ -134,9 +149,12 @@ function toEditState(r: Outside): EditState {
     note:            r.note ?? "",
     withdrawDate:    r.withdrawDate.slice(0, 10),
     pallet:          r.pallet   != null ? String(r.pallet)   : "",
+    palletType:      r.palletType ?? "wood",
     box:             r.box      != null ? String(r.box)      : "",
     sack:            r.sack     != null ? String(r.sack)     : "",
+    sackType:        r.sackType ?? "plastic",
     paperBar:        r.paperBar != null ? String(r.paperBar) : "",
+    spoolType:       r.spoolType ?? "spool_plastic",
     returnPallet:    r.returnPallet,
     returnBox:       r.returnBox,
     returnSack:      r.returnSack,
@@ -370,9 +388,12 @@ export default function OutsideHistoryList() {
           note:            editState.note.trim() || null,
           withdrawDate:    editState.withdrawDate || undefined,
           pallet:          editState.pallet   ? parseInt(editState.pallet)   : null,
+          palletType:      editState.palletType || null,
           box:             editState.box      ? parseInt(editState.box)      : null,
           sack:            editState.sack     ? parseInt(editState.sack)     : null,
+          sackType:        editState.sackType || null,
           paperBar:        editState.paperBar ? parseInt(editState.paperBar) : null,
+          spoolType:       editState.spoolType || null,
           returnPallet:    editState.returnPallet,
           returnBox:       editState.returnBox,
           returnSack:      editState.returnSack,
@@ -579,9 +600,12 @@ export default function OutsideHistoryList() {
 
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-2">ส่งคืนบรรจุภัณฑ์</p>
                 <DRow label="จำนวนพาเลท"     value={selected.pallet?.toLocaleString()} />
+                <DRow label="ประเภทพาเลท"    value={selected.palletType ? (PALLET_TYPE_LABEL[selected.palletType] ?? selected.palletType) : null} />
                 <DRow label="จำนวนกล่อง"     value={selected.box?.toLocaleString()} />
                 <DRow label="จำนวนกระสอบ"    value={selected.sack?.toLocaleString()} />
+                <DRow label="ประเภทกระสอบ"   value={selected.sackType ? (SACK_TYPE_LABEL[selected.sackType] ?? selected.sackType) : null} />
                 <DRow label="จำนวนกระดาษกั้น" value={selected.paperBar?.toLocaleString()} />
+                <DRow label="ประเภทหลอด"     value={selected.spoolType ? (SPOOL_TYPE_LABEL[selected.spoolType] ?? selected.spoolType) : null} />
                 <DRow label="คืนพาเลท"       value={yn(selected.returnPallet)} />
                 <DRow label="คืนกล่อง"       value={yn(selected.returnBox)} />
                 <DRow label="คืนกระสอบ"      value={yn(selected.returnSack)} />
@@ -719,12 +743,29 @@ export default function OutsideHistoryList() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <input type="number" min="0" value={editState.pallet}
                       onChange={(e) => patchEdit({ pallet: e.target.value })} placeholder="จำนวนพาเลท" className={inp} />
+                    <select value={editState.palletType}
+                      onChange={(e) => patchEdit({ palletType: e.target.value })} className={inp}>
+                      <option value="wood">ไม้</option>
+                      <option value="steel">เหล็ก</option>
+                    </select>
                     <input type="number" min="0" value={editState.box}
                       onChange={(e) => patchEdit({ box: e.target.value })} placeholder="จำนวนกล่อง" className={inp} />
-                    <input type="number" min="0" value={editState.sack}
-                      onChange={(e) => patchEdit({ sack: e.target.value })} placeholder="จำนวนกระสอบ" className={inp} />
                     <input type="number" min="0" value={editState.paperBar}
                       onChange={(e) => patchEdit({ paperBar: e.target.value })} placeholder="จำนวนกระดาษกั้น" className={inp} />
+                    <input type="number" min="0" value={editState.sack}
+                      onChange={(e) => patchEdit({ sack: e.target.value })} placeholder="จำนวนกระสอบ" className={inp} />
+                    <select value={editState.sackType}
+                      onChange={(e) => patchEdit({ sackType: e.target.value })} className={inp}>
+                      <option value="p">ปอ</option>
+                      <option value="plastic">พลาสติก</option>
+                    </select>
+                    <select value={editState.spoolType}
+                      onChange={(e) => patchEdit({ spoolType: e.target.value })} className={`${inp} col-span-2`}>
+                      <option value="spool_plastic">หลอดกรวย พลาสติก</option>
+                      <option value="spool_paper">หลอดกรวย กระดาษ</option>
+                      <option value="spoolC_plastic">หลอดทรงกระบอก พลาสติก</option>
+                      <option value="spoolC_paper">หลอดทรงกระบอก กระดาษ</option>
+                    </select>
                   </div>
                   <div className="flex gap-3 overflow-x-auto pb-1">
                     {([
