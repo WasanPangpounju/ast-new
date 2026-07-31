@@ -1,5 +1,5 @@
 "use client";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -134,6 +134,15 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
   const [rowError, setRowError] = useState<Record<number, string>>({});
   const [historyOpenFor, setHistoryOpenFor] = useState<number | null>(null);
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchQty, setBatchQty] = useState<Record<number, string>>({});
+  const [batchEmp, setBatchEmp] = useState(emp);
+  const [batchNote, setBatchNote] = useState("");
+  const [batchErrors, setBatchErrors] = useState<Record<number, string>>({});
+  const [batchSubmitting, setBatchSubmitting] = useState(false);
+  const [batchResultMsg, setBatchResultMsg] = useState<string | null>(null);
+
   const queryKey = ["package-returns-obligations", sourceType, statusFilter, page];
 
   const { data, isFetching, isError, error } = useQuery<ObligationResponse>({
@@ -154,6 +163,109 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
   const totalPages = data?.totalPages ?? 1;
   const from = total === 0 ? 0 : (page - 1) * LIMIT + 1;
   const to = Math.min(page * LIMIT, total);
+
+  // Selection is page/filter scoped — a row's checkbox state doesn't survive navigating
+  // away since `rows` no longer contains it.
+  useEffect(() => { setSelectedIds(new Set()); }, [sourceType, statusFilter, page]);
+
+  const selectedRows = rows.filter((r) => selectedIds.has(r.id));
+
+  function toggleSelect(id: number, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(checked: boolean) {
+    setSelectedIds(checked ? new Set(rows.filter((r) => r.status !== "RETURNED").map((r) => r.id)) : new Set());
+  }
+
+  function openBatchModal() {
+    setBatchQty({});
+    setBatchEmp(emp);
+    setBatchNote("");
+    setBatchErrors({});
+    setBatchResultMsg(null);
+    setBatchOpen(true);
+  }
+
+  function closeBatchModal() {
+    setBatchOpen(false);
+    setBatchErrors({});
+    setBatchResultMsg(null);
+  }
+
+  async function handleBatchSubmit() {
+    const errs: Record<number, string> = {};
+    for (const row of selectedRows) {
+      const qtyStr = batchQty[row.id] ?? "";
+      const qty = Number(qtyStr);
+      const remaining = row.qtyDue - row.qtyReturned;
+      if (!qtyStr || !Number.isInteger(qty) || qty <= 0) {
+        errs[row.id] = "กรอกจำนวนเต็มมากกว่า 0";
+      } else if (qty > remaining) {
+        errs[row.id] = `คืนได้สูงสุด ${remaining} ชิ้น`;
+      }
+    }
+    setBatchErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+
+    setBatchSubmitting(true);
+    setBatchResultMsg(null);
+    let successCount = 0;
+    const failed: Record<number, string> = {};
+
+    for (const row of selectedRows) {
+      const qty = Number(batchQty[row.id]);
+      try {
+        const res = await fetch(`/api/warehouse/package-returns/obligations/${row.id}/entries`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            qty,
+            emp: batchEmp.trim() || undefined,
+            note: batchNote.trim() || undefined,
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "บันทึกการคืนไม่สำเร็จ");
+
+        successCount++;
+        qc.setQueryData<ObligationResponse>(queryKey, (old) => {
+          if (!old) return old;
+          const updated = old.data.map((o) => {
+            if (o.id !== row.id) return o;
+            const qtyReturned = o.qtyReturned + qty;
+            const status: Status = qtyReturned >= o.qtyDue ? "RETURNED" : qtyReturned > 0 ? "PARTIALLY_RETURNED" : "PENDING";
+            return { ...o, qtyReturned, status };
+          });
+          const filtered = statusFilter
+            ? updated.filter((o) => o.status === statusFilter)
+            : updated.filter((o) => o.status !== "RETURNED");
+          return { ...old, data: filtered };
+        });
+        qc.invalidateQueries({ queryKey: ["package-returns-entries", row.id] });
+      } catch (err: unknown) {
+        failed[row.id] = err instanceof Error ? err.message : "เกิดข้อผิดพลาด";
+      }
+    }
+
+    qc.invalidateQueries({ queryKey: ["package-returns-obligations", sourceType] });
+    setBatchSubmitting(false);
+    setBatchErrors(failed);
+
+    if (Object.keys(failed).length === 0) {
+      setSelectedIds(new Set());
+      setBatchOpen(false);
+      setBatchResultMsg(null);
+    } else {
+      // keep the modal open, scoped to the rows that failed, so the user can fix/retry
+      setSelectedIds(new Set(Object.keys(failed).map(Number)));
+      setBatchResultMsg(`บันทึกสำเร็จ ${successCount}/${selectedRows.length} รายการ — ${Object.keys(failed).length} รายการล้มเหลว`);
+    }
+  }
 
   function handleStatusFilterChange(value: "" | Status) {
     setStatusFilter(value);
@@ -229,22 +341,42 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
     <div className="bg-white shadow-sm border border-gray-200 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-200 bg-gray-50">
         <span className="text-xs text-gray-500">ทั้งหมด {total.toLocaleString()} รายการ</span>
-        <select
-          value={statusFilter}
-          onChange={(e) => handleStatusFilterChange(e.target.value as "" | Status)}
-          className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">ทั้งหมด (ไม่รวมคืนครบแล้ว)</option>
-          <option value="PENDING">รอคืน</option>
-          <option value="PARTIALLY_RETURNED">คืนบางส่วน</option>
-          <option value="RETURNED">คืนครบแล้ว</option>
-        </select>
+        <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <button
+              type="button"
+              onClick={openBatchModal}
+              className="px-2.5 py-1 text-xs bg-blue-600 text-white hover:bg-blue-700 font-medium transition-colors whitespace-nowrap"
+            >
+              บันทึกคืนที่เลือก ({selectedIds.size})
+            </button>
+          )}
+          <select
+            value={statusFilter}
+            onChange={(e) => handleStatusFilterChange(e.target.value as "" | Status)}
+            className="border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">ทั้งหมด (ไม่รวมคืนครบแล้ว)</option>
+            <option value="PENDING">รอคืน</option>
+            <option value="PARTIALLY_RETURNED">คืนบางส่วน</option>
+            <option value="RETURNED">คืนครบแล้ว</option>
+          </select>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-8">
+                <input
+                  type="checkbox"
+                  checked={rows.length > 0 && rows.filter((r) => r.status !== "RETURNED").every((r) => selectedIds.has(r.id)) && rows.some((r) => r.status !== "RETURNED")}
+                  onChange={(e) => toggleSelectAll(e.target.checked)}
+                  className="w-3.5 h-3.5 cursor-pointer"
+                  title="เลือกทั้งหมด"
+                />
+              </th>
               <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-10">#</th>
               <th className="text-left px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">วันที่สร้าง</th>
               <th className="text-left px-3 py-2.5 font-medium text-gray-600">คู่ค้า</th>
@@ -258,7 +390,7 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
           <tbody className="divide-y divide-gray-100">
             {isFetching && rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-gray-400">
+                <td colSpan={9} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     กำลังโหลด...
@@ -267,13 +399,13 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
               </tr>
             ) : isError ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-red-400">
+                <td colSpan={9} className="text-center py-12 text-red-400">
                   {error instanceof Error ? error.message : "โหลดข้อมูลไม่สำเร็จ"}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-gray-400">
+                <td colSpan={9} className="text-center py-12 text-gray-400">
                   ไม่มีรายการ
                 </td>
               </tr>
@@ -288,6 +420,16 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
                 return (
                   <Fragment key={row.id}>
                     <tr className={`hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
+                      <td className="px-3 py-2 text-center">
+                        {row.status !== "RETURNED" && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(row.id)}
+                            onChange={(e) => toggleSelect(row.id, e.target.checked)}
+                            className="w-3.5 h-3.5 cursor-pointer"
+                          />
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.createdAt)}</td>
                       <td className="px-3 py-2 text-gray-700 max-w-[150px] truncate" title={counterparty ?? ""}>
@@ -330,7 +472,7 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
                     </tr>
                     {isFormOpen && (
                       <tr className="bg-blue-50/50">
-                        <td colSpan={8} className="px-3 py-2.5">
+                        <td colSpan={9} className="px-3 py-2.5">
                           <div className="flex items-end gap-2 flex-wrap">
                             <label className="flex flex-col gap-0.5">
                               <span className="text-gray-500">จำนวนที่คืนครั้งนี้</span>
@@ -411,6 +553,99 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
           </div>
         </div>
       )}
+
+      {/* ── Batch return modal ─────────────────────────────────────────────── */}
+      {batchOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={closeBatchModal} />
+          <div className="relative bg-white shadow-xl w-full max-w-2xl mx-4 overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between shrink-0">
+              <h2 className="font-semibold text-gray-900 text-sm">บันทึกคืนที่เลือก ({selectedRows.length} รายการ)</h2>
+              <button type="button" onClick={closeBatchModal}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none w-7 h-7 flex items-center justify-center">×</button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
+              <div className="overflow-x-auto border border-gray-100">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-gray-50 text-gray-600">
+                      <th className="text-left px-3 py-2 font-medium">คู่ค้า</th>
+                      <th className="text-left px-3 py-2 font-medium">ประเภท</th>
+                      <th className="text-right px-3 py-2 font-medium whitespace-nowrap">ต้องคืน</th>
+                      <th className="text-right px-3 py-2 font-medium whitespace-nowrap">คงเหลือ</th>
+                      <th className="text-left px-3 py-2 font-medium w-32">จำนวนที่คืนครั้งนี้</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {selectedRows.map((row) => {
+                      const counterparty = row.sourceType === "MATERIAL_IMPORT" ? row.supplier?.name : row.recipientName;
+                      const remaining = row.qtyDue - row.qtyReturned;
+                      return (
+                        <tr key={row.id}>
+                          <td className="px-3 py-2 text-gray-700 max-w-[120px] truncate" title={counterparty ?? ""}>{counterparty ?? "-"}</td>
+                          <td className="px-3 py-2 text-gray-800">
+                            {CATEGORY_LABEL[row.category]}{row.variant ? ` (${row.variant})` : ""}
+                          </td>
+                          <td className="px-3 py-2 text-right text-gray-700">{row.qtyDue.toLocaleString()}</td>
+                          <td className="px-3 py-2 text-right font-medium text-gray-900">{remaining.toLocaleString()}</td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              min={1}
+                              max={remaining}
+                              value={batchQty[row.id] ?? ""}
+                              onChange={(e) => setBatchQty((prev) => ({ ...prev, [row.id]: e.target.value }))}
+                              className="border border-gray-300 px-2 py-1 text-xs w-24 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            {batchErrors[row.id] && <p className="text-red-500 mt-1">{batchErrors[row.id]}</p>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-gray-500">ผู้บันทึก</span>
+                  <input
+                    type="text"
+                    value={batchEmp}
+                    onChange={(e) => setBatchEmp(e.target.value)}
+                    className="border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs text-gray-500">หมายเหตุ (ถ้ามี, ใช้ร่วมกันทุกรายการ)</span>
+                  <input
+                    type="text"
+                    value={batchNote}
+                    onChange={(e) => setBatchNote(e.target.value)}
+                    className="border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </label>
+              </div>
+
+              {batchResultMsg && (
+                <p className="text-xs px-3 py-2 bg-amber-50 text-amber-700">{batchResultMsg}</p>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
+              <button type="button" onClick={closeBatchModal}
+                className="px-4 py-1.5 text-xs border border-gray-300 hover:bg-gray-50 text-gray-600">
+                ยกเลิก
+              </button>
+              <button type="button" onClick={handleBatchSubmit} disabled={batchSubmitting || selectedRows.length === 0}
+                className="px-5 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 font-medium">
+                {batchSubmitting ? "กำลังบันทึก..." : `ยืนยันการคืน (${selectedRows.length})`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -457,7 +692,7 @@ function HistoryRow({ obligationId, qc }: { obligationId: number; qc: ReturnType
 
   return (
     <tr className="bg-gray-50">
-      <td colSpan={8} className="px-3 py-2.5">
+      <td colSpan={9} className="px-3 py-2.5">
         <div className="text-gray-600 font-medium mb-1.5">ประวัติการคืน</div>
         {isFetching && entries.length === 0 ? (
           <div className="text-gray-400 py-2">กำลังโหลด...</div>
