@@ -545,6 +545,10 @@ model MaterialRequisition {
   // nullable: legacy rows จาก MySQL ไม่มี FK กลับ materials
   materialId      Int?
   material        Material? @relation(fields: [materialId], references: [id])
+  // เก็บลง column โดยตรง (สมมาตรกับ MaterialOutside/MaterialReturn) กัน materialId lookup พลาดแล้วข้อมูลหาย
+  lot             String?
+  yarnType        String?
+  supplierName    String?
   department      String
   emp             String?
   spool           Int

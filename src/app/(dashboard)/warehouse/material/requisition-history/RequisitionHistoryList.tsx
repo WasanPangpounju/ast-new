@@ -16,11 +16,25 @@ interface Requisition {
   note: string | null;
   withdrawDate: string;
   createdAt: string;
+  lot: string | null;
+  yarnType: string | null;
+  supplierName: string | null;
   material: {
     lot: string;
     yarnType: string;
     supplierName: string;
   } | null;
+}
+
+// รายการเก่าบางส่วนพึ่ง relation `material` เท่านั้น (ก่อนแก้ให้เก็บลง column โดยตรง)
+function rowYarnType(r: Pick<Requisition, "yarnType" | "material">): string | null {
+  return r.yarnType ?? r.material?.yarnType ?? null;
+}
+function rowSupplierName(r: Pick<Requisition, "supplierName" | "material">): string | null {
+  return r.supplierName ?? r.material?.supplierName ?? null;
+}
+function rowLot(r: Pick<Requisition, "lot" | "material">): string | null {
+  return r.lot ?? r.material?.lot ?? null;
 }
 
 interface RequisitionResponse {
@@ -35,6 +49,9 @@ type Tab = "detail" | "edit";
 interface EditState {
   department: string;
   emp: string;
+  supplierName: string;
+  yarnType: string;
+  lot: string;
   spool: string;
   weightWithdrawnP: string;
   weightWithdrawn: string;
@@ -66,6 +83,9 @@ function toEditState(r: Requisition): EditState {
   return {
     department:       r.department,
     emp:              r.emp ?? "",
+    supplierName:     rowSupplierName(r) ?? "",
+    yarnType:         rowYarnType(r) ?? "",
+    lot:              rowLot(r) ?? "",
     spool:            String(r.spool),
     weightWithdrawnP: fmt3(r.weightWithdrawnP),
     weightWithdrawn:  String(r.weightWithdrawn),
@@ -214,6 +234,9 @@ export default function RequisitionHistoryList() {
         body: JSON.stringify({
           department:      editState.department,
           emp:             editState.emp.trim() || null,
+          supplierName:    editState.supplierName.trim() || null,
+          yarnType:        editState.yarnType.trim() || null,
+          lot:             editState.lot.trim() || null,
           spool:           sp,
           weightWithdrawn: w,
           note:            editState.note.trim() || null,
@@ -227,6 +250,9 @@ export default function RequisitionHistoryList() {
         ...prev,
         department:       editState.department,
         emp:              editState.emp.trim() || null,
+        supplierName:     editState.supplierName.trim() || null,
+        yarnType:         editState.yarnType.trim() || null,
+        lot:              editState.lot.trim() || null,
         spool:            sp,
         weightWithdrawn:  w,
         weightWithdrawnP: w * LBS_PER_KG,
@@ -260,7 +286,7 @@ export default function RequisitionHistoryList() {
       <div className="bg-white border border-gray-200 p-4 mb-4 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div className="md:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">ค้นหา (แผนก, ชนิดด้าย, เลขที่เบิก)</label>
+            <label className="block text-xs text-gray-500 mb-1">ค้นหา (แผนก, ชนิดด้าย, บริษัท, เลขที่เบิก)</label>
             <input value={q} onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
               placeholder="พิมพ์ค้นหา..."
@@ -321,11 +347,11 @@ export default function RequisitionHistoryList() {
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.withdrawDate)}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[100px] truncate">{row.department}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[100px] truncate">{row.emp ?? "-"}</td>
-                  <td className="px-3 py-2 text-gray-800 max-w-[120px] truncate" title={row.material?.yarnType ?? ""}>
-                    {row.material?.yarnType ?? "-"}
+                  <td className="px-3 py-2 text-gray-800 max-w-[120px] truncate" title={rowYarnType(row) ?? ""}>
+                    {rowYarnType(row) ?? "-"}
                   </td>
-                  <td className="px-3 py-2 text-gray-700 max-w-[150px] truncate" title={row.material?.supplierName ?? ""}>
-                    {row.material?.supplierName ?? "-"}
+                  <td className="px-3 py-2 text-gray-700 max-w-[150px] truncate" title={rowSupplierName(row) ?? ""}>
+                    {rowSupplierName(row) ?? "-"}
                   </td>
                   <td className="px-3 py-2 text-right font-medium text-gray-900">{row.spool.toLocaleString()}</td>
                   <td className="px-3 py-2 text-right font-medium text-gray-900">{numFmt(row.weightWithdrawnP, 3)}</td>
@@ -409,9 +435,9 @@ export default function RequisitionHistoryList() {
                 <DRow label="วันที่เบิก"    value={fmtDate(selected.withdrawDate)} />
                 <DRow label="แผนก"    value={selected.department} />
                 <DRow label="พนักงาน" value={selected.emp} />
-                <DRow label="ชนิดด้าย" value={selected.material?.yarnType} />
-                <DRow label="ชื่อบริษัท"    value={selected.material?.supplierName} />
-                <DRow label="Lot"           value={selected.material?.lot} />
+                <DRow label="ชนิดด้าย" value={rowYarnType(selected)} />
+                <DRow label="ชื่อบริษัท"    value={rowSupplierName(selected)} />
+                <DRow label="Lot"           value={rowLot(selected)} />
 
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-2">จำนวน & น้ำหนัก</p>
                 <DRow label="จำนวน (ลูก)"          value={selected.spool.toLocaleString()} />
@@ -467,13 +493,29 @@ export default function RequisitionHistoryList() {
               <>
                 <div className="overflow-y-auto flex-1 px-5 py-4 space-y-4">
 
-                  {/* context อ่านอย่างเดียว */}
-                  {(selected?.material?.yarnType || selected?.material?.supplierName) && (
-                    <div className="bg-gray-50 border border-gray-100 px-3 py-2 text-xs text-gray-500 space-y-0.5">
-                      {selected.material?.yarnType    && <p>ชนิดด้าย: <span className="font-medium text-gray-700">{selected.material.yarnType}</span></p>}
-                      {selected.material?.supplierName && <p>บริษัท: <span className="font-medium text-gray-700">{selected.material.supplierName}</span></p>}
+                  {/* วัตถุดิบ */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">บริษัท</label>
+                      <input value={editState.supplierName}
+                        onChange={(e) => patchEdit({ supplierName: e.target.value })}
+                        placeholder="ชื่อบริษัท"
+                        className={inp} />
                     </div>
-                  )}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">ชนิดด้าย</label>
+                      <input value={editState.yarnType}
+                        onChange={(e) => patchEdit({ yarnType: e.target.value })}
+                        placeholder="ชนิดด้าย"
+                        className={inp} />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Lot</label>
+                      <input value={editState.lot}
+                        onChange={(e) => patchEdit({ lot: e.target.value })}
+                        placeholder="Lot" className={inp} />
+                    </div>
+                  </div>
 
                   {/* เบิกวัตถุดิบใช้ที่ */}
                   <div>
