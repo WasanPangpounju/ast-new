@@ -182,13 +182,63 @@ export default function MaterialRequisitionForm({ emp }: Props) {
   const supTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const yarnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lotTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avgTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formRef = useRef(form);
+  // น้ำหนักเฉลี่ย/ลูก (kg) ของ yarnType+supplierName ปัจจุบัน ดึงจาก stock — ใช้คูณกับ "จำนวน (ลูก)"
+  // เพื่อ auto-fill ช่องน้ำหนัก client-side โดยไม่ต้องยิง API ทุกครั้งที่ spool เปลี่ยน
+  const avgKgRef = useRef<number | null>(null);
+  // true เมื่อ user แก้ช่องน้ำหนักเอง — กันไม่ให้ auto-fill ทับค่าที่แก้ไว้ตอน spool เปลี่ยนอีกครั้ง
+  const weightDirtyRef = useRef(false);
+  // นับรอบ reset เพื่อทิ้งผลลัพธ์ fetch ที่ค้างอยู่ (in-flight) หลังจากบริบท (yarnType/supplierName) เปลี่ยนไปแล้ว
+  const avgEpochRef = useRef(0);
 
   useEffect(() => { formRef.current = form; }, [form]);
   useEffect(() => { setEmpList(getEmpList()); }, []);
 
   function patch(changes: Partial<FormState>) {
     setForm((prev) => ({ ...prev, ...changes }));
+  }
+
+  // ── น้ำหนักเฉลี่ยจากสต็อก (auto-fill) ────────────────────────────────────────
+
+  function resetAutoFillState() {
+    if (avgTimer.current) clearTimeout(avgTimer.current);
+    avgEpochRef.current += 1;
+    avgKgRef.current = null;
+    weightDirtyRef.current = false;
+  }
+
+  function applyAutoWeight(spoolStr: string) {
+    if (weightDirtyRef.current) return;
+    const avg = avgKgRef.current;
+    if (!avg || avg <= 0) return;
+    const sp = parseInt(spoolStr, 10);
+    if (isNaN(sp) || sp < 1) return;
+    const kg = sp * avg;
+    patch({ weightWithdrawn: fmt3(kg), weightWithdrawnP: fmt3(kg * LBS_PER_KG) });
+  }
+
+  function scheduleAverageFetch() {
+    if (avgTimer.current) clearTimeout(avgTimer.current);
+    const epoch = avgEpochRef.current;
+    avgTimer.current = setTimeout(async () => {
+      const yarnType = formRef.current.yarnType.trim();
+      const supplierName = formRef.current.supplierName.trim();
+      if (!yarnType || !supplierName) {
+        if (avgEpochRef.current === epoch) avgKgRef.current = null;
+        return;
+      }
+      try {
+        const p = new URLSearchParams({ yarnType, supplierName });
+        const res = await fetch(`/api/warehouse/material/average-weight?${p}`);
+        const data = await res.json();
+        if (avgEpochRef.current !== epoch) return; // บริบทเปลี่ยนไปแล้วระหว่างรอ response ทิ้งผลลัพธ์นี้
+        avgKgRef.current = typeof data.averageKg === "number" ? data.averageKg : null;
+        applyAutoWeight(formRef.current.spool);
+      } catch {
+        if (avgEpochRef.current === epoch) avgKgRef.current = null;
+      }
+    }, 300);
   }
 
   function showToast(type: "success" | "error", msg: string) {
@@ -200,6 +250,8 @@ export default function MaterialRequisitionForm({ emp }: Props) {
 
   function onSupplierChange(v: string) {
     patch({ supplierName: v });
+    resetAutoFillState();
+    scheduleAverageFetch();
     if (supTimer.current) clearTimeout(supTimer.current);
     supTimer.current = setTimeout(async () => {
       if (!v.trim()) { setSupOptions([]); return; }
@@ -213,6 +265,8 @@ export default function MaterialRequisitionForm({ emp }: Props) {
 
   function onYarnTypeChange(v: string) {
     patch({ yarnType: v });
+    resetAutoFillState();
+    scheduleAverageFetch();
     if (!v.trim()) setLotOptions([]);
     if (yarnTimer.current) clearTimeout(yarnTimer.current);
     yarnTimer.current = setTimeout(async () => {
@@ -250,12 +304,19 @@ export default function MaterialRequisitionForm({ emp }: Props) {
   // ── Weight converters ───────────────────────────────────────────────────────
 
   function onWeightP(v: string) {
+    weightDirtyRef.current = true;
     const p = parseFloat(v) || 0;
     patch({ weightWithdrawnP: v, weightWithdrawn: p > 0 ? fmt3(p / LBS_PER_KG) : "" });
   }
   function onWeightKg(v: string) {
+    weightDirtyRef.current = true;
     const k = parseFloat(v) || 0;
     patch({ weightWithdrawn: v, weightWithdrawnP: k > 0 ? fmt3(k * LBS_PER_KG) : "" });
+  }
+
+  function onSpoolChange(v: string) {
+    patch({ spool: v });
+    applyAutoWeight(v);
   }
 
   // ── Validation ──────────────────────────────────────────────────────────────
@@ -297,6 +358,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
     setSupOptions([]);
     setYarnOptions([]);
     setLotOptions([]);
+    resetAutoFillState();
   }
 
   // ── Save ─────────────────────────────────────────────────────────────────────
@@ -397,6 +459,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
       setForm(clearItemFields);
       setErrors({});
       setSupOptions([]); setYarnOptions([]); setLotOptions([]);
+      resetAutoFillState();
       showToast("success", `บันทึกสำเร็จ ${successCount} รายการ`);
       setTimeout(() => router.push("/warehouse/material/requisition-history"), 1200);
     } else {
@@ -405,6 +468,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
         setForm(clearItemFields);
         setErrors({});
         setSupOptions([]); setYarnOptions([]); setLotOptions([]);
+        resetAutoFillState();
       }
       showToast("error", `บันทึกสำเร็จ ${successCount}/${toSubmit.length} รายการ — ${failedKeys.length} รายการล้มเหลว`);
     }
@@ -496,7 +560,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
             <AutocompleteInput
               value={form.supplierName}
               onChange={onSupplierChange}
-              onSelect={(v) => { patch({ supplierName: v }); setSupOptions([]); }}
+              onSelect={(v) => { patch({ supplierName: v }); setSupOptions([]); resetAutoFillState(); scheduleAverageFetch(); }}
               options={supOptions}
               placeholder="พิมพ์ชื่อบริษัท"
               inputClassName={`${inp} ${errors.supplierName ? errB : ""}`}
@@ -507,7 +571,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
             <AutocompleteInput
               value={form.yarnType}
               onChange={onYarnTypeChange}
-              onSelect={(v) => { patch({ yarnType: v }); setYarnOptions([]); fetchLots(v, formRef.current.supplierName, formRef.current.lot); }}
+              onSelect={(v) => { patch({ yarnType: v }); setYarnOptions([]); fetchLots(v, formRef.current.supplierName, formRef.current.lot); resetAutoFillState(); scheduleAverageFetch(); }}
               options={yarnOptions}
               placeholder="เช่น CP 30/1, R 30"
               inputClassName={`${inp} ${errors.yarnType ? errB : ""}`}
@@ -527,7 +591,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
 
           <Field label="จำนวน (ลูก)" required error={errors.spool}>
             <input type="number" min="1" value={form.spool}
-              onChange={(e) => patch({ spool: e.target.value })}
+              onChange={(e) => onSpoolChange(e.target.value)}
               placeholder="จำนวน"
               className={`${inp} ${errors.spool ? errB : ""}`} />
           </Field>
@@ -570,7 +634,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
             + เพิ่มรายการใหม่
           </button>
           <button type="button"
-            onClick={() => { setForm(makeEmpty(initDate, emp)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); }}
+            onClick={() => { setForm(makeEmpty(initDate, emp)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); resetAutoFillState(); }}
             className="px-4 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
             เคลียร์ข้อมูล
           </button>
