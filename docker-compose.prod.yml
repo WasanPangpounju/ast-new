@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ast_new
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ast_net
+  app:
+    build: .
+    restart: always
+    env_file: .env.production
+    environment:
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/ast_new"
+      NODE_ENV: production
+      AUTH_TRUST_HOST: "true"
+      AUTH_URL: "http://206.81.0.211:3000"
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ast_net
+volumes:
+  postgres_data:
+networks:
+  ast_net:
+    driver: bridge
