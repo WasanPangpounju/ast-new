@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 import type { Prisma } from '@/generated/prisma/client/client'
+import { buildOutsideObligationsData } from '@/lib/package-return-obligations'
 
 const LBS_PER_KG = 2.2046
 
@@ -20,6 +21,14 @@ const outsideSchema = z.object({
   averageKg:       z.number().optional(),
   materialId:      z.number().int().optional(),
   note:            z.string().optional(),
+  withdrawDate:    z.string().optional(),
+  pallet:          z.number().int().optional(),
+  palletType:      z.string().optional(),
+  box:             z.number().int().optional(),
+  sack:            z.number().int().optional(),
+  sackType:        z.string().optional(),
+  paperBar:        z.number().int().optional(),
+  spoolType:       z.string().optional(),
   returnPallet:    z.boolean().optional(),
   returnBox:       z.boolean().optional(),
   returnSack:      z.boolean().optional(),
@@ -45,7 +54,8 @@ export async function POST(request: NextRequest) {
 
   const { withdrawId, lot, yarnType, supplierName, spool, weightWithdrawn,
           weightPSum, weightKgSum, weightPPackage, weightKgPackage,
-          averageP, averageKg, materialId, note,
+          averageP, averageKg, materialId, note, withdrawDate,
+          pallet, palletType, box, sack, sackType, paperBar, spoolType,
           returnPallet, returnBox, returnSack, returnSpool, returnPaperBar,
           recipient, usageNote, paymentComment } = parsed.data
 
@@ -70,36 +80,120 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const data = await prisma.materialOutside.create({
-      data: {
-        withdrawId:      withdrawId ?? crypto.randomUUID(),
-        lot:             lot || null,
-        yarnType,
-        supplierName:    supplierName || null,
-        spool,
-        weightWithdrawn,
-        weightPSum:      weightPSum      ?? null,
-        weightKgSum:     weightKgSum     ?? null,
-        weightPPackage:  weightPPackage  ?? null,
-        weightKgPackage: weightKgPackage ?? null,
-        averageP:        averageP        ?? null,
-        averageKg:       averageKg       ?? null,
-        note:            note            || null,
-        returnPallet:    returnPallet    ?? false,
-        returnBox:       returnBox       ?? false,
-        returnSack:      returnSack      ?? false,
-        returnSpool:     returnSpool     ?? false,
-        returnPaperBar:  returnPaperBar  ?? false,
-        recipient:       recipient       || null,
-        usageNote:       usageNote       || null,
-        paymentComment:  paymentComment  || null,
-        ...(resolvedMaterialId != null && { materialId: resolvedMaterialId }),
-      },
+    const data = await prisma.$transaction(async tx => {
+      const outside = await tx.materialOutside.create({
+        data: {
+          withdrawId:      withdrawId ?? crypto.randomUUID(),
+          lot:             lot || null,
+          yarnType,
+          supplierName:    supplierName || null,
+          spool,
+          weightWithdrawn,
+          weightPSum:      weightPSum      ?? null,
+          weightKgSum:     weightKgSum     ?? null,
+          weightPPackage:  weightPPackage  ?? null,
+          weightKgPackage: weightKgPackage ?? null,
+          averageP:        averageP        ?? null,
+          averageKg:       averageKg       ?? null,
+          note:            note            || null,
+          withdrawDate:    withdrawDate ? new Date(withdrawDate) : new Date(),
+          pallet:          pallet          ?? null,
+          palletType:      palletType      || null,
+          box:             box             ?? null,
+          sack:            sack            ?? null,
+          sackType:        sackType        || null,
+          paperBar:        paperBar        ?? null,
+          spoolType:       spoolType       || null,
+          returnPallet:    returnPallet    ?? false,
+          returnBox:       returnBox       ?? false,
+          returnSack:      returnSack      ?? false,
+          returnSpool:     returnSpool     ?? false,
+          returnPaperBar:  returnPaperBar  ?? false,
+          recipient:       recipient       || null,
+          usageNote:       usageNote       || null,
+          paymentComment:  paymentComment  || null,
+          ...(resolvedMaterialId != null && { materialId: resolvedMaterialId }),
+        },
+      })
+
+      const obligationsData = buildOutsideObligationsData(outside, recipient || null)
+      if (obligationsData.length > 0) {
+        await tx.packageReturnObligation.createMany({ data: obligationsData })
+      }
+
+      return outside
     })
     return Response.json({ success: true, data })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[material/outside POST] error:', msg)
+    return Response.json({ error: msg }, { status: 500 })
+  }
+}
+
+const patchSchema = z.object({
+  supplierName:    z.string().nullable().optional(),
+  yarnType:        z.string().min(1).optional(),
+  lot:             z.string().nullable().optional(),
+  spool:           z.number().int().positive().optional(),
+  weightWithdrawn: z.number().positive().optional(),
+  weightPSum:      z.number().nullable().optional(),
+  weightKgSum:     z.number().nullable().optional(),
+  weightPPackage:  z.number().nullable().optional(),
+  weightKgPackage: z.number().nullable().optional(),
+  averageP:        z.number().nullable().optional(),
+  averageKg:       z.number().nullable().optional(),
+  note:            z.string().nullable().optional(),
+  withdrawDate:    z.string().optional(),
+  pallet:          z.number().int().nullable().optional(),
+  palletType:      z.string().nullable().optional(),
+  box:             z.number().int().nullable().optional(),
+  sack:            z.number().int().nullable().optional(),
+  sackType:        z.string().nullable().optional(),
+  paperBar:        z.number().int().nullable().optional(),
+  spoolType:       z.string().nullable().optional(),
+  returnPallet:    z.boolean().optional(),
+  returnBox:       z.boolean().optional(),
+  returnSack:      z.boolean().optional(),
+  returnSpool:     z.boolean().optional(),
+  returnPaperBar:  z.boolean().optional(),
+  recipient:       z.string().nullable().optional(),
+  usageNote:       z.string().nullable().optional(),
+  paymentComment:  z.string().nullable().optional(),
+})
+
+export async function PATCH(request: NextRequest) {
+  const idParam = request.nextUrl.searchParams.get('id')
+  const id = idParam ? parseInt(idParam, 10) : NaN
+  if (isNaN(id)) return Response.json({ error: 'Invalid id' }, { status: 400 })
+
+  let body: unknown
+  try { body = await request.json() } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  const parsed = patchSchema.safeParse(body)
+  if (!parsed.success) {
+    return Response.json({ error: parsed.error.flatten() }, { status: 400 })
+  }
+
+  try {
+    const existing = await prisma.materialOutside.findUnique({ where: { id } })
+    if (!existing || existing.deletedAt !== null) {
+      return Response.json({ error: 'Not found' }, { status: 404 })
+    }
+    const { withdrawDate, ...rest } = parsed.data
+    const updated = await prisma.materialOutside.update({
+      where: { id },
+      data: {
+        ...rest,
+        ...(withdrawDate !== undefined && { withdrawDate: new Date(withdrawDate) }),
+      },
+    })
+    return Response.json({ success: true, data: updated })
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[material/outside PATCH] error:', msg)
     return Response.json({ error: msg }, { status: 500 })
   }
 }

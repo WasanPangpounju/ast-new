@@ -1,11 +1,30 @@
 "use client";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import AutocompleteInput from "@/components/AutocompleteInput";
+import ThaiDatePicker from "@/components/ThaiDatePicker";
+import ConfirmSubmitModal, { ConfirmRow } from "@/components/ConfirmSubmitModal";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const LBS_PER_KG = 2.2046;
 const fmt = (n: number, d = 4) => (n > 0 ? n.toFixed(d) : "");
+
+const PALLET_TYPE_LABEL: Record<string, string> = { wood: "ไม้", steel: "เหล็ก" };
+const SACK_TYPE_LABEL: Record<string, string> = { p: "ปอ", plastic: "พลาสติก" };
+const SPOOL_TYPE_LABEL: Record<string, string> = {
+  spool_plastic: "หลอดกรวย พลาสติก",
+  spool_paper: "หลอดกรวย กระดาษ",
+  spoolC_plastic: "หลอดทรงกระบอก พลาสติก",
+  spoolC_paper: "หลอดทรงกระบอก กระดาษ",
+};
+
+function fmtDate(iso: string): string {
+  try {
+    const d = new Date(iso);
+    return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1).toString().padStart(2, "0")}/${d.getFullYear() + 543}`;
+  } catch { return iso; }
+}
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 
@@ -21,11 +40,11 @@ interface FormState {
   pallet: string;
   box: string;
   sack: string;
-  // ── packaging type tags (UI only)
+  paperBar: string;
+  // ── packaging type tags (sent to API)
   palletType: string;
   sackType: string;
   spoolType: string;
-  paperBar: string;
   // ── quantities
   spool: string;
   yarnSum: string;
@@ -38,7 +57,7 @@ interface FormState {
   weightKgNet: string;  // calculated
   averageP: string;     // calculated
   averageKg: string;    // calculated
-  // ── return packaging (UI only)
+  // ── return packaging (sent to API)
   returnPallet: boolean;
   returnBox: boolean;
   returnSack: boolean;
@@ -141,11 +160,74 @@ export default function MaterialCreateForm({ emp }: Props) {
   const formRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState<FormState>(() => makeEmpty(today, emp));
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
+  const [supOptions, setSupOptions] = useState<string[]>([]);
+  const [yarnOptions, setYarnOptions] = useState<string[]>([]);
+  const [lotOptions, setLotOptions] = useState<string[]>([]);
+  const supTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const yarnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lotTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stateRef = useRef(form);
+
+  useEffect(() => { stateRef.current = form; }, [form]);
 
   function patch(changes: Partial<FormState>) {
     setForm((prev) => recalc(prev, changes));
+  }
+
+  function fetchLots(yarnType: string, supplierName: string, q = "") {
+    if (!yarnType.trim()) { setLotOptions([]); return; }
+    const p = new URLSearchParams({ yarnType });
+    if (supplierName) p.set("supplierName", supplierName);
+    if (q) p.set("q", q);
+    fetch(`/api/warehouse/material/lots?${p}`)
+      .then((r) => r.json())
+      .then((d) => setLotOptions(d.data ?? []))
+      .catch(() => setLotOptions([]));
+  }
+
+  function scheduleLotFetch(yarnType: string, supplierName: string, q = "") {
+    if (lotTimer.current) clearTimeout(lotTimer.current);
+    if (!yarnType.trim()) { setLotOptions([]); return; }
+    lotTimer.current = setTimeout(() => fetchLots(yarnType, supplierName, q), 300);
+  }
+
+  function onSupplierChange(v: string) {
+    patch({ supplierName: v });
+    if (supTimer.current) clearTimeout(supTimer.current);
+    supTimer.current = setTimeout(async () => {
+      if (!v.trim()) { setSupOptions([]); return; }
+      try {
+        const res = await fetch(`/api/warehouse/material/suppliers?q=${encodeURIComponent(v)}`);
+        const data = await res.json();
+        setSupOptions(data.data ?? []);
+      } catch { setSupOptions([]); }
+    }, 300);
+    scheduleLotFetch(stateRef.current.yarnType, v, stateRef.current.lot);
+  }
+
+  function onYarnTypeChange(v: string) {
+    patch({ yarnType: v });
+    if (yarnTimer.current) clearTimeout(yarnTimer.current);
+    yarnTimer.current = setTimeout(async () => {
+      try {
+        const p = new URLSearchParams();
+        if (v.trim()) p.set("q", v);
+        const supplier = stateRef.current.supplierName.trim();
+        if (supplier) p.set("supplierName", supplier);
+        const res = await fetch(`/api/warehouse/material/yarn-types?${p}`);
+        const data = await res.json();
+        setYarnOptions(data.data ?? []);
+      } catch { setYarnOptions([]); }
+    }, 300);
+    scheduleLotFetch(v, stateRef.current.supplierName, stateRef.current.lot);
+  }
+
+  function onLotChange(v: string) {
+    patch({ lot: v });
+    scheduleLotFetch(stateRef.current.yarnType, stateRef.current.supplierName, v);
   }
 
   // ── weight converters ───────────────────────────────────────────────────────
@@ -202,13 +284,51 @@ export default function MaterialCreateForm({ emp }: Props) {
     setTimeout(() => setToast(null), 4500);
   }
 
-  async function handleSave() {
+  function handleSave() {
     if (!validate()) return;
+    setConfirmOpen(true);
+  }
+
+  function buildConfirmRows(): ConfirmRow[] {
+    const returned = (
+      [
+        ["returnPallet", "พาเลท"], ["returnBox", "กล่อง"], ["returnSack", "กระสอบ"],
+        ["returnSpool", "หลอด"], ["returnPaperBar", "กระดาษกั้น"],
+      ] as [keyof FormState, string][]
+    ).filter(([k]) => form[k]).map(([, label]) => label).join(", ");
+
+    return [{
+      key: "item",
+      fields: [
+        { label: "ชื่อบริษัท", value: form.supplierName },
+        { label: "เลขที่ใบส่งสินค้า", value: form.importStatus },
+        { label: "วันที่", value: fmtDate(form.createDate) },
+        { label: "พนักงาน", value: form.emp },
+        { label: "ชนิดด้าย", value: form.yarnType },
+        { label: "ล็อตที่", value: form.lot },
+        { label: "จำนวนหลอดทั้งหมด", value: form.spool ? `${form.spool} หลอด (${SPOOL_TYPE_LABEL[form.spoolType] ?? form.spoolType})` : "" },
+        { label: "จำนวนด้ายทั้งหมด (ลูก)", value: form.yarnSum },
+        { label: "น้ำหนักรวม (kg)", value: form.weightKgSum },
+        { label: "น้ำหนักบรรจุภัณฑ์ (kg)", value: form.weightKgPackage },
+        { label: "น้ำหนักสุทธิ (kg)", value: form.weightKgNet },
+        { label: "น้ำหนักเฉลี่ยต่อลูก (kg)", value: form.averageKg },
+        { label: "พาเลท", value: form.pallet ? `${form.pallet} (${PALLET_TYPE_LABEL[form.palletType] ?? form.palletType})` : "" },
+        { label: "กล่อง", value: form.box },
+        { label: "กระสอบ", value: form.sack ? `${form.sack} (${SACK_TYPE_LABEL[form.sackType] ?? form.sackType})` : "" },
+        { label: "กระดาษกั้น", value: form.paperBar },
+        { label: "ส่งคืนบรรจุภัณฑ์", value: returned },
+        { label: "หมายเหตุ", value: form.note },
+      ],
+    }];
+  }
+
+  async function submitReal() {
     setSaving(true);
     try {
       const item = {
         supplierName:   form.supplierName.trim(),
         importStatus:   form.importStatus.trim() || undefined,
+        importDate:     form.createDate,
         yarnType:       form.yarnType.trim(),
         lot:            form.lot.trim() || "-",
         spool:          parseInt(form.spool),
@@ -221,8 +341,17 @@ export default function MaterialCreateForm({ emp }: Props) {
         averageKg:      parseFloat(form.averageKg)      || undefined,
         averageP:       parseFloat(form.averageP)       || undefined,
         pallet:         parseInt(form.pallet)  || undefined,
+        palletType:     form.palletType.trim() || undefined,
         box:            parseInt(form.box)     || undefined,
         sack:           parseInt(form.sack)    || undefined,
+        sackType:       form.sackType.trim()   || undefined,
+        paperBar:       parseInt(form.paperBar) || undefined,
+        spoolType:      form.spoolType.trim()  || undefined,
+        returnPallet:   form.returnPallet,
+        returnBox:      form.returnBox,
+        returnSack:     form.returnSack,
+        returnSpool:    form.returnSpool,
+        returnPaperBar: form.returnPaperBar,
         emp:            form.emp.trim()  || undefined,
         note:           form.note.trim() || undefined,
       };
@@ -241,6 +370,7 @@ export default function MaterialCreateForm({ emp }: Props) {
       showToast("error", "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setSaving(false);
+      setConfirmOpen(false);
     }
   }
 
@@ -266,10 +396,15 @@ export default function MaterialCreateForm({ emp }: Props) {
         <SectionLabel>ข้อมูลการนำเข้า</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Field label="ชื่อบริษัท" required error={errors.supplierName}>
-            <input id="f-supplierName" value={form.supplierName}
-              onChange={(e) => patch({ supplierName: e.target.value })}
+            <AutocompleteInput
+              id="f-supplierName"
+              value={form.supplierName}
+              onChange={onSupplierChange}
+              onSelect={(v) => { patch({ supplierName: v }); setSupOptions([]); fetchLots(stateRef.current.yarnType, v, stateRef.current.lot); }}
+              options={supOptions}
               placeholder="ชื่อบริษัท"
-              className={`${inp} ${errors.supplierName ? errB : ""}`} />
+              inputClassName={`${inp} ${errors.supplierName ? errB : ""}`}
+            />
           </Field>
           <Field label="เลขที่ใบส่งสินค้า">
             <input value={form.importStatus}
@@ -278,23 +413,33 @@ export default function MaterialCreateForm({ emp }: Props) {
               className={inp} />
           </Field>
           <Field label="วันที่">
-            <input type="date" value={form.createDate}
-              onChange={(e) => patch({ createDate: e.target.value })}
-              className={inp} />
+            <ThaiDatePicker
+              value={form.createDate}
+              onChange={(v) => patch({ createDate: v })}
+            />
           </Field>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
           <Field label="ชนิดด้าย" required error={errors.yarnType}>
-            <input id="f-yarnType" value={form.yarnType}
-              onChange={(e) => patch({ yarnType: e.target.value })}
+            <AutocompleteInput
+              id="f-yarnType"
+              value={form.yarnType}
+              onChange={onYarnTypeChange}
+              onSelect={(v) => { patch({ yarnType: v }); setYarnOptions([]); fetchLots(v, stateRef.current.supplierName, stateRef.current.lot); }}
+              options={yarnOptions}
               placeholder="เช่น CP 30/1, R 30"
-              className={`${inp} ${errors.yarnType ? errB : ""}`} />
+              inputClassName={`${inp} ${errors.yarnType ? errB : ""}`}
+            />
           </Field>
           <Field label="ล็อตที่">
-            <input value={form.lot}
-              onChange={(e) => patch({ lot: e.target.value })}
-              placeholder="ล็อตที่"
-              className={inp} />
+            <AutocompleteInput
+              value={form.lot}
+              onChange={onLotChange}
+              onSelect={(v) => { patch({ lot: v }); setLotOptions([]); }}
+              options={lotOptions}
+              placeholder="ล็อตที่ (พิมพ์หรือเลือกจากรายการ)"
+              inputClassName={inp}
+            />
           </Field>
           <Field label="พนักงาน">
             <input value={form.emp}
@@ -508,7 +653,7 @@ export default function MaterialCreateForm({ emp }: Props) {
         {/* ── Buttons ─────────────────────────────────────────────── */}
         <div className="flex items-center justify-end gap-3 pt-5 mt-5">
           <button type="button"
-            onClick={() => { setForm(makeEmpty(today, emp)); setErrors({}); }}
+            onClick={() => { setForm(makeEmpty(today, emp)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); }}
             className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600 transition-colors">
             เคลียร์ข้อมูล
           </button>
@@ -518,6 +663,16 @@ export default function MaterialCreateForm({ emp }: Props) {
           </button>
         </div>
       </div>
+
+      <ConfirmSubmitModal
+        open={confirmOpen}
+        title="ยืนยันการนำเข้าวัตถุดิบ"
+        rows={buildConfirmRows()}
+        submitting={saving}
+        onConfirm={submitReal}
+        onCancel={() => setConfirmOpen(false)}
+        tone="blue"
+      />
     </div>
   );
 }

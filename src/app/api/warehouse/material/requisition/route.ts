@@ -13,7 +13,8 @@ const requisitionSchema = z.object({
   spool:        z.number().int().positive(),
   weightWithdrawn: z.number().positive(),
   note:         z.string().optional(),
-  // ใช้ lookup materialId — ไม่เก็บลง column โดยตรง
+  withdrawDate: z.string().optional(),
+  // ใช้ lookup materialId และเก็บลง column โดยตรงด้วย (กัน lookup พลาดแล้วข้อมูลหาย)
   supplierName: z.string().optional(),
   yarnType:     z.string().optional(),
   lot:          z.string().optional(),
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: parsed.error.flatten() }, { status: 400 })
   }
 
-  const { materialId, withdrawId, department, emp, spool, weightWithdrawn, note,
+  const { materialId, withdrawId, department, emp, spool, weightWithdrawn, note, withdrawDate,
           supplierName, yarnType, lot } = parsed.data
 
   // ถ้า materialId ไม่ได้ส่งมา ให้ลอง lookup จาก supplierName + yarnType + lot
@@ -65,6 +66,10 @@ export async function POST(request: NextRequest) {
         spool,
         weightWithdrawn,
         note,
+        withdrawDate: withdrawDate ? new Date(withdrawDate) : new Date(),
+        lot:          lot          || null,
+        yarnType:     yarnType     || null,
+        supplierName: supplierName || null,
         ...(resolvedMaterialId != null && { materialId: resolvedMaterialId }),
       },
     })
@@ -101,6 +106,8 @@ export async function GET(request: NextRequest) {
     where.OR = [
       { withdrawId: { contains: q, mode: 'insensitive' } },
       { department: { contains: q, mode: 'insensitive' } },
+      { yarnType:     { contains: q, mode: 'insensitive' } },
+      { supplierName: { contains: q, mode: 'insensitive' } },
       {
         material: {
           yarnType: { contains: q, mode: 'insensitive' },
@@ -147,6 +154,10 @@ const patchSchema = z.object({
   spool:           z.number().int().positive().optional(),
   weightWithdrawn: z.number().positive().optional(),
   note:            z.string().nullable().optional(),
+  withdrawDate:    z.string().optional(),
+  lot:             z.string().nullable().optional(),
+  yarnType:        z.string().nullable().optional(),
+  supplierName:    z.string().nullable().optional(),
 })
 
 export async function PATCH(request: NextRequest) {
@@ -169,9 +180,13 @@ export async function PATCH(request: NextRequest) {
     if (!existing || existing.deletedAt !== null) {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
+    const { withdrawDate, ...rest } = parsed.data
     const updated = await prisma.materialRequisition.update({
       where: { id },
-      data: parsed.data,
+      data: {
+        ...rest,
+        ...(withdrawDate !== undefined && { withdrawDate: new Date(withdrawDate) }),
+      },
     })
     return Response.json({ success: true, data: updated })
   } catch (err: unknown) {

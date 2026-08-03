@@ -1,3 +1,8 @@
+// ⚠️ เพิ่ม entry ที่นี่แล้ว อย่าลืมเพิ่ม src/app/(dashboard)/NavLinks.tsx ด้วยเสมอ —
+// NavLinks.tsx เก็บรายการเมนู sidebar ของตัวเองแยกจากไฟล์นี้ ไม่ได้ derive จาก ALL_MENUS
+// ถ้าลืม เมนูจะไม่ขึ้น sidebar แม้ requirePermission()/permission ถูกต้องและเข้าหน้าตรงผ่าน URL ได้
+// (พลาดจุดนี้มาแล้ว 2 ครั้ง: needs-supplier และ package-returns.record)
+
 export type MenuItem = {
   key: string
   label: string
@@ -24,7 +29,6 @@ export const ALL_MENUS: MenuItem[] = [
   { key: 'warehouse.stock',              label: 'สต็อกผ้า',                href: '/warehouse/stock',                  group: 'ระบบคลังสินค้า' },
   { key: 'warehouse.stock-deposit',      label: 'สต็อกผ้าฝากจัดเก็บ',      href: '/warehouse/stock-deposit',          group: 'ระบบคลังสินค้า' },
   { key: 'warehouse.reports',            label: 'รายงาน',                  href: '/warehouse/reports',                group: 'ระบบคลังสินค้า' },
-  { key: 'warehouse.returns',            label: 'ส่งคืนผ้าซัพพลายเออร์',   href: '/warehouse/returns',                group: 'ระบบคลังสินค้า' },
 
   // ─── ระบบวัตถุดิบ ──────────────────────────────────────
   { key: 'material.create',              label: 'นำเข้าวัตถุดิบ',           href: '/warehouse/material/create',        group: 'ระบบวัตถุดิบ' },
@@ -33,6 +37,11 @@ export const ALL_MENUS: MenuItem[] = [
   { key: 'material.requisition-history', label: 'ประวัติการเบิก',           href: '/warehouse/material/requisition-history', group: 'ระบบวัตถุดิบ' },
   { key: 'material.outside',             label: 'เบิกวัตถุดิบภายนอก',       href: '/warehouse/material/outside',       group: 'ระบบวัตถุดิบ' },
   { key: 'material.outside-history',     label: 'ประวัติเบิกภายนอก',        href: '/warehouse/material/outside-history', group: 'ระบบวัตถุดิบ' },
+  { key: 'material.return',              label: 'คืนวัตถุดิบเข้าสต็อก',      href: '/warehouse/material/return',        group: 'ระบบวัตถุดิบ' },
+  { key: 'material.return-history',      label: 'ประวัติการคืน',            href: '/warehouse/material/return-history', group: 'ระบบวัตถุดิบ' },
+  { key: 'material.stock',               label: 'สต็อกวัตถุดิบ',            href: '/warehouse/material/stock',         group: 'ระบบวัตถุดิบ' },
+  { key: 'package-returns.assign-supplier', label: 'มอบหมายซัพพลายเออร์คืนบรรจุภัณฑ์', href: '/warehouse/package-returns/needs-supplier', group: 'ระบบวัตถุดิบ' },
+  { key: 'package-returns.record',          label: 'บันทึกคืนบรรจุภัณฑ์',              href: '/warehouse/package-returns',         group: 'ระบบวัตถุดิบ' },
 
   // ─── ตั้งค่า ────────────────────────────────────────────
   { key: 'admin.users',                  label: 'จัดการผู้ใช้',             href: '/admin/users',                      group: 'ตั้งค่า' },

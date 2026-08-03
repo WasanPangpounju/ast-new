@@ -1,5 +1,8 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import AutocompleteInput from "@/components/AutocompleteInput";
+import ConfirmSubmitModal, { ConfirmRow } from "@/components/ConfirmSubmitModal";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -18,6 +21,13 @@ interface FormState {
   averageKg:       string;
   note:            string;
   withdrawDate:    string;
+  pallet:          string;
+  palletType:      string;
+  box:             string;
+  sack:            string;
+  sackType:        string;
+  paperBar:        string;
+  spoolType:       string;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -43,6 +53,13 @@ interface PendingItem {
   averageKg:       number;
   note:            string;
   withdrawDate:    string;
+  pallet:          number;
+  palletType:      string;
+  box:             number;
+  sack:            number;
+  sackType:        string;
+  paperBar:        number;
+  spoolType:       string;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -58,6 +75,15 @@ interface PendingItem {
 const LBS_PER_KG = 2.2046;
 const fmt3 = (n: number) => (n > 0 ? n.toFixed(3) : "");
 
+const PALLET_TYPE_LABEL: Record<string, string> = { wood: "ไม้", steel: "เหล็ก" };
+const SACK_TYPE_LABEL: Record<string, string> = { p: "ปอ", plastic: "พลาสติก" };
+const SPOOL_TYPE_LABEL: Record<string, string> = {
+  spool_plastic: "หลอดกรวย พลาสติก",
+  spool_paper: "หลอดกรวย กระดาษ",
+  spoolC_plastic: "หลอดทรงกระบอก พลาสติก",
+  spoolC_paper: "หลอดทรงกระบอก กระดาษ",
+};
+
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
 function todayStr() {
@@ -72,6 +98,19 @@ function fmtDate(iso: string) {
 
 let keySeq = 0;
 function nextKey() { return ++keySeq; }
+
+function isFormTouched(f: FormState): boolean {
+  return !!(
+    f.yarnType.trim() || f.lot.trim() || f.supplierName.trim() ||
+    f.spool.trim() || f.weightWithdrawn.trim() ||
+    f.weightPSum.trim() || f.weightKgSum.trim() ||
+    f.weightPPackage.trim() || f.weightKgPackage.trim() ||
+    f.note.trim() ||
+    f.pallet.trim() || f.box.trim() || f.sack.trim() || f.paperBar.trim() ||
+    f.returnPallet || f.returnBox || f.returnSack || f.returnSpool || f.returnPaperBar ||
+    f.recipient.trim() || f.usageNote.trim() || f.paymentComment.trim()
+  );
+}
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -102,56 +141,6 @@ const inp = "w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ou
 const ro  = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500";
 const errB = "border-red-400 focus:ring-red-400";
 
-// ─── Autocomplete ───────────────────────────────────────────────────────────────
-
-function AutocompleteInput({
-  value, onChange, onSelect, options, placeholder, inputClassName,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onSelect: (v: string) => void;
-  options: string[];
-  placeholder?: string;
-  inputClassName?: string;
-}) {
-  const [show, setShow] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setShow(false);
-      }
-    }
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, []);
-
-  return (
-    <div className="relative" ref={containerRef}>
-      <input
-        value={value}
-        onChange={(e) => { onChange(e.target.value); setShow(true); }}
-        onFocus={() => { if (options.length > 0) setShow(true); }}
-        placeholder={placeholder}
-        className={inputClassName ?? inp}
-        autoComplete="off"
-      />
-      {show && options.length > 0 && (
-        <ul className="absolute z-10 left-0 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto mt-1">
-          {options.map((opt) => (
-            <li key={opt}
-              onMouseDown={(e) => { e.preventDefault(); onSelect(opt); setShow(false); }}
-              className="px-4 py-3 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 cursor-pointer first:rounded-t-lg last:rounded-b-lg transition-colors">
-              {opt}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 // ─── Main Component ─────────────────────────────────────────────────────────────
 
 function makeEmpty(t: string): FormState {
@@ -162,6 +151,10 @@ function makeEmpty(t: string): FormState {
     weightWithdrawnP: "", weightWithdrawn: "",
     averageP: "", averageKg: "",
     note: "", withdrawDate: t,
+    pallet: "", palletType: "wood",
+    box: "",
+    sack: "", sackType: "plastic",
+    paperBar: "", spoolType: "spool_plastic",
     returnPallet: false, returnBox: false, returnSack: false,
     returnSpool: false, returnPaperBar: false,
     recipient: "", usageNote: "", paymentComment: "",
@@ -170,17 +163,22 @@ function makeEmpty(t: string): FormState {
 
 export default function MaterialOutsideForm() {
   const initDate = todayStr();
+  const router = useRouter();
   const [form, setForm]       = useState<FormState>(() => makeEmpty(initDate));
   const [errors, setErrors]   = useState<Partial<Record<string, string>>>({});
   const [saving, setSaving]   = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingSubmit, setPendingSubmit] = useState<{ items: PendingItem[]; currentKey: number | null } | null>(null);
   const [toast, setToast]     = useState<{ type: "success" | "error"; msg: string } | null>(null);
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
   const [supOptions, setSupOptions]   = useState<string[]>([]);
   const [yarnOptions, setYarnOptions] = useState<string[]>([]);
   const [lotOptions, setLotOptions]   = useState<string[]>([]);
-  const supTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const yarnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lotTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recipientOptions, setRecipientOptions] = useState<string[]>([]);
+  const supTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const yarnTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lotTimer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recipientTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formRef   = useRef(form);
 
   useEffect(() => { formRef.current = form; }, [form]);
@@ -242,6 +240,19 @@ export default function MaterialOutsideForm() {
     if (lotTimer.current) clearTimeout(lotTimer.current);
     lotTimer.current = setTimeout(() => {
       fetchLots(formRef.current.yarnType, formRef.current.supplierName, v);
+    }, 300);
+  }
+
+  function onRecipientChange(v: string) {
+    patch({ recipient: v });
+    if (recipientTimer.current) clearTimeout(recipientTimer.current);
+    recipientTimer.current = setTimeout(async () => {
+      if (!v.trim()) { setRecipientOptions([]); return; }
+      try {
+        const res = await fetch(`/api/warehouse/material/outside/recipients?q=${encodeURIComponent(v)}`);
+        const data = await res.json();
+        setRecipientOptions(data.data ?? []);
+      } catch { setRecipientOptions([]); }
     }, 300);
   }
 
@@ -315,11 +326,13 @@ export default function MaterialOutsideForm() {
 
   function validate(): boolean {
     const e: Record<string, string> = {};
+    if (!form.supplierName.trim()) e.supplierName = "ระบุบริษัท";
     if (!form.yarnType.trim()) e.yarnType = "ระบุชนิดด้าย";
     const sp = parseInt(form.spool);
     if (!form.spool || isNaN(sp) || sp < 1) e.spool = "ต้องมากกว่า 0";
     const w = parseFloat(form.weightWithdrawn);
     if (!form.weightWithdrawn || isNaN(w) || w <= 0) e.weightWithdrawn = "ต้องมากกว่า 0";
+    if (!form.recipient.trim()) e.recipient = "ระบุผู้รับวัตถุดิบ";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -343,6 +356,13 @@ export default function MaterialOutsideForm() {
       averageKg:       parseFloat(form.averageKg) || 0,
       note:            form.note,
       withdrawDate:    form.withdrawDate,
+      pallet:          parseInt(form.pallet)   || 0,
+      palletType:      form.palletType,
+      box:             parseInt(form.box)      || 0,
+      sack:            parseInt(form.sack)     || 0,
+      sackType:        form.sackType,
+      paperBar:        parseInt(form.paperBar) || 0,
+      spoolType:       form.spoolType,
       returnPallet:    form.returnPallet,
       returnBox:       form.returnBox,
       returnSack:      form.returnSack,
@@ -356,18 +376,111 @@ export default function MaterialOutsideForm() {
       ...makeEmpty(prev.withdrawDate),
     }));
     setErrors({});
-    setSupOptions([]); setYarnOptions([]); setLotOptions([]);
+    setSupOptions([]); setYarnOptions([]); setLotOptions([]); setRecipientOptions([]);
   }
 
-  // ── Save all pending ────────────────────────────────────────────────────────
+  // ── Save ─────────────────────────────────────────────────────────────────────
+  // "บันทึก" is always visible/clickable (not gated on pendingItems). It saves
+  // pendingItems PLUS whatever's currently typed in the form (if any) — the
+  // current form is always validated first so nothing typed gets silently
+  // dropped. "+ เพิ่มรายการใหม่" still works the same as before for batching.
 
-  async function handleSaveAll() {
-    if (pendingItems.length === 0) return;
+  function handleSave() {
+    const touched = isFormTouched(form);
+    if (touched) {
+      if (!validate()) return;
+    } else {
+      setErrors({});
+    }
+    if (!touched && pendingItems.length === 0) {
+      showToast("error", "กรุณากรอกข้อมูลอย่างน้อย 1 รายการ");
+      return;
+    }
+
+    const toSubmit: PendingItem[] = [...pendingItems];
+    let currentKey: number | null = null;
+    if (touched) {
+      currentKey = nextKey();
+      toSubmit.push({
+        key:             currentKey,
+        supplierName:    form.supplierName,
+        yarnType:        form.yarnType,
+        lot:             form.lot,
+        spool:           parseInt(form.spool),
+        weightPSum:      parseFloat(form.weightPSum)      || 0,
+        weightKgSum:     parseFloat(form.weightKgSum)     || 0,
+        weightPPackage:  parseFloat(form.weightPPackage)  || 0,
+        weightKgPackage: parseFloat(form.weightKgPackage) || 0,
+        weightWithdrawn: parseFloat(form.weightWithdrawn),
+        averageP:        parseFloat(form.averageP)  || 0,
+        averageKg:       parseFloat(form.averageKg) || 0,
+        note:            form.note,
+        withdrawDate:    form.withdrawDate,
+        pallet:          parseInt(form.pallet)   || 0,
+        palletType:      form.palletType,
+        box:             parseInt(form.box)      || 0,
+        sack:            parseInt(form.sack)     || 0,
+        sackType:        form.sackType,
+        paperBar:        parseInt(form.paperBar) || 0,
+        spoolType:       form.spoolType,
+        returnPallet:    form.returnPallet,
+        returnBox:       form.returnBox,
+        returnSack:      form.returnSack,
+        returnSpool:     form.returnSpool,
+        returnPaperBar:  form.returnPaperBar,
+        recipient:       form.recipient,
+        usageNote:       form.usageNote,
+        paymentComment:  form.paymentComment,
+      });
+    }
+
+    setPendingSubmit({ items: toSubmit, currentKey });
+    setConfirmOpen(true);
+  }
+
+  function buildConfirmRows(): ConfirmRow[] {
+    if (!pendingSubmit) return [];
+    return pendingSubmit.items.map((item) => {
+      const returned = (
+        [
+          [item.returnPallet, "พาเลท"], [item.returnBox, "กล่อง"], [item.returnSack, "กระสอบ"],
+          [item.returnSpool, "หลอด"], [item.returnPaperBar, "กระดาษกั้น"],
+        ] as [boolean, string][]
+      ).filter(([on]) => on).map(([, label]) => label).join(", ");
+
+      return {
+        key: item.key,
+        fields: [
+          { label: "ผู้รับวัตถุดิบ", value: item.recipient },
+          { label: "วันที่", value: fmtDate(item.withdrawDate) },
+          { label: "บริษัท", value: item.supplierName },
+          { label: "ชนิดด้าย", value: item.yarnType },
+          { label: "Lot", value: item.lot },
+          { label: "จำนวน (ลูก)", value: item.spool ? item.spool.toLocaleString() : "" },
+          { label: "น้ำหนักสุทธิ (kg)", value: item.weightWithdrawn ? item.weightWithdrawn.toFixed(3) : "" },
+          { label: "น้ำหนักเฉลี่ย/ลูก (kg)", value: item.averageKg ? item.averageKg.toFixed(3) : "" },
+          { label: "พาเลท/กล่อง/กระสอบ/กระดาษกั้น", value: [item.pallet, item.box, item.sack, item.paperBar].some((v) => v > 0) ? `${item.pallet || 0}/${item.box || 0}/${item.sack || 0}/${item.paperBar || 0}` : "" },
+          { label: "ประเภทพาเลท", value: item.pallet ? (PALLET_TYPE_LABEL[item.palletType] ?? item.palletType) : "" },
+          { label: "ประเภทกระสอบ", value: item.sack ? (SACK_TYPE_LABEL[item.sackType] ?? item.sackType) : "" },
+          { label: "ประเภทหลอด", value: item.returnSpool ? (SPOOL_TYPE_LABEL[item.spoolType] ?? item.spoolType) : "" },
+          { label: "ส่งคืนบรรจุภัณฑ์", value: returned },
+          { label: "การนำไปใช้", value: item.usageNote },
+          { label: "หมายเหตุการเงิน", value: item.paymentComment },
+          { label: "หมายเหตุ", value: item.note },
+        ],
+      };
+    });
+  }
+
+  async function submitReal() {
+    if (!pendingSubmit) return;
+    const { items: toSubmit, currentKey } = pendingSubmit;
+
     setSaving(true);
     let successCount = 0;
     const failedKeys: number[] = [];
 
-    for (const item of pendingItems) {
+    for (const item of toSubmit) {
       try {
         const res = await fetch("/api/warehouse/material/outside", {
           method: "POST",
@@ -385,6 +498,14 @@ export default function MaterialOutsideForm() {
             averageP:        item.averageP        || undefined,
             averageKg:       item.averageKg       || undefined,
             note:            item.note            || undefined,
+            withdrawDate:    item.withdrawDate     || undefined,
+            pallet:          item.pallet          || undefined,
+            palletType:      item.palletType      || undefined,
+            box:             item.box             || undefined,
+            sack:            item.sack            || undefined,
+            sackType:        item.sackType        || undefined,
+            paperBar:        item.paperBar        || undefined,
+            spoolType:       item.spoolType       || undefined,
             returnPallet:    item.returnPallet,
             returnBox:       item.returnBox,
             returnSack:      item.returnSack,
@@ -403,12 +524,23 @@ export default function MaterialOutsideForm() {
     }
 
     setSaving(false);
+    setConfirmOpen(false);
+    setPendingSubmit(null);
     if (failedKeys.length === 0) {
       setPendingItems([]);
+      setForm(makeEmpty(form.withdrawDate));
+      setErrors({});
+      setSupOptions([]); setYarnOptions([]); setLotOptions([]); setRecipientOptions([]);
       showToast("success", `บันทึกสำเร็จ ${successCount} รายการ`);
+      setTimeout(() => router.push("/warehouse/material/outside-history"), 1200);
     } else {
-      setPendingItems((prev) => prev.filter((i) => failedKeys.includes(i.key)));
-      showToast("error", `บันทึกสำเร็จ ${successCount}/${pendingItems.length} รายการ — ${failedKeys.length} รายการล้มเหลว`);
+      setPendingItems(toSubmit.filter((i) => failedKeys.includes(i.key) && i.key !== currentKey));
+      if (currentKey !== null && !failedKeys.includes(currentKey)) {
+        setForm(makeEmpty(form.withdrawDate));
+        setErrors({});
+        setSupOptions([]); setYarnOptions([]); setLotOptions([]); setRecipientOptions([]);
+      }
+      showToast("error", `บันทึกสำเร็จ ${successCount}/${toSubmit.length} รายการ — ${failedKeys.length} รายการล้มเหลว`);
     }
   }
 
@@ -438,13 +570,14 @@ export default function MaterialOutsideForm() {
         {/* ── วัตถุดิบ ──────────────────────────────────────────────── */}
         <SectionLabel>วัตถุดิบ</SectionLabel>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="บริษัท">
+          <Field label="บริษัท" required error={errors.supplierName}>
             <AutocompleteInput
               value={form.supplierName}
               onChange={onSupplierChange}
               onSelect={(v) => { patch({ supplierName: v }); setSupOptions([]); }}
               options={supOptions}
               placeholder="พิมพ์ชื่อบริษัท"
+              inputClassName={`${inp} ${errors.supplierName ? errB : ""}`}
             />
           </Field>
 
@@ -530,7 +663,7 @@ export default function MaterialOutsideForm() {
                     const p = parseFloat(e.target.value) || 0;
                     patch({ weightWithdrawnP: e.target.value, weightWithdrawn: p > 0 ? fmt3(p / LBS_PER_KG) : "" });
                   }}
-                  placeholder="ปอนด์" className={inp} />
+                  placeholder="ปอนด์" className={`${inp} ${errors.weightWithdrawn ? errB : ""}`} />
               </div>
               <div>
                 <label className="block text-xs text-gray-400 mb-1">kg <span className="text-red-500">*</span></label>
@@ -572,6 +705,54 @@ export default function MaterialOutsideForm() {
         {/* ── ส่งคืนบรรจุภัณฑ์ ─────────────────────────────────────── */}
         <SectionLabel color="amber">ส่งคืนบรรจุภัณฑ์</SectionLabel>
         <div className="p-4 space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Field label="จำนวนพาเลท">
+              <input type="number" min="0" value={form.pallet}
+                onChange={(e) => patch({ pallet: e.target.value })}
+                placeholder="จำนวน" className={inp} />
+            </Field>
+            <Field label="ประเภทพาเลท">
+              <select value={form.palletType}
+                onChange={(e) => patch({ palletType: e.target.value })}
+                className={inp}>
+                <option value="wood">ไม้</option>
+                <option value="steel">เหล็ก</option>
+              </select>
+            </Field>
+            <Field label="จำนวนกล่อง">
+              <input type="number" min="0" value={form.box}
+                onChange={(e) => patch({ box: e.target.value })}
+                placeholder="จำนวน" className={inp} />
+            </Field>
+            <Field label="จำนวนกระดาษกั้น">
+              <input type="number" min="0" value={form.paperBar}
+                onChange={(e) => patch({ paperBar: e.target.value })}
+                placeholder="จำนวน" className={inp} />
+            </Field>
+            <Field label="จำนวนกระสอบ">
+              <input type="number" min="0" value={form.sack}
+                onChange={(e) => patch({ sack: e.target.value })}
+                placeholder="จำนวน" className={inp} />
+            </Field>
+            <Field label="ประเภทกระสอบ">
+              <select value={form.sackType}
+                onChange={(e) => patch({ sackType: e.target.value })}
+                className={inp}>
+                <option value="p">ปอ</option>
+                <option value="plastic">พลาสติก</option>
+              </select>
+            </Field>
+            <Field label="ประเภทหลอด">
+              <select value={form.spoolType}
+                onChange={(e) => patch({ spoolType: e.target.value })}
+                className={`${inp} col-span-2`}>
+                <option value="spool_plastic">หลอดกรวย พลาสติก</option>
+                <option value="spool_paper">หลอดกรวย กระดาษ</option>
+                <option value="spoolC_plastic">หลอดทรงกระบอก พลาสติก</option>
+                <option value="spoolC_paper">หลอดทรงกระบอก กระดาษ</option>
+              </select>
+            </Field>
+          </div>
           <div className="flex gap-3 overflow-x-auto pb-1">
             {([
               { key: "returnPallet",   label: "พาเลท" },
@@ -592,11 +773,15 @@ export default function MaterialOutsideForm() {
             ))}
           </div>
           <div className="grid grid-cols-1 gap-3">
-            <Field label="ผู้รับวัตถุดิบ">
-              <input value={form.recipient}
-                onChange={(e) => patch({ recipient: e.target.value })}
+            <Field label="ผู้รับวัตถุดิบ" required error={errors.recipient}>
+              <AutocompleteInput
+                value={form.recipient}
+                onChange={onRecipientChange}
+                onSelect={(v) => { patch({ recipient: v }); setRecipientOptions([]); }}
+                options={recipientOptions}
                 placeholder="ผู้รับวัตถุดิบ"
-                className={inp} />
+                inputClassName={`${inp} ${errors.recipient ? errB : ""}`}
+              />
             </Field>
             <Field label="การนำไปใช้">
               <textarea value={form.usageNote}
@@ -620,9 +805,18 @@ export default function MaterialOutsideForm() {
             + เพิ่มรายการใหม่
           </button>
           <button type="button"
-            onClick={() => { setForm(makeEmpty(initDate)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); }}
+            onClick={() => { setForm(makeEmpty(initDate)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); setRecipientOptions([]); }}
             className="px-4 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
             เคลียร์ข้อมูล
+          </button>
+          <button type="button" onClick={handleSave} disabled={saving}
+            className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 transition-colors shadow-sm">
+            {saving
+              ? "กำลังบันทึก..."
+              : (() => {
+                  const total = pendingItems.length + (isFormTouched(form) ? 1 : 0);
+                  return total > 1 ? `บันทึก ${total} รายการ` : "บันทึก";
+                })()}
           </button>
         </div>
 
@@ -673,19 +867,21 @@ export default function MaterialOutsideForm() {
                 </tbody>
               </table>
             </div>
-            <div className="flex items-center justify-between mt-3">
-              <p className="text-xs text-gray-500">
-                รวม <span className="font-semibold text-gray-800">{pendingItems.length}</span> รายการ
-              </p>
-              <button type="button" onClick={handleSaveAll} disabled={saving}
-                className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium disabled:opacity-50 transition-colors shadow-sm">
-                {saving ? "กำลังบันทึก..." : `บันทึก ${pendingItems.length} รายการ`}
-              </button>
-            </div>
+            <p className="text-xs text-gray-500 mt-3">
+              รวม <span className="font-semibold text-gray-800">{pendingItems.length}</span> รายการ — กด &quot;บันทึก&quot; ด้านบนเพื่อบันทึกทั้งหมด
+            </p>
           </div>
         )}
       </div>
 
+      <ConfirmSubmitModal
+        open={confirmOpen}
+        title="ยืนยันการเบิกวัตถุดิบออกภายนอก"
+        rows={buildConfirmRows()}
+        submitting={saving}
+        onConfirm={submitReal}
+        onCancel={() => { setConfirmOpen(false); setPendingSubmit(null); }}
+      />
     </div>
   );
 }

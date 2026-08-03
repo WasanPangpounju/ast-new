@@ -1,9 +1,9 @@
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import FabricReturnPage from './FabricReturnPage'
+import MaterialReturnForm from './MaterialReturnForm'
 
-export default async function WarehouseReturnsPage() {
+export default async function MaterialReturnPage() {
   const session = await auth()
   if (!session) redirect('/login')
-  return <FabricReturnPage />
+  return <MaterialReturnForm />
 }

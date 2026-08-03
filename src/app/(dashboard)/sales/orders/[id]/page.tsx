@@ -14,7 +14,7 @@ interface OrderDetail {
   priceM: number | null;
   discountP: number | null;
   discountYard: number | null;
-  commission: number | null;
+  commission: string | null;
   orderSumYard: number | null;
   orderSumM: number | null;
   status: string | null;

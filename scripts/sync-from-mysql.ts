@@ -42,6 +42,16 @@ function i(v: any): number | null {
 function s(v: any): string | null {
   return v != null && v !== '' ? String(v) : null
 }
+// MySQL createDate columns (materials/materialstores/material_outsides) are plain
+// varchar "MM/DD/YYYY" strings — the real event date, distinct from created_at (which
+// for materialstores in particular has been proven unreliable, see material-resync-plan.md §3).
+function parseCreateDate(v: any): Date | null {
+  if (!v) return null
+  const [mm, dd, yyyy] = String(v).split('/')
+  if (!mm || !dd || !yyyy) return null
+  const dt = new Date(Number(yyyy), Number(mm) - 1, Number(dd))
+  return isNaN(dt.getTime()) ? null : dt
+}
 
 function should(table: string) {
   return ONLY_TABLES.length === 0 || ONLY_TABLES.includes(table)
@@ -87,6 +97,7 @@ async function main() {
   const [empMaterials]:  any = await db.query('SELECT * FROM empmaterials')
   const [materials]:     any = await db.query('SELECT * FROM materials ORDER BY id ASC')
   const [materialStores]: any = await db.query('SELECT * FROM materialstores ORDER BY id ASC')
+  const [materialOutsides]: any = await db.query('SELECT * FROM material_outsides ORDER BY id ASC')
 
   // สร้าง map: order.id → purchaseOrder (string) สำหรับ FK resolve
   const idToPo = new Map<number, string>(
@@ -104,6 +115,7 @@ async function main() {
   console.log(`  empMaterials:   ${empMaterials.length}`)
   console.log(`  materials:      ${materials.length}`)
   console.log(`  materialStores: ${materialStores.length}`)
+  console.log(`  materialOutsides: ${materialOutsides.length}`)
   console.log('')
 
   if (DRY_RUN) {
@@ -116,10 +128,16 @@ async function main() {
   // ── 2. TRUNCATE — full หรือ targeted ขึ้นกับ --tables flag ───────────────
   // หมายเหตุ:
   //   - orderdeadlines, ordershippeds, fabricimports, productions, inventories,
-  //     ast_bill_of_structures, material_outsides, material_returns, packages
-  //     เป็นตาราง PG-only (ไม่มีใน MySQL) → รักษาข้อมูล
-  //   - วิธี: drop FK จาก PG-only tables → TRUNCATE → re-add FK
-  //     เพราะ PostgreSQL ไม่อนุญาต TRUNCATE parent table ที่มี FK child อยู่นอก set
+  //     ast_bill_of_structures, packages เป็นตาราง PG-only (ไม่มีใน MySQL) → รักษาข้อมูล
+  //   - material_outsides ไม่ใช่ PG-only จริงๆ — MySQL มีตารางนี้อยู่ (คงชื่อเดิม) แค่ไม่เคยถูก
+  //     sync มาก่อน — resync รอบนี้แก้ให้ sync ด้วย จึงต้อง TRUNCATE พร้อม materials เหมือนกัน
+  //   - material_returns, package_return_obligations, package_return_entries เป็นฟีเจอร์ใหม่
+  //     ทั้งหมด ไม่มีต้นทาง MySQL เลย — TRUNCATE ทิ้งตามที่ user ยืนยันแล้ว (0 แถวหลัง resync
+  //     ยกเว้นแถวที่ preserve ไว้ต่างหาก ดู material-resync-plan.md §4.2)
+  //   - วิธี: drop FK จาก PG-only tables (ast_bill_of_structures/inventories/orderdeadlines/
+  //     ordershippeds/productions/packages) → TRUNCATE → re-add FK เพราะ PostgreSQL ไม่อนุญาต
+  //     TRUNCATE parent table ที่มี FK child อยู่นอก set — material_outsides/material_returns/
+  //     package_return_* ไม่ต้องทำแบบนี้แล้วเพราะอยู่ใน TRUNCATE set เดียวกับ materials พอดี
   console.log('🗑️  Truncating PostgreSQL tables...')
   if (ONLY_TABLES.length === 0) {
     // Drop FK constraints that point from PG-only tables to tables we're truncating
@@ -128,8 +146,6 @@ async function main() {
     await prisma.$executeRawUnsafe(`ALTER TABLE "orderdeadlines"         DROP CONSTRAINT IF EXISTS "orderdeadlines_purchaseOrder_fkey"`)
     await prisma.$executeRawUnsafe(`ALTER TABLE "ordershippeds"          DROP CONSTRAINT IF EXISTS "ordershippeds_purchaseOrder_fkey"`)
     await prisma.$executeRawUnsafe(`ALTER TABLE "productions"            DROP CONSTRAINT IF EXISTS "productions_purchaseOrder_fkey"`)
-    await prisma.$executeRawUnsafe(`ALTER TABLE "material_outsides"      DROP CONSTRAINT IF EXISTS "material_outsides_materialId_fkey"`)
-    await prisma.$executeRawUnsafe(`ALTER TABLE "material_returns"       DROP CONSTRAINT IF EXISTS "material_returns_materialId_fkey"`)
     await prisma.$executeRawUnsafe(`ALTER TABLE "packages"               DROP CONSTRAINT IF EXISTS "packages_supplierId_fkey"`)
 
     await prisma.$executeRawUnsafe(`
@@ -142,15 +158,22 @@ async function main() {
         "coordinators",
         "customers",
         "suppliers",
+        "package_return_entries",
+        "package_return_obligations",
+        "material_returns",
+        "material_outsides",
         "materialrequisitions",
         "materialcoordinators",
         "materials"
+      CASCADE
     `)
   } else {
-    // Targeted sync: truncate เฉพาะตารางที่ sync — FK order: requisitions → coordinators → materials
+    // Targeted sync: truncate เฉพาะตารางที่ sync — FK order: requisitions/outsides → coordinators → materials
     const targeted: string[] = []
     if (ONLY_TABLES.some(t => ['materialRequisitions', 'materials'].includes(t)))
       targeted.push('"materialrequisitions"')
+    if (ONLY_TABLES.some(t => ['materialOutsides', 'materials'].includes(t)))
+      targeted.push('"material_outsides"')
     if (ONLY_TABLES.includes('materialCoordinators'))
       targeted.push('"materialcoordinators"')
     if (ONLY_TABLES.includes('materials'))
@@ -232,7 +255,7 @@ async function main() {
       priceM:         f(o.priceM),
       discountP:      f(o.discountP),
       discountYard:   f(o.discountYard),
-      commission:     f(o.commission),
+      commission:     s(o.commission),
       createDate:     d(o.createDate),
       status:         s(o.status),
       deadline:       s(o.deadline),
@@ -392,8 +415,12 @@ async function main() {
       averageKg:      f(r.average_kg)        ?? null,
       averageP:       f(r.average_p)         ?? null,
       emp:            s(r.emp),
-      importStatus:   r.importStatus ?? r.import_status ?? 'completed',
+      // 'completed' ไม่เคยเป็นค่าจริงของ field นี้ (เก็บเลขบิล/lot ref เช่น "85046032" — ดู
+      // project_material_importstatus memory) เปลี่ยน fallback เป็น '' แทนการสร้างค่าปลอม
+      // (ไม่ใช่ null ตรงๆ เพราะ schema กำหนด importStatus เป็น String บังคับ ไม่ nullable)
+      importStatus:   r.importStatus ?? r.import_status ?? '',
       note:           s(r.note),
+      importDate:     parseCreateDate(r.createDate),
       createdAt:      r.created_at ? new Date(r.created_at) : new Date(),
       updatedAt:      r.updated_at ? new Date(r.updated_at) : new Date(),
       deletedAt:      r.deleted_at ? new Date(r.deleted_at) : null,
@@ -403,29 +430,40 @@ async function main() {
     )
   }
 
-  if (should('materialRequisitions')) {
-    // materialstores ไม่มี materialId ตรงๆ — ใช้ lot+yarnType+supplierName match best-effort
-    // materialId เป็น nullable ดังนั้น row ที่ match ไม่ได้ก็ import ได้ (materialId = null)
-    const matLookup = new Map<string, number>()
-    for (const m of materials) {
-      const key = `${m.lot ?? ''}|${m.yarnType ?? ''}|${m.supplierName ?? ''}`
-      matLookup.set(key, Number(m.id))
-    }
+  // materialstores/material_outsides ไม่มี materialId ตรงๆ — ใช้ lot+yarnType+supplierName
+  // match best-effort กับ materials ที่เพิ่งดึงมา (ใช้ร่วมกันทั้ง requisitions และ outsides)
+  // materialId เป็น nullable ดังนั้น row ที่ match ไม่ได้ก็ import ได้ (materialId = null)
+  const matLookup = new Map<string, number>()
+  for (const m of materials) {
+    const key = `${m.lot ?? ''}|${m.yarnType ?? ''}|${m.supplierName ?? ''}`
+    matLookup.set(key, Number(m.id))
+  }
 
+  if (should('materialRequisitions')) {
     let matched = 0, unmatched = 0
     const reqData = materialStores.map((r: any) => {
       const key = `${r.lot ?? ''}|${r.yarnType ?? ''}|${r.supplierName ?? ''}`
       const mid = matLookup.get(key) ?? null
       if (mid) matched++; else unmatched++
+      // materialstores.created_at ไม่น่าเชื่อถือ (พิสูจน์แล้วว่าห่างจาก createDate จริงได้เกือบ
+      // 2 เดือน แถวติดกันมี timestamp เป๊ะเหมือนกัน — ดู material-resync-plan.md §3) ใช้
+      // createDate (parsed) แทนทั้ง withdrawDate และ createdAt/updatedAt สำหรับตารางนี้เท่านั้น
+      const eventDate = parseCreateDate(r.createDate) ?? new Date()
       const base = {
         id:             Number(r.id),
         withdrawId:     r.withdrawId ?? '',
+        // denormalize ตรงบน row เสมอ (สมมาตรกับ Outside/Return) กัน materialId lookup พลาด
+        // แล้วข้อมูลหาย — เดิม script นี้ resolve แค่ materialId แล้วทิ้ง field พวกนี้ไป
+        lot:            s(r.lot),
+        yarnType:       s(r.yarnType),
+        supplierName:   s(r.supplierName),
         department:     r.department ?? '',
         spool:          i(r.spool) ?? 0,
         weightWithdrawn:f(r.weight_kg_net) ?? 0,
         note:           null as string | null,
-        createdAt:      r.created_at ? new Date(r.created_at) : new Date(),
-        updatedAt:      r.updated_at ? new Date(r.updated_at) : new Date(),
+        withdrawDate:   eventDate,
+        createdAt:      eventDate,
+        updatedAt:      eventDate,
         deletedAt:      null as Date | null,
       }
       // Prisma v7 createMany ไม่รับ null สำหรับ nullable FK — ต้อง omit field แทน
@@ -434,6 +472,60 @@ async function main() {
     console.log(`  materialRequisitions: ${matched} matched, ${unmatched} unmatched (materialId=null)`)
     await insertBatch('materialRequisitions', reqData, batch =>
       prisma.materialRequisition.createMany({ data: batch, skipDuplicates: true })
+    )
+  }
+
+  if (should('materialOutsides')) {
+    let matched = 0, unmatched = 0
+    const outData = materialOutsides.map((r: any) => {
+      const key = `${r.lot ?? ''}|${r.yarnType ?? ''}|${r.supplierName ?? ''}`
+      const mid = matLookup.get(key) ?? null
+      if (mid) matched++; else unmatched++
+
+      // material_outsides.emp ไม่มี column ปลายทางใน MaterialOutside model เลย — backfill
+      // ครั้งก่อน (มือ, ไม่ใช่ script นี้) ยัดใส่ note เป็น suffix "[legacy] emp=X, pallet/box/
+      // sack=N" ไปแล้ว (ยืนยันจาก diff จริงใน material-resync-plan.md §4) ใช้ pattern เดียวกัน
+      // ต่อเพื่อความสม่ำเสมอ
+      const extras: string[] = []
+      if (i(r.pallet)) extras.push(`pallet=${r.pallet}`)
+      if (i(r.box)) extras.push(`box=${r.box}`)
+      if (i(r.sack)) extras.push(`sack=${r.sack}`)
+      const legacyTag = `[legacy] emp=${r.emp}${extras.length ? ', ' + extras.join(', ') : ''}`
+      const note = s(r.comment) ? `${r.comment} ${legacyTag}` : legacyTag
+
+      const base = {
+        id:              Number(r.id),
+        // MySQL ไม่มี withdrawId เลย — ใช้ pattern เดียวกับที่ backfill ครั้งก่อนตั้งไว้แล้ว
+        // (ยืนยันจากข้อมูลจริงใน Postgres: id เก่าๆ มี withdrawId = "LEGACY-MO-<id>")
+        withdrawId:      `LEGACY-MO-${r.id}`,
+        lot:             s(r.lot),
+        yarnType:        r.yarnType ?? '',
+        supplierName:    s(r.supplierName),
+        spool:           i(r.spool) ?? 0,
+        weightWithdrawn: f(r.weight_kg_net) ?? 0,
+        weightPSum:      f(r.weight_p_sum),
+        weightKgSum:     f(r.weight_kg_sum),
+        weightPPackage:  f(r.weight_p_package),
+        weightKgPackage: f(r.weight_kg_package),
+        averageP:        f(r.average_p),
+        averageKg:       f(r.average_kg),
+        note,
+        withdrawDate:    parseCreateDate(r.createDate) ?? new Date(),
+        pallet:          i(r.pallet),
+        box:             i(r.box),
+        sack:            i(r.sack),
+        recipient:       s(r.recipient),
+        paymentComment:  s(r.paymentComment),
+        createdAt:       r.created_at ? new Date(r.created_at) : new Date(),
+        updatedAt:       r.updated_at ? new Date(r.updated_at) : new Date(),
+        deletedAt:       null as Date | null,
+      }
+      // Prisma v7 createMany ไม่รับ null สำหรับ nullable FK — ต้อง omit field แทน
+      return mid !== null ? { ...base, materialId: mid } : base
+    })
+    console.log(`  materialOutsides: ${matched} matched, ${unmatched} unmatched (materialId=null)`)
+    await insertBatch('materialOutsides', outData, batch =>
+      prisma.materialOutside.createMany({ data: batch, skipDuplicates: true })
     )
   }
 
@@ -455,6 +547,7 @@ async function main() {
     { table: 'fabricimports',        col: 'id' },
     { table: 'materials',            col: 'id' },
     { table: 'materialrequisitions', col: 'id' },
+    { table: 'material_outsides',    col: 'id' },
     { table: 'materialcoordinators', col: 'id' },
   ]
   for (const { table, col } of tables) {
@@ -475,15 +568,13 @@ async function main() {
     await prisma.$executeRawUnsafe(`ALTER TABLE "orderdeadlines"         ADD CONSTRAINT "orderdeadlines_purchaseOrder_fkey"         FOREIGN KEY ("purchaseOrder")  REFERENCES ast_purchaseorders("purchaseOrder") ON UPDATE CASCADE ON DELETE RESTRICT`)
     await prisma.$executeRawUnsafe(`ALTER TABLE "ordershippeds"          ADD CONSTRAINT "ordershippeds_purchaseOrder_fkey"          FOREIGN KEY ("purchaseOrder")  REFERENCES ast_purchaseorders("purchaseOrder") ON UPDATE CASCADE ON DELETE RESTRICT`)
     await prisma.$executeRawUnsafe(`ALTER TABLE "productions"            ADD CONSTRAINT "productions_purchaseOrder_fkey"            FOREIGN KEY ("purchaseOrder")  REFERENCES ast_purchaseorders("purchaseOrder") ON UPDATE CASCADE ON DELETE RESTRICT`)
-    await prisma.$executeRawUnsafe(`ALTER TABLE "material_outsides"      ADD CONSTRAINT "material_outsides_materialId_fkey"         FOREIGN KEY ("materialId")     REFERENCES materials(id) ON UPDATE CASCADE ON DELETE SET NULL`)
-    await prisma.$executeRawUnsafe(`ALTER TABLE "material_returns"       ADD CONSTRAINT "material_returns_materialId_fkey"          FOREIGN KEY ("materialId")     REFERENCES materials(id) ON UPDATE CASCADE ON DELETE SET NULL`)
     await prisma.$executeRawUnsafe(`ALTER TABLE "packages"               ADD CONSTRAINT "packages_supplierId_fkey"                  FOREIGN KEY ("supplierId")     REFERENCES suppliers(id) ON UPDATE CASCADE ON DELETE SET NULL`)
     console.log('  ✓ FK constraints restored\n')
   }
 
   // ── 6. Summary ──────────────────────────────────────────────────────────
   console.log('\n📊 สรุปข้อมูลใน PostgreSQL หลัง sync:')
-  const [c, co, su, o, fs, fa, sf, fo, mat, matReq] = await Promise.all([
+  const [c, co, su, o, fs, fa, sf, fo, mat, matReq, matOut] = await Promise.all([
     prisma.customer.count(),
     prisma.coordinator.count(),
     prisma.supplier.count(),
@@ -494,6 +585,7 @@ async function main() {
     prisma.fabricOut.count(),
     prisma.material.count(),
     prisma.materialRequisition.count(),
+    prisma.materialOutside.count(),
   ])
   console.log(`
   Customers:            ${c}
@@ -506,6 +598,7 @@ async function main() {
   Fabric Outs:          ${fo}
   Materials:            ${mat}
   Material Requisitions:${matReq}
+  Material Outsides:    ${matOut}
   `)
 
   await db.end()

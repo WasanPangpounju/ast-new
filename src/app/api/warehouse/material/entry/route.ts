@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 import type { Prisma } from '@/generated/prisma/client/client'
+import { resolveSupplierId, buildImportObligationsData } from '@/lib/package-return-obligations'
 
 const itemSchema = z.object({
   lot: z.string().min(1),
@@ -9,12 +10,22 @@ const itemSchema = z.object({
   yarnType: z.string().min(1),
   supplierName: z.string().min(1),
   importStatus: z.string().optional(),
+  importDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   weightKgNet: z.number().positive(),
   weightKgSum: z.number().positive(),
   weightKgPackage: z.number().positive(),
   pallet: z.number().int().optional(),
+  palletType: z.string().optional(),
   box: z.number().int().optional(),
   sack: z.number().int().optional(),
+  sackType: z.string().optional(),
+  paperBar: z.number().int().optional(),
+  spoolType: z.string().optional(),
+  returnPallet: z.boolean().optional(),
+  returnBox: z.boolean().optional(),
+  returnSack: z.boolean().optional(),
+  returnSpool: z.boolean().optional(),
+  returnPaperBar: z.boolean().optional(),
   weightPNet: z.number().optional(),
   weightPSum: z.number().optional(),
   weightPPackage: z.number().optional(),
@@ -44,8 +55,24 @@ export async function POST(request: NextRequest) {
   const { items } = parsed.data
 
   try {
-    const created = await prisma.material.createManyAndReturn({
-      data: items.map(item => ({ ...item })),
+    const created = await prisma.$transaction(async tx => {
+      const materials = []
+      for (const item of items) {
+        const material = await tx.material.create({
+          data: {
+            ...item,
+            importDate: item.importDate ? new Date(item.importDate) : undefined,
+          },
+        })
+        materials.push(material)
+
+        const { supplierId, needsSupplierAssignment } = await resolveSupplierId(tx, material.supplierName)
+        const obligationsData = buildImportObligationsData(material, supplierId, needsSupplierAssignment)
+        if (obligationsData.length > 0) {
+          await tx.packageReturnObligation.createMany({ data: obligationsData })
+        }
+      }
+      return materials
     })
     return Response.json({ success: true, count: created.length, ids: created.map(r => r.id) })
   } catch (err: unknown) {
@@ -69,10 +96,10 @@ export async function GET(request: NextRequest) {
   if (status) where.importStatus = status
 
   if (dateFrom || dateTo) {
-    const createdAtFilter: Prisma.DateTimeFilter = {}
-    if (dateFrom) createdAtFilter.gte = new Date(dateFrom)
-    if (dateTo) createdAtFilter.lte = new Date(dateTo)
-    where.createdAt = createdAtFilter
+    const importDateFilter: Prisma.DateTimeFilter = {}
+    if (dateFrom) importDateFilter.gte = new Date(dateFrom)
+    if (dateTo) importDateFilter.lte = new Date(dateTo)
+    where.importDate = importDateFilter
   }
 
   if (q) {
@@ -90,7 +117,7 @@ export async function GET(request: NextRequest) {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { importDate: { sort: 'desc', nulls: 'last' } },
       }),
       prisma.material.count({ where }),
     ])

@@ -199,16 +199,30 @@ const navItems: NavItem[] = [
         menuKey: "material.outside-history",
       },
       {
+        href: "/warehouse/material/return",
+        label: "คืนวัตถุดิบเข้าสต็อก",
+        menuKey: "material.return",
+      },
+      {
+        href: "/warehouse/material/return-history",
+        label: "ประวัติการคืน",
+        menuKey: "material.return-history",
+      },
+      {
         href: "/warehouse/material/stock",
         label: "สต็อกวัตถุดิบ",
         menuKey: "material.stock",
       },
       {
-        href: "/warehouse/returns",
-        label: "ส่งคืนบรรจุภัณฑ์",
-        menuKey: "warehouse.returns",
+        href: "/warehouse/package-returns",
+        label: "บันทึกคืนบรรจุภัณฑ์",
+        menuKey: "package-returns.record",
       },
-     
+      {
+        href: "/warehouse/package-returns/needs-supplier",
+        label: "มอบหมายซัพพลายเออร์คืนบรรจุภัณฑ์",
+        menuKey: "package-returns.assign-supplier",
+      },
     ],
   },
   {
