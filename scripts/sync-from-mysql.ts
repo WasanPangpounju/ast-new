@@ -458,6 +458,7 @@ async function main() {
         yarnType:       s(r.yarnType),
         supplierName:   s(r.supplierName),
         department:     r.department ?? '',
+        emp:            s(r.emp),
         spool:          i(r.spool) ?? 0,
         weightWithdrawn:f(r.weight_kg_net) ?? 0,
         note:           null as string | null,
