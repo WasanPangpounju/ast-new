@@ -42,7 +42,9 @@ export async function GET(request: NextRequest) {
     const baseWhere = search
       ? (() => {
           const esc = search.replace(/'/g, "''")
-          return `deleted_at IS NULL AND ("customerName" ILIKE '%${esc}%' OR "receiveName" ILIKE '%${esc}%')`
+          const digits = search.replace(/[^0-9]/g, '')
+          const vatNoClause = digits ? ` OR CAST("vatNo" AS TEXT) LIKE '%${digits}%'` : ''
+          return `deleted_at IS NULL AND ("customerName" ILIKE '%${esc}%' OR "receiveName" ILIKE '%${esc}%' OR "vatType" ILIKE '%${esc}%'${vatNoClause})`
         })()
       : `deleted_at IS NULL`
 
