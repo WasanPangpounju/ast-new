@@ -233,7 +233,7 @@ export default function MaterialRequisitionForm({ emp }: Props) {
         const res = await fetch(`/api/warehouse/material/average-weight?${p}`);
         const data = await res.json();
         if (avgEpochRef.current !== epoch) return; // บริบทเปลี่ยนไปแล้วระหว่างรอ response ทิ้งผลลัพธ์นี้
-        avgKgRef.current = typeof data.averageKg === "number" ? data.averageKg : null;
+        avgKgRef.current = typeof data.averageKgTotal === "number" ? data.averageKgTotal : null;
         applyAutoWeight(formRef.current.spool);
       } catch {
         if (avgEpochRef.current === epoch) avgKgRef.current = null;
