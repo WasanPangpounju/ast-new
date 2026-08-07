@@ -23,17 +23,19 @@ async function getFlatByCompany(q: string, page: number, limit: number, offset: 
       ORDER BY "remainingSpool" DESC
       LIMIT ${limit} OFFSET ${offset}
     `),
-    prisma.$queryRawUnsafe<{ total: number; totalRemainingSpool: number; totalRemainingWeightKg: number }[]>(`
+    prisma.$queryRawUnsafe<{ total: number; totalRemainingSpool: number; totalRemainingWeightKg: number; totalRemainingWeightKgEstimated: number }[]>(`
       SELECT
         COUNT(*)::int                                        AS "total",
         COALESCE(SUM(t."remainingSpool"), 0)::int            AS "totalRemainingSpool",
-        COALESCE(SUM(t."remainingWeightKg"), 0)              AS "totalRemainingWeightKg"
+        COALESCE(SUM(t."remainingWeightKg"), 0)              AS "totalRemainingWeightKg",
+        COALESCE(SUM(t."remainingWeightKgEstimated"), 0)     AS "totalRemainingWeightKgEstimated"
       FROM (${companyCte}) t
     `),
   ])
 
   const total = summary?.total ?? 0
   const totalRemainingWeightKg = summary?.totalRemainingWeightKg ?? 0
+  const totalRemainingWeightKgEstimated = summary?.totalRemainingWeightKgEstimated ?? 0
 
   return Response.json({
     mode: 'flat' as const,
@@ -44,6 +46,8 @@ async function getFlatByCompany(q: string, page: number, limit: number, offset: 
     totalRemainingSpool: summary?.totalRemainingSpool ?? 0,
     totalRemainingWeightKg,
     totalRemainingWeightLb: totalRemainingWeightKg * KG_TO_LB,
+    totalRemainingWeightKgEstimated,
+    totalRemainingWeightLbEstimated: totalRemainingWeightKgEstimated * KG_TO_LB,
   })
 }
 
@@ -83,11 +87,12 @@ async function getGrouped(q: string, page: number, limit: number, offset: number
       ORDER BY "remainingSpool" DESC
       LIMIT ${limit} OFFSET ${offset}
     `),
-    prisma.$queryRawUnsafe<{ total: number; totalRemainingSpool: number; totalRemainingWeightKg: number }[]>(`
+    prisma.$queryRawUnsafe<{ total: number; totalRemainingSpool: number; totalRemainingWeightKg: number; totalRemainingWeightKgEstimated: number }[]>(`
       SELECT
         COUNT(*)::int                                        AS "total",
         COALESCE(SUM(t."remainingSpool"), 0)::int            AS "totalRemainingSpool",
-        COALESCE(SUM(t."remainingWeightKg"), 0)              AS "totalRemainingWeightKg"
+        COALESCE(SUM(t."remainingWeightKg"), 0)              AS "totalRemainingWeightKg",
+        COALESCE(SUM(t."remainingWeightKgEstimated"), 0)     AS "totalRemainingWeightKgEstimated"
       FROM (${groupedCte}) t
     `),
   ])
@@ -124,6 +129,7 @@ async function getGrouped(q: string, page: number, limit: number, offset: number
 
   const total = summary?.total ?? 0
   const totalRemainingWeightKg = summary?.totalRemainingWeightKg ?? 0
+  const totalRemainingWeightKgEstimated = summary?.totalRemainingWeightKgEstimated ?? 0
 
   return Response.json({
     mode: 'grouped' as const,
@@ -134,6 +140,8 @@ async function getGrouped(q: string, page: number, limit: number, offset: number
     totalRemainingSpool: summary?.totalRemainingSpool ?? 0,
     totalRemainingWeightKg,
     totalRemainingWeightLb: totalRemainingWeightKg * KG_TO_LB,
+    totalRemainingWeightKgEstimated,
+    totalRemainingWeightLbEstimated: totalRemainingWeightKgEstimated * KG_TO_LB,
   })
 }
 

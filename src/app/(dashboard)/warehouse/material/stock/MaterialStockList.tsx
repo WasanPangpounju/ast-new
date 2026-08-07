@@ -13,6 +13,8 @@ interface StockResponseBase {
   totalRemainingSpool: number;
   totalRemainingWeightKg: number;
   totalRemainingWeightLb: number;
+  totalRemainingWeightKgEstimated: number;
+  totalRemainingWeightLbEstimated: number;
 }
 interface GroupedStockResponse extends StockResponseBase {
   mode: "grouped";
@@ -64,8 +66,8 @@ export default function MaterialStockList() {
   const total = data?.total ?? 0;
   const totalPages = data?.totalPages ?? 1;
   const totalSpool = data?.totalRemainingSpool ?? 0;
-  const totalWeight = Number(data?.totalRemainingWeightKg ?? 0);
-  const totalWeightLb = Number(data?.totalRemainingWeightLb ?? 0);
+  const totalWeight = Number(data?.totalRemainingWeightKgEstimated ?? 0);
+  const totalWeightLb = Number(data?.totalRemainingWeightLbEstimated ?? 0);
   const from = total === 0 ? 0 : (page - 1) * LIMIT + 1;
   const to = Math.min(page * LIMIT, total);
   const isEmpty = mode === "grouped" ? groups.length === 0 : flatRows.length === 0;

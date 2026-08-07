@@ -44,3 +44,7 @@ next-env.d.ts
 .aider*
 /material_outsides_after_backfill.sql
 /*.sql
+
+# customer-data exports (investigation/report scratch space — never commit)
+/backups/
+/scripts/exports/

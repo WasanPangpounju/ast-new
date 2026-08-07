@@ -57,7 +57,7 @@ export default function MaterialStockGroupRow({ group, rowNumber, striped, expan
           <WeightValue kg={Number(group.usedWeightKg)} lb={group.usedWeightLb} unit={weightUnit} />
         </td>
         <td className="px-3 py-2 text-right font-semibold text-gray-900">
-          <WeightValue kg={Number(group.remainingWeightKg)} lb={group.remainingWeightLb} unit={weightUnit} />
+          <WeightValue kg={Number(group.remainingWeightKgEstimated)} lb={group.remainingWeightLbEstimated} unit={weightUnit} />
         </td>
         <td className="px-3 py-2 text-center">
           <StatusBadge remaining={group.remainingSpool} total={group.totalSpool} />
@@ -81,7 +81,7 @@ export default function MaterialStockGroupRow({ group, rowNumber, striped, expan
             <WeightValue kg={Number(c.usedWeightKg)} lb={c.usedWeightLb} unit={weightUnit} />
           </td>
           <td className="px-3 py-2 text-right text-gray-800">
-            <WeightValue kg={Number(c.remainingWeightKg)} lb={c.remainingWeightLb} unit={weightUnit} />
+            <WeightValue kg={Number(c.remainingWeightKgEstimated)} lb={c.remainingWeightLbEstimated} unit={weightUnit} />
           </td>
           <td className="px-3 py-2 text-center">
             <StatusBadge remaining={c.remainingSpool} total={c.totalSpool} />

@@ -44,6 +44,10 @@ export interface MaterialStockCompanyRow {
   usedWeightLb: number
   remainingWeightKg: number
   remainingWeightLb: number
+  // remainingSpool × avgWeightPerSpool (totalWeightKg/totalSpool) — ไม่ติดลบเหมือน remainingWeightKg เดิม
+  // ดู docs/remaining-weight-formula-change-impact-assessment.md
+  remainingWeightKgEstimated: number
+  remainingWeightLbEstimated: number
 }
 
 export interface MaterialStockGroup {
@@ -58,6 +62,8 @@ export interface MaterialStockGroup {
   usedWeightLb: number
   remainingWeightKg: number
   remainingWeightLb: number
+  remainingWeightKgEstimated: number
+  remainingWeightLbEstimated: number
   autoExpand: boolean
   companies: MaterialStockCompanyRow[]
 }

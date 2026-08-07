@@ -1,14 +1,20 @@
 export const esc = (s: string) => s.replace(/'/g, "''")
 export const KG_TO_LB = 2.20462
 
-export function withLb<T extends { totalWeightKg: number | string; usedWeightKg: number | string; remainingWeightKg: number | string }>(
+export function withLb<T extends {
+  totalWeightKg: number | string
+  usedWeightKg: number | string
+  remainingWeightKg: number | string
+  remainingWeightKgEstimated: number | string
+}>(
   row: T
-): T & { totalWeightLb: number; usedWeightLb: number; remainingWeightLb: number } {
+): T & { totalWeightLb: number; usedWeightLb: number; remainingWeightLb: number; remainingWeightLbEstimated: number } {
   return {
     ...row,
     totalWeightLb: Number(row.totalWeightKg) * KG_TO_LB,
     usedWeightLb: Number(row.usedWeightKg) * KG_TO_LB,
     remainingWeightLb: Number(row.remainingWeightKg) * KG_TO_LB,
+    remainingWeightLbEstimated: Number(row.remainingWeightKgEstimated) * KG_TO_LB,
   }
 }
 
@@ -64,6 +70,12 @@ export const MATERIAL_STOCK_JOINS = `
 `
 
 // remaining = total - เบิกใช้งาน(req + req_orphan) - เบิกภายนอก(out_w) + คืนเข้าสต็อก(ret)
+//
+// remainingWeightKgEstimated = remainingSpool × avgWeightPerSpool (avgWeightPerSpool = totalWeightKg/totalSpool)
+// เก็บคู่กับ remainingWeightKg เดิม (ไม่แก้ทับ) — remainingSpool ไม่เคยติดลบในระบบ (ยืนยันจากการสืบสวน
+// docs/tc45-g10-stock-remaining-anomaly-investigation.md) ดังนั้นตัวประมาณนี้ไม่ติดลบเสมอ ต่างจาก
+// remainingWeightKg เดิมที่เป็นผลต่างสะสมจริงและมี catastrophic cancellation ทำให้ดูผิดปกติ/ติดลบได้เมื่อของเหลือน้อย
+// (ดู docs/remaining-weight-formula-change-impact-assessment.md) — remainingWeightKg เดิมยังคงไว้เป็น diagnostic signal
 export const AGGREGATE_COLUMNS = `
   SUM(m.spool)::int                                                            AS "totalSpool",
   (COALESCE(SUM(req.spool), 0) + COALESCE(SUM(out_w.spool), 0)
@@ -80,5 +92,13 @@ export const AGGREGATE_COLUMNS = `
     - COALESCE(SUM(req.weight), 0)
     - COALESCE(SUM(out_w.weight), 0)
     - COALESCE(SUM(req_orphan.weight), 0)
-    + COALESCE(SUM(ret.weight), 0))                                            AS "remainingWeightKg"
+    + COALESCE(SUM(ret.weight), 0))                                            AS "remainingWeightKg",
+  CASE WHEN SUM(m.spool) > 0 THEN
+    (SUM(m.spool)
+      - COALESCE(SUM(req.spool), 0)
+      - COALESCE(SUM(out_w.spool), 0)
+      - COALESCE(SUM(req_orphan.spool), 0)
+      + COALESCE(SUM(ret.spool), 0))::float
+    * (SUM(m."weightKgSum") / SUM(m.spool))
+  ELSE 0 END                                                                    AS "remainingWeightKgEstimated"
 `

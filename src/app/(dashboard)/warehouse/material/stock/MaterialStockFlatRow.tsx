@@ -28,7 +28,7 @@ export default function MaterialStockFlatRow({ row, rowNumber, striped, weightUn
         <WeightValue kg={Number(row.usedWeightKg)} lb={row.usedWeightLb} unit={weightUnit} />
       </td>
       <td className="px-3 py-2 text-right font-semibold text-gray-900">
-        <WeightValue kg={Number(row.remainingWeightKg)} lb={row.remainingWeightLb} unit={weightUnit} />
+        <WeightValue kg={Number(row.remainingWeightKgEstimated)} lb={row.remainingWeightLbEstimated} unit={weightUnit} />
       </td>
       <td className="px-3 py-2 text-center">
         <StatusBadge remaining={row.remainingSpool} total={row.totalSpool} />
