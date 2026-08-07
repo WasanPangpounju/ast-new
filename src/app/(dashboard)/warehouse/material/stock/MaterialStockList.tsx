@@ -35,7 +35,7 @@ export default function MaterialStockList() {
   const [appliedQ, setAppliedQ] = useState("");
   const [appliedType, setAppliedType] = useState<string | undefined>(undefined);
   const [page, setPage] = useState(1);
-  const [weightUnit, setWeightUnit] = useState<WeightUnit>("kg");
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>("lb");
   const [expandedOverride, setExpandedOverride] = useState<Record<string, boolean>>({});
   const [suggestions, setSuggestions] = useState<AutocompleteOption[]>([]);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
