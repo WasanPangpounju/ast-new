@@ -83,7 +83,12 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams
-  const q = (params.get('q') ?? '').trim()
+  const withdrawId   = (params.get('withdrawId')   ?? '').trim()
+  const department   = (params.get('department')   ?? '').trim()
+  const emp          = (params.get('emp')          ?? '').trim()
+  const yarnType     = (params.get('yarnType')     ?? '').trim()
+  const supplierName = (params.get('supplierName') ?? '').trim()
+  const lot          = (params.get('lot')          ?? '').trim()
   const materialIdParam = params.get('materialId')
   const materialId = materialIdParam ? parseInt(materialIdParam, 10) : undefined
   const page = Math.max(1, parseInt(params.get('page') ?? '1', 10))
@@ -102,19 +107,38 @@ export async function GET(request: NextRequest) {
     where.createdAt = createdAtFilter
   }
 
-  if (q) {
-    where.OR = [
-      { withdrawId: { contains: q, mode: 'insensitive' } },
-      { department: { contains: q, mode: 'insensitive' } },
-      { yarnType:     { contains: q, mode: 'insensitive' } },
-      { supplierName: { contains: q, mode: 'insensitive' } },
-      {
-        material: {
-          yarnType: { contains: q, mode: 'insensitive' },
-        },
-      },
-    ]
+  if (withdrawId) where.withdrawId = { contains: withdrawId, mode: 'insensitive' }
+  if (department) where.department = { contains: department, mode: 'insensitive' }
+  if (emp)        where.emp        = { contains: emp, mode: 'insensitive' }
+
+  // yarnType/supplierName/lot: รายการเก่าบางส่วนพึ่ง relation `material` เท่านั้น
+  // (ก่อนแก้ให้เก็บลง column โดยตรง) จึงต้อง fallback ไปหา field ผ่าน relation ด้วย
+  const andConditions: Prisma.MaterialRequisitionWhereInput[] = []
+  if (yarnType) {
+    andConditions.push({
+      OR: [
+        { yarnType: { contains: yarnType, mode: 'insensitive' } },
+        { material: { yarnType: { contains: yarnType, mode: 'insensitive' } } },
+      ],
+    })
   }
+  if (supplierName) {
+    andConditions.push({
+      OR: [
+        { supplierName: { contains: supplierName, mode: 'insensitive' } },
+        { material: { supplierName: { contains: supplierName, mode: 'insensitive' } } },
+      ],
+    })
+  }
+  if (lot) {
+    andConditions.push({
+      OR: [
+        { lot: { contains: lot, mode: 'insensitive' } },
+        { material: { lot: { contains: lot, mode: 'insensitive' } } },
+      ],
+    })
+  }
+  if (andConditions.length > 0) where.AND = andConditions
 
   try {
     const [data, total] = await Promise.all([

@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import Link from "next/link";
+import AutocompleteInput from "@/components/AutocompleteInput";
+import { useFieldSuggestions } from "@/hooks/useFieldSuggestions";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -36,6 +38,21 @@ function rowSupplierName(r: Pick<Requisition, "supplierName" | "material">): str
 function rowLot(r: Pick<Requisition, "lot" | "material">): string | null {
   return r.lot ?? r.material?.lot ?? null;
 }
+
+interface SearchFilters {
+  withdrawId: string;
+  department: string;
+  emp: string;
+  yarnType: string;
+  supplierName: string;
+  lot: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+const emptyFilters: SearchFilters = {
+  withdrawId: "", department: "", emp: "", yarnType: "", supplierName: "", lot: "", dateFrom: "", dateTo: "",
+};
 
 interface RequisitionResponse {
   data: Requisition[];
@@ -112,13 +129,15 @@ const inp = "w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-non
 export default function RequisitionHistoryList() {
   const qc = useQueryClient();
 
-  const [q, setQ]               = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo]     = useState("");
-  const [appliedQ, setAppliedQ]               = useState("");
-  const [appliedDateFrom, setAppliedDateFrom] = useState("");
-  const [appliedDateTo, setAppliedDateTo]     = useState("");
+  const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
+  const [applied, setApplied] = useState<SearchFilters>(emptyFilters);
   const [page, setPage] = useState(1);
+
+  const departmentSuggest = useFieldSuggestions("/api/warehouse/material/departments");
+  const empSuggest        = useFieldSuggestions("/api/warehouse/material/employees");
+  const yarnTypeSuggest   = useFieldSuggestions("/api/warehouse/material/yarn-types");
+  const supplierSuggest   = useFieldSuggestions("/api/warehouse/material/suppliers");
+  const lotSuggest        = useFieldSuggestions("/api/warehouse/material/lots");
 
   const [selected, setSelected] = useState<Requisition | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("detail");
@@ -131,12 +150,17 @@ export default function RequisitionHistoryList() {
 
   // ── list query ──────────────────────────────────────────────────────────────
   const { data, isFetching, isError } = useQuery<RequisitionResponse>({
-    queryKey: ["material-requisition", appliedQ, appliedDateFrom, appliedDateTo, page],
+    queryKey: ["material-requisition", applied, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
-      if (appliedQ)        p.set("q",        appliedQ);
-      if (appliedDateFrom) p.set("dateFrom",  appliedDateFrom);
-      if (appliedDateTo)   p.set("dateTo",    appliedDateTo);
+      if (applied.withdrawId)   p.set("withdrawId",   applied.withdrawId);
+      if (applied.department)   p.set("department",   applied.department);
+      if (applied.emp)          p.set("emp",          applied.emp);
+      if (applied.yarnType)     p.set("yarnType",     applied.yarnType);
+      if (applied.supplierName) p.set("supplierName", applied.supplierName);
+      if (applied.lot)          p.set("lot",          applied.lot);
+      if (applied.dateFrom)     p.set("dateFrom",     applied.dateFrom);
+      if (applied.dateTo)       p.set("dateTo",       applied.dateTo);
       const res = await fetch(`/api/warehouse/material/requisition?${p}`);
       if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
       return res.json();
@@ -151,16 +175,19 @@ export default function RequisitionHistoryList() {
   const to         = Math.min(page * LIMIT, total);
 
   // ── handlers ────────────────────────────────────────────────────────────────
+  function setField<K extends keyof SearchFilters>(key: K, value: SearchFilters[K]) {
+    setFilters((f) => ({ ...f, [key]: value }));
+  }
   function handleSearch() {
     setPage(1);
-    setAppliedQ(q);
-    setAppliedDateFrom(dateFrom);
-    setAppliedDateTo(dateTo);
+    setApplied(filters);
   }
   function handleClear() {
-    setQ(""); setDateFrom(""); setDateTo("");
-    setAppliedQ(""); setAppliedDateFrom(""); setAppliedDateTo("");
+    setFilters(emptyFilters);
+    setApplied(emptyFilters);
     setPage(1);
+    departmentSuggest.clear(); empSuggest.clear(); yarnTypeSuggest.clear();
+    supplierSuggest.clear(); lotSuggest.clear();
   }
 
   function openModal(row: Requisition) {
@@ -284,23 +311,83 @@ export default function RequisitionHistoryList() {
 
       {/* Search */}
       <div className="bg-white border border-gray-200 p-4 mb-4 shadow-sm">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="md:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">ค้นหา (แผนก, ชนิดด้าย, บริษัท, เลขที่เบิก)</label>
-            <input value={q} onChange={(e) => setQ(e.target.value)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">แผนก</label>
+            <AutocompleteInput
+              value={filters.department}
+              onChange={(v) => { setField("department", v); departmentSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("department", v); departmentSuggest.clear(); }}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="พิมพ์ค้นหา..."
+              options={departmentSuggest.options}
+              placeholder="พิมพ์แผนก..."
+              inputClassName={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">ชนิดด้าย</label>
+            <AutocompleteInput
+              value={filters.yarnType}
+              onChange={(v) => { setField("yarnType", v); yarnTypeSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("yarnType", v); yarnTypeSuggest.clear(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              options={yarnTypeSuggest.options}
+              placeholder="พิมพ์ชนิดด้าย..."
+              inputClassName={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">บริษัท</label>
+            <AutocompleteInput
+              value={filters.supplierName}
+              onChange={(v) => { setField("supplierName", v); supplierSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("supplierName", v); supplierSuggest.clear(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              options={supplierSuggest.options}
+              placeholder="พิมพ์ชื่อบริษัท..."
+              inputClassName={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Lot</label>
+            <AutocompleteInput
+              value={filters.lot}
+              onChange={(v) => { setField("lot", v); lotSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("lot", v); lotSuggest.clear(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              options={lotSuggest.options}
+              placeholder="พิมพ์ Lot..."
+              inputClassName={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">พนักงาน</label>
+            <AutocompleteInput
+              value={filters.emp}
+              onChange={(v) => { setField("emp", v); empSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("emp", v); empSuggest.clear(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              options={empSuggest.options}
+              placeholder="พิมพ์ชื่อพนักงาน..."
+              inputClassName={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">เลขที่เบิก</label>
+            <input value={filters.withdrawId} onChange={(e) => setField("withdrawId", e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="พิมพ์เลขที่เบิก..."
               className={inp} />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">วันที่เริ่ม</label>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={inp} />
+            <input type="date" value={filters.dateFrom} onChange={(e) => setField("dateFrom", e.target.value)} className={inp} />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">วันที่สิ้นสุด</label>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inp} />
+            <input type="date" value={filters.dateTo} onChange={(e) => setField("dateTo", e.target.value)} className={inp} />
           </div>
-          <div className="flex items-end gap-2 md:col-span-4">
+          <div className="flex items-end gap-2">
             <button type="button" onClick={handleSearch}
               className="px-6 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium">ค้นหา</button>
             <button type="button" onClick={handleClear}

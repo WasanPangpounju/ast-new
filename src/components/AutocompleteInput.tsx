@@ -11,7 +11,7 @@ function normalize(opt: AutocompleteOption): { value: string; label: string; typ
 }
 
 export default function AutocompleteInput({
-  value, onChange, onSelect, options, placeholder, inputClassName, id, typeLabels,
+  value, onChange, onSelect, options, placeholder, inputClassName, id, typeLabels, onKeyDown,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -21,6 +21,7 @@ export default function AutocompleteInput({
   inputClassName?: string;
   id?: string;
   typeLabels?: Record<string, string>;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }) {
   const [show, setShow] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -42,6 +43,7 @@ export default function AutocompleteInput({
         value={value}
         onChange={(e) => { onChange(e.target.value); setShow(true); }}
         onFocus={() => { if (options.length > 0) setShow(true); }}
+        onKeyDown={onKeyDown}
         placeholder={placeholder}
         className={inputClassName ?? inp}
         autoComplete="off"

@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import Link from "next/link";
+import AutocompleteInput from "@/components/AutocompleteInput";
+import { useFieldSuggestions } from "@/hooks/useFieldSuggestions";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,17 @@ interface EntryResponse {
 }
 
 type Tab = "detail" | "edit";
+
+interface Filters {
+  lot: string;
+  yarnType: string;
+  supplierName: string;
+  emp: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+const emptyFilters: Filters = { lot: "", yarnType: "", supplierName: "", emp: "", dateFrom: "", dateTo: "" };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -98,13 +111,14 @@ export default function MaterialHistoryList() {
   const qc = useQueryClient();
 
   // list filters
-  const [q, setQ]               = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo]     = useState("");
-  const [appliedQ, setAppliedQ]               = useState("");
-  const [appliedDateFrom, setAppliedDateFrom] = useState("");
-  const [appliedDateTo, setAppliedDateTo]     = useState("");
+  const [filters, setFilters] = useState<Filters>(emptyFilters);
+  const [applied, setApplied] = useState<Filters>(emptyFilters);
   const [page, setPage] = useState(1);
+
+  const lotSuggest      = useFieldSuggestions("/api/warehouse/material/lots");
+  const yarnTypeSuggest = useFieldSuggestions("/api/warehouse/material/yarn-types");
+  const supplierSuggest = useFieldSuggestions("/api/warehouse/material/suppliers");
+  const empSuggest      = useFieldSuggestions("/api/warehouse/material/employees");
 
   // modal
   const [selected, setSelected]   = useState<Material | null>(null);
@@ -116,12 +130,15 @@ export default function MaterialHistoryList() {
 
   // ── list query ──────────────────────────────────────────────────────────────
   const { data, isFetching, isError } = useQuery<EntryResponse>({
-    queryKey: ["material-entry", appliedQ, appliedDateFrom, appliedDateTo, page],
+    queryKey: ["material-entry", applied, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
-      if (appliedQ)        p.set("q",        appliedQ);
-      if (appliedDateFrom) p.set("dateFrom",  appliedDateFrom);
-      if (appliedDateTo)   p.set("dateTo",    appliedDateTo);
+      if (applied.lot)          p.set("lot",          applied.lot);
+      if (applied.yarnType)     p.set("yarnType",     applied.yarnType);
+      if (applied.supplierName) p.set("supplierName", applied.supplierName);
+      if (applied.emp)          p.set("emp",          applied.emp);
+      if (applied.dateFrom)     p.set("dateFrom",      applied.dateFrom);
+      if (applied.dateTo)       p.set("dateTo",        applied.dateTo);
       const res = await fetch(`/api/warehouse/material/entry?${p}`);
       if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
       return res.json();
@@ -148,12 +165,18 @@ export default function MaterialHistoryList() {
   const to         = Math.min(page * LIMIT, total);
 
   // ── handlers ────────────────────────────────────────────────────────────────
+  function setField<K extends keyof Filters>(key: K, value: Filters[K]) {
+    setFilters((f) => ({ ...f, [key]: value }));
+  }
   function handleSearch() {
-    setPage(1); setAppliedQ(q); setAppliedDateFrom(dateFrom); setAppliedDateTo(dateTo);
+    setPage(1);
+    setApplied(filters);
   }
   function handleClear() {
-    setQ(""); setDateFrom(""); setDateTo("");
-    setAppliedQ(""); setAppliedDateFrom(""); setAppliedDateTo(""); setPage(1);
+    setFilters(emptyFilters);
+    setApplied(emptyFilters);
+    setPage(1);
+    lotSuggest.clear(); yarnTypeSuggest.clear(); supplierSuggest.clear(); empSuggest.clear();
   }
 
   function openModal(row: Material) {
@@ -249,25 +272,66 @@ export default function MaterialHistoryList() {
 
       {/* Search */}
       <div className="bg-white border border-gray-200 p-4 mb-4 shadow-sm">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="md:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">ค้นหา (Lot, ชนิดด้าย, บริษัท, พนักงาน)</label>
-            <input value={q} onChange={(e) => setQ(e.target.value)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">ชนิดด้าย</label>
+            <AutocompleteInput
+              value={filters.yarnType}
+              onChange={(v) => { setField("yarnType", v); yarnTypeSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("yarnType", v); yarnTypeSuggest.clear(); }}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="พิมพ์ค้นหา..."
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              options={yarnTypeSuggest.options}
+              placeholder="พิมพ์ชนิดด้าย..."
+              inputClassName="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">บริษัท</label>
+            <AutocompleteInput
+              value={filters.supplierName}
+              onChange={(v) => { setField("supplierName", v); supplierSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("supplierName", v); supplierSuggest.clear(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              options={supplierSuggest.options}
+              placeholder="พิมพ์ชื่อบริษัท..."
+              inputClassName="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Lot</label>
+            <AutocompleteInput
+              value={filters.lot}
+              onChange={(v) => { setField("lot", v); lotSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("lot", v); lotSuggest.clear(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              options={lotSuggest.options}
+              placeholder="พิมพ์ Lot..."
+              inputClassName="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">พนักงาน</label>
+            <AutocompleteInput
+              value={filters.emp}
+              onChange={(v) => { setField("emp", v); empSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("emp", v); empSuggest.clear(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              options={empSuggest.options}
+              placeholder="พิมพ์ชื่อพนักงาน..."
+              inputClassName="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">วันที่เริ่ม</label>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)}
+            <input type="date" value={filters.dateFrom} onChange={(e) => setField("dateFrom", e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">วันที่สิ้นสุด</label>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)}
+            <input type="date" value={filters.dateTo} onChange={(e) => setField("dateTo", e.target.value)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-          <div className="flex items-end gap-2 md:col-span-4">
+          <div className="flex items-end gap-2 md:col-span-3">
             <button type="button" onClick={handleSearch}
               className="px-6 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium">ค้นหา</button>
             <button type="button" onClick={handleClear}

@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import Link from "next/link";
+import AutocompleteInput from "@/components/AutocompleteInput";
+import { useFieldSuggestions } from "@/hooks/useFieldSuggestions";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -44,6 +46,20 @@ interface Outside {
     supplierName: string;
   } | null;
 }
+
+interface SearchFilters {
+  withdrawId: string;
+  yarnType: string;
+  supplierName: string;
+  lot: string;
+  recipient: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+const emptyFilters: SearchFilters = {
+  withdrawId: "", yarnType: "", supplierName: "", lot: "", recipient: "", dateFrom: "", dateTo: "",
+};
 
 interface OutsideResponse {
   data: Outside[];
@@ -180,13 +196,14 @@ function DRow({ label, value }: { label: string; value: React.ReactNode }) {
 export default function OutsideHistoryList() {
   const qc = useQueryClient();
 
-  const [q, setQ]               = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo]     = useState("");
-  const [appliedQ, setAppliedQ]               = useState("");
-  const [appliedDateFrom, setAppliedDateFrom] = useState("");
-  const [appliedDateTo, setAppliedDateTo]     = useState("");
+  const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
+  const [applied, setApplied] = useState<SearchFilters>(emptyFilters);
   const [page, setPage] = useState(1);
+
+  const yarnTypeSuggest  = useFieldSuggestions("/api/warehouse/material/yarn-types");
+  const supplierSuggest  = useFieldSuggestions("/api/warehouse/material/suppliers");
+  const lotSuggest       = useFieldSuggestions("/api/warehouse/material/lots");
+  const recipientSuggest = useFieldSuggestions("/api/warehouse/material/outside/recipients");
 
   const [selected, setSelected]   = useState<Outside | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("detail");
@@ -200,12 +217,16 @@ export default function OutsideHistoryList() {
 
   // ── list query ──────────────────────────────────────────────────────────────
   const { data, isFetching, isError } = useQuery<OutsideResponse>({
-    queryKey: ["material-outside", appliedQ, appliedDateFrom, appliedDateTo, page],
+    queryKey: ["material-outside", applied, page],
     queryFn: async () => {
       const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
-      if (appliedQ)        p.set("q",       appliedQ);
-      if (appliedDateFrom) p.set("dateFrom", appliedDateFrom);
-      if (appliedDateTo)   p.set("dateTo",   appliedDateTo);
+      if (applied.withdrawId)   p.set("withdrawId",   applied.withdrawId);
+      if (applied.yarnType)     p.set("yarnType",     applied.yarnType);
+      if (applied.supplierName) p.set("supplierName", applied.supplierName);
+      if (applied.lot)          p.set("lot",          applied.lot);
+      if (applied.recipient)    p.set("recipient",    applied.recipient);
+      if (applied.dateFrom)     p.set("dateFrom",      applied.dateFrom);
+      if (applied.dateTo)       p.set("dateTo",        applied.dateTo);
       const res = await fetch(`/api/warehouse/material/outside?${p}`);
       if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
       return res.json();
@@ -220,16 +241,18 @@ export default function OutsideHistoryList() {
   const to         = Math.min(page * LIMIT, total);
 
   // ── handlers ────────────────────────────────────────────────────────────────
+  function setField<K extends keyof SearchFilters>(key: K, value: SearchFilters[K]) {
+    setFilters((f) => ({ ...f, [key]: value }));
+  }
   function handleSearch() {
     setPage(1);
-    setAppliedQ(q);
-    setAppliedDateFrom(dateFrom);
-    setAppliedDateTo(dateTo);
+    setApplied(filters);
   }
   function handleClear() {
-    setQ(""); setDateFrom(""); setDateTo("");
-    setAppliedQ(""); setAppliedDateFrom(""); setAppliedDateTo("");
+    setFilters(emptyFilters);
+    setApplied(emptyFilters);
     setPage(1);
+    yarnTypeSuggest.clear(); supplierSuggest.clear(); lotSuggest.clear(); recipientSuggest.clear();
   }
 
   function openModal(row: Outside) {
@@ -438,23 +461,71 @@ export default function OutsideHistoryList() {
 
       {/* Search */}
       <div className="bg-white border border-gray-200 p-4 mb-4 shadow-sm">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="md:col-span-2">
-            <label className="block text-xs text-gray-500 mb-1">ค้นหา (ชนิดด้าย, บริษัท, Lot, เลขที่เบิก)</label>
-            <input value={q} onChange={(e) => setQ(e.target.value)}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">ชนิดด้าย</label>
+            <AutocompleteInput
+              value={filters.yarnType}
+              onChange={(v) => { setField("yarnType", v); yarnTypeSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("yarnType", v); yarnTypeSuggest.clear(); }}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="พิมพ์ค้นหา..."
+              options={yarnTypeSuggest.options}
+              placeholder="พิมพ์ชนิดด้าย..."
+              inputClassName={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">บริษัท</label>
+            <AutocompleteInput
+              value={filters.supplierName}
+              onChange={(v) => { setField("supplierName", v); supplierSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("supplierName", v); supplierSuggest.clear(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              options={supplierSuggest.options}
+              placeholder="พิมพ์ชื่อบริษัท..."
+              inputClassName={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Lot</label>
+            <AutocompleteInput
+              value={filters.lot}
+              onChange={(v) => { setField("lot", v); lotSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("lot", v); lotSuggest.clear(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              options={lotSuggest.options}
+              placeholder="พิมพ์ Lot..."
+              inputClassName={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">ผู้รับวัตถุดิบ</label>
+            <AutocompleteInput
+              value={filters.recipient}
+              onChange={(v) => { setField("recipient", v); recipientSuggest.fetchSuggestions(v); }}
+              onSelect={(v) => { setField("recipient", v); recipientSuggest.clear(); }}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              options={recipientSuggest.options}
+              placeholder="พิมพ์ชื่อผู้รับ..."
+              inputClassName={inp}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">เลขที่เบิก</label>
+            <input value={filters.withdrawId} onChange={(e) => setField("withdrawId", e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              placeholder="พิมพ์เลขที่เบิก..."
               className={inp} />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">วันที่เริ่ม</label>
-            <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={inp} />
+            <input type="date" value={filters.dateFrom} onChange={(e) => setField("dateFrom", e.target.value)} className={inp} />
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">วันที่สิ้นสุด</label>
-            <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={inp} />
+            <input type="date" value={filters.dateTo} onChange={(e) => setField("dateTo", e.target.value)} className={inp} />
           </div>
-          <div className="flex items-end gap-2 md:col-span-4">
+          <div className="flex items-end gap-2">
             <button type="button" onClick={handleSearch}
               className="px-6 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium">ค้นหา</button>
             <button type="button" onClick={handleClear}

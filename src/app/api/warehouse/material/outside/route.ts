@@ -200,7 +200,11 @@ export async function PATCH(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams
-  const q         = (params.get('q') ?? '').trim()
+  const withdrawId   = (params.get('withdrawId')   ?? '').trim()
+  const yarnType     = (params.get('yarnType')     ?? '').trim()
+  const supplierName = (params.get('supplierName') ?? '').trim()
+  const lot          = (params.get('lot')          ?? '').trim()
+  const recipient    = (params.get('recipient')    ?? '').trim()
   const page      = Math.max(1, parseInt(params.get('page')  ?? '1',  10))
   const limit     = Math.min(100, Math.max(1, parseInt(params.get('limit') ?? '20', 10)))
   const dateFrom  = params.get('dateFrom')
@@ -215,14 +219,11 @@ export async function GET(request: NextRequest) {
     where.createdAt = createdAtFilter
   }
 
-  if (q) {
-    where.OR = [
-      { withdrawId:   { contains: q, mode: 'insensitive' } },
-      { yarnType:     { contains: q, mode: 'insensitive' } },
-      { supplierName: { contains: q, mode: 'insensitive' } },
-      { lot:          { contains: q, mode: 'insensitive' } },
-    ]
-  }
+  if (withdrawId)   where.withdrawId   = { contains: withdrawId, mode: 'insensitive' }
+  if (yarnType)     where.yarnType     = { contains: yarnType, mode: 'insensitive' }
+  if (supplierName) where.supplierName = { contains: supplierName, mode: 'insensitive' }
+  if (lot)          where.lot          = { contains: lot, mode: 'insensitive' }
+  if (recipient)    where.recipient    = { contains: recipient, mode: 'insensitive' }
 
   try {
     const [data, total] = await Promise.all([

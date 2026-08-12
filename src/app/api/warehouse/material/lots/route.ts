@@ -7,12 +7,10 @@ export async function GET(request: NextRequest) {
   const supplierName = (params.get('supplierName') ?? '').trim()
   const q           = (params.get('q')           ?? '').trim()
 
-  if (!yarnType) return Response.json({ data: [] })
-
   const rows = await prisma.material.findMany({
     where: {
       deletedAt: null,
-      yarnType,
+      ...(yarnType    ? { yarnType }    : {}),
       ...(supplierName ? { supplierName } : {}),
       ...(q ? { lot: { contains: q, mode: 'insensitive' } } : {}),
     },
