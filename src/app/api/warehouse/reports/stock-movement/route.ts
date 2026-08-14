@@ -22,16 +22,20 @@ export async function GET(request: NextRequest) {
 
   const vatFilter = (vatType && vatType !== 'all') ? `AND "vatType" = '${vatType}'` : ''
 
+  // หน้ากว้างในข้อมูลจริงมีหลายรูปแบบ เช่น "50", "50/V1-V1", "50/V-PST"
+  // ให้ถือว่าเป็นหน้ากว้างเดียวกันโดยพิจารณาเฉพาะตัวเลขนำหน้า (ก่อน "/" หรือช่องว่างหรืออักษร)
+  const fabricWNorm = `COALESCE(substring(trim("fabricW") from '^([0-9]+(?:\\.[0-9]+)?)'), trim("fabricW"))`
+
   const inRows = await prisma.$queryRawUnsafe(`
     SELECT
       "fabricStruct",
       "fabricPattern",
-      "fabricW",
+      ${fabricWNorm} as "fabricW",
       SUM(fold)::int as fold,
       ROUND(SUM("sumYard")::numeric, 2)::float as "sumYard"
     FROM stockfabrics
     WHERE deleted_at IS NULL ${dateFilter}
-    GROUP BY "fabricStruct", "fabricPattern", "fabricW"
+    GROUP BY "fabricStruct", "fabricPattern", ${fabricWNorm}
     ORDER BY "fabricStruct"
   `) as any[]
 
@@ -39,12 +43,12 @@ export async function GET(request: NextRequest) {
     SELECT
       "fabricStruct",
       "fabricPattern",
-      "fabricW",
+      ${fabricWNorm} as "fabricW",
       SUM(fold)::int as fold,
       ROUND(SUM("sumYard")::numeric, 2)::float as "sumYard"
     FROM fabricouts
     WHERE deleted_at IS NULL ${vatFilter} ${dateFilter}
-    GROUP BY "fabricStruct", "fabricPattern", "fabricW"
+    GROUP BY "fabricStruct", "fabricPattern", ${fabricWNorm}
     ORDER BY "fabricStruct"
   `) as any[]
 

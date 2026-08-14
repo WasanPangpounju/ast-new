@@ -25,21 +25,26 @@ export async function GET(request: NextRequest) {
 
   const whereClause = conditions.join(' AND ')
 
+  // เดิม GROUP BY แค่ vatType+vatNo (ต่อบิล) แล้วใช้ MAX() ดึง fabricStruct/fabricPattern/fabricW มาโชว์
+  // ทำให้บิลที่มีสินค้าหลายชนิดผ้า/หน้ากว้างถูกยุบเหลือแถวเดียว โดยแต่ละคอลัมน์เอาค่า MAX ของตัวเอง
+  // แยกกัน กลายเป็นชุดค่าที่ไม่เคยอยู่ด้วยกันจริงในข้อมูลต้นฉบับ (เช่น struct จากรายการหนึ่ง ผสมกับ
+  // pattern จากอีกรายการหนึ่ง) จึงเพิ่ม fabricStruct/fabricPattern/fabricW เข้าไปใน GROUP BY ด้วย
+  // ให้แต่ละชนิดผ้า/หน้ากว้างในบิลเดียวกันแยกเป็นคนละแถว ค่าที่แสดงจึงตรงกับข้อมูลจริงเสมอ
   const rows = await prisma.$queryRawUnsafe(`
     SELECT
       f."vatType",
       f."vatNo"::text as "vatNo",
       MAX(f."customerName") as "customerName",
-      MAX(f."fabricStruct") as "fabricStruct",
-      MAX(f."fabricPattern") as "fabricPattern",
-      MAX(f."fabricW") as "fabricW",
+      f."fabricStruct",
+      f."fabricPattern",
+      f."fabricW",
       SUM(f.fold)::int as fold,
       ROUND(SUM(f."sumYard")::numeric, 2)::float as "sumYard",
       MIN(f."createDate") as "createDate"
     FROM fabricouts f
     WHERE ${whereClause}
-    GROUP BY f."vatType", f."vatNo"
-    ORDER BY MIN(f."createDate") DESC
+    GROUP BY f."vatType", f."vatNo", f."fabricStruct", f."fabricPattern", f."fabricW"
+    ORDER BY MIN(f."createDate") DESC, f."vatType", f."vatNo"
     LIMIT 500
   `) as any[]
 
