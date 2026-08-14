@@ -44,12 +44,14 @@ interface SummaryDetail {
   outFold: number;
   balanceYard: number;
   balanceFold: number;
+  balanceAnomaly?: boolean;
 }
 
 interface StockSummary {
   totalIn: number;
   totalOut: number;
   balance: number;
+  balanceAnomaly?: boolean;
   asOfDate: string;
   details: SummaryDetail[];
 }
@@ -637,7 +639,7 @@ function Tab3() {
         <td>${r.fabricW || "-"}</td>
         <td style="text-align:right">${Number(r.inYard).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</td>
         <td style="text-align:right">${Number(r.outYard).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</td>
-        <td style="text-align:right">${Number(r.balanceYard).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</td>
+        <td style="text-align:right">${r.balanceAnomaly ? "0 !" : Number(r.balanceYard).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</td>
       </tr>
     `,
       )
@@ -676,7 +678,7 @@ function Tab3() {
       <td colspan="4" style="text-align:right">รวมทั้งหมด</td>
       <td style="text-align:right">${Number(result.totalIn).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</td>
       <td style="text-align:right">${Number(result.totalOut).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</td>
-      <td style="text-align:right">${Number(result.balance).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</td>
+      <td style="text-align:right">${result.balanceAnomaly ? "0 !" : Number(result.balance).toLocaleString("th-TH", { maximumFractionDigits: 2 })}</td>
     </tr>
   </tfoot>
 </table>
@@ -756,7 +758,7 @@ function Tab3() {
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
             <div className="text-xs text-green-600 mb-1">คงเหลือสะสม</div>
             <div className="text-xl font-bold text-green-800">
-              {fmtNum(result.balance)}
+              {result.balanceAnomaly ? "0 !" : fmtNum(result.balance)}
             </div>
             <div className="text-xs text-green-500">หลา</div>
           </div>
@@ -814,9 +816,9 @@ function Tab3() {
                     {fmtNum(r.outYard)}
                   </td>
                   <td
-                    className={`px-3 py-1.5 text-right font-medium ${r.balanceYard < 0 ? "text-red-600" : "text-green-700"}`}
+                    className={`px-3 py-1.5 text-right font-medium ${r.balanceAnomaly ? "text-red-600" : r.balanceYard < 0 ? "text-red-600" : "text-green-700"}`}
                   >
-                    {fmtNum(r.balanceYard)}
+                    {r.balanceAnomaly ? "0 !" : fmtNum(r.balanceYard)}
                   </td>
                 </tr>
               ))
@@ -835,7 +837,7 @@ function Tab3() {
                   {fmtNum(result.totalOut)}
                 </td>
                 <td className="px-3 py-2 text-right text-blue-800">
-                  {fmtNum(result.balance)}
+                  {result.balanceAnomaly ? "0 !" : fmtNum(result.balance)}
                 </td>
               </tr>
             </tfoot>

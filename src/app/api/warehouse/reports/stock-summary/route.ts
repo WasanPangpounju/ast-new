@@ -55,9 +55,22 @@ export async function GET(request: NextRequest) {
   // แต่การ์ดสรุปยอด (totalIn/totalOut) รวมทุกแถวรวมถึงแถวที่ถูกตัดออกด้วย ทำให้ยอดในตาราง
   // ไม่เท่ากับยอดในการ์ดสรุป (ยิ่งเห็นชัดขึ้นหลังรวมกลุ่มด้วยหน้ากว้าง normalize เพราะมีแถวที่ยอดเท่ากันพอดีเพิ่มขึ้น)
   // จึงตัด filter ออก ให้ตารางแสดงครบทุกกลุ่มเพื่อให้ผลรวมตรงกับการ์ดเสมอ
+  //
+  // ถ้ารับเข้าสะสม = 0 หรือน้อยกว่าส่งออกสะสม (ข้อมูลผิดปกติ เช่น struct/หน้ากว้างตอนนำเข้ากับ
+  // ตอนเบิกออกถูกบันทึกไม่ตรงกัน ทำให้คงเหลือติดลบ) ให้ตรึงรับเข้า = ส่งออก และคงเหลือ = 0
+  // พร้อมตั้ง flag ไว้ให้ฝั่งแสดงผลรู้ว่าเป็นค่าที่ถูกตรึง (ไม่ใช่คงเหลือ 0 จากยอดสมดุลจริง)
+  const clamp = (inYard: number, outYard: number) => {
+    const anomaly = inYard === 0 || inYard < outYard
+    return anomaly
+      ? { inYard: outYard, outYard, balanceYard: 0, balanceAnomaly: true }
+      : { inYard, outYard, balanceYard: inYard - outYard, balanceAnomaly: false }
+  }
+
   const details = Array.from(map.values())
-    .map(r => ({ ...r, balanceYard: r.inYard - r.outYard }))
+    .map(r => ({ fabricStruct: r.fabricStruct, fabricPattern: r.fabricPattern, fabricW: r.fabricW, ...clamp(r.inYard, r.outYard) }))
     .sort((a, b) => (a.fabricStruct ?? '').localeCompare(b.fabricStruct ?? '', 'th'))
 
-  return Response.json({ totalIn, totalOut, balance: totalIn - totalOut, asOfDate, details })
+  const totals = clamp(totalIn, totalOut)
+
+  return Response.json({ totalIn: totals.inYard, totalOut: totals.outYard, balance: totals.balanceYard, balanceAnomaly: totals.balanceAnomaly, asOfDate, details })
 }
