@@ -1,9 +1,16 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 
 const GROUPS = 8
 const ROWS = 20
 const TOTAL_SLOTS = GROUPS * ROWS
+
+function newSessionId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2)
+}
 
 interface StockResult {
   fabricStruct: string
@@ -30,6 +37,15 @@ interface Props {
 }
 
 export default function PurchaseStockForm({ emp }: Props) {
+  const router = useRouter()
+
+  // refId doubles as the DB refId: generated client-side and sent with every
+  // save so "บันทึกรายการถัดไป" keeps appending rows to the same stockfabrics
+  // record instead of starting a new one each click. A fresh id is issued
+  // once the record is closed (บันทึกเสร็จสิ้น / ยกเลิก).
+  const [refId, setRefId] = useState<string>(newSessionId)
+  const [savedCount, setSavedCount] = useState(0)
+
   const [createDate, setCreateDate] = useState(new Date().toISOString().slice(0, 10))
   const [supplier, setSupplier] = useState('')
   const [billRef, setBillRef] = useState('')
@@ -96,6 +112,8 @@ export default function PurchaseStockForm({ emp }: Props) {
   const totalFold = yardNums.filter(v => v > 0).length
   const totalYard = yardNums.reduce((a, b) => a + b, 0)
 
+  // ปิด record ปัจจุบัน: เคลียร์ทุก field และออก refId ใหม่สำหรับ record ถัดไป
+  // (เรียกจากปุ่ม "ยกเลิก" และท้าย handleSave "บันทึกเสร็จสิ้น")
   function resetForm() {
     setYards(Array(TOTAL_SLOTS).fill(''))
     setStockSearch('')
@@ -108,9 +126,69 @@ export default function PurchaseStockForm({ emp }: Props) {
     setCustomer('')
     setPricePerYard('')
     setDyeLot('')
+    setSavedCount(0)
+    setRefId(newSessionId())
+  }
+
+  // เคลียร์เฉพาะตารางหลา/พับ ใช้ต่อจากบันทึกสำเร็จของ "บันทึกรายการถัดไป" เท่านั้น
+  // คงค่า field หลัก (ผู้ขาย/เลขบิล/ลูกค้า/รหัสผ้า/โครงสร้างผ้า ฯลฯ) ไว้ทั้งหมด เพราะ
+  // รายการถัดไปในชุดเดียวกัน (refId เดิม) เป็นผ้าล็อตเดิม ต่างกันแค่จำนวนหลาที่คีย์รอบใหม่
+  function resetYardsOnly() {
+    setYards(Array(TOTAL_SLOTS).fill(''))
   }
 
   async function handleSave() {
+    const hasPendingRows = totalFold > 0
+    // ถ้ายังไม่เคยบันทึกอะไรในชุดนี้เลย (savedCount === 0) ต้องกรอกให้ครบก่อนเสมอ
+    // ถ้าเคยบันทึกไปแล้วอย่างน้อย 1 รายการ และกริดปัจจุบันว่าง ให้ถือว่าจบชุดได้เลย
+    if (hasPendingRows || savedCount === 0) {
+      if (!supplier.trim()) {
+        alert('กรุณากรอกชื่อผู้ขาย / โรงงาน')
+        return
+      }
+      if (!billRef.trim()) {
+        alert('กรุณากรอกเลขที่บิล / ใบส่งของ')
+        return
+      }
+      if (!fabricStruct || totalFold === 0) {
+        alert('กรุณากรอกข้อมูลให้ครบ: โครงสร้างผ้า และหลาผ้าอย่างน้อย 1 ช่อง')
+        return
+      }
+    }
+    setSaving(true)
+    try {
+      if (hasPendingRows) {
+        const res = await fetch('/api/warehouse/stock/purchase/entry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fabricStruct, fabricPattern, fabricW, fabricCode,
+            customer: customer || null,
+            supplier, billRef,
+            pricePerYard: pricePerYard ? parseFloat(pricePerYard) : null,
+            dyeLot: dyeLot || null,
+            emp, createDate, yards,
+            // ผูกรายการสุดท้ายนี้เข้า record เดิม (refId เดิม) ถ้าเคยกด
+            // "บันทึกรายการถัดไป" มาก่อน แล้วค่อยปิด record ผ่าน resetForm()
+            refId,
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error ?? 'บันทึกไม่สำเร็จ')
+        alert(`บันทึกสำเร็จ ${data.count} รายการ`)
+      }
+      resetForm()
+      router.push('/warehouse/stock/purchase/review')
+    } catch (err: unknown) {
+      alert('เกิดข้อผิดพลาด: ' + (err instanceof Error ? err.message : String(err)))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ต่อเนื่อง: บันทึกรายการปัจจุบัน แล้วเคลียร์เฉพาะตารางหลา (ไม่ redirect,
+  // ไม่ reset field หลัก) เพื่อคีย์รายการถัดไปในชุดเดียวกัน (refId เดิม) ได้ทันที
+  async function handleSaveNext() {
     if (!supplier.trim()) {
       alert('กรุณากรอกชื่อผู้ขาย / โรงงาน')
       return
@@ -135,12 +213,13 @@ export default function PurchaseStockForm({ emp }: Props) {
           pricePerYard: pricePerYard ? parseFloat(pricePerYard) : null,
           dyeLot: dyeLot || null,
           emp, createDate, yards,
+          refId,
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'บันทึกไม่สำเร็จ')
-      alert(`บันทึกสำเร็จ ${data.count} รายการ`)
-      resetForm()
+      setSavedCount(c => c + 1)
+      resetYardsOnly()
     } catch (err: unknown) {
       alert('เกิดข้อผิดพลาด: ' + (err instanceof Error ? err.message : String(err)))
     } finally {
@@ -384,13 +463,22 @@ export default function PurchaseStockForm({ emp }: Props) {
 
       {/* Buttons */}
       <div className="flex items-center justify-end gap-3">
+        {savedCount > 0 && (
+          <span className="mr-auto text-xs text-gray-500">
+            บันทึกแล้ว {savedCount} รายการ
+          </span>
+        )}
         <button type="button" onClick={resetForm}
           className="px-4 py-2 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600">
           ยกเลิก
         </button>
+        <button onClick={handleSaveNext} disabled={saving}
+          className="px-6 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium disabled:opacity-50">
+          {saving ? 'กำลังบันทึก...' : 'บันทึกรายการถัดไป'}
+        </button>
         <button onClick={handleSave} disabled={saving}
           className="px-6 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium disabled:opacity-50">
-          {saving ? 'กำลังบันทึก...' : 'บันทึก'}
+          {saving ? 'กำลังบันทึก...' : 'บันทึกเสร็จสิ้น'}
         </button>
       </div>
     </div>

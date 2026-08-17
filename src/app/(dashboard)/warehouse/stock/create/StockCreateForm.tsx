@@ -1,11 +1,18 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import AiPhotoModal from "@/components/AiPhotoModal";
 import { AiReadResult } from "@/hooks/useAiPhotoRead";
 
 const GROUPS = 8;
 const ROWS = 20;
 const TOTAL_SLOTS = GROUPS * ROWS;
+
+function newSessionId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+}
 
 interface StockResult {
   fabricStruct: string;
@@ -32,6 +39,7 @@ interface Props {
 }
 
 export default function StockCreateForm({ emp }: Props) {
+  const router = useRouter();
   const [createDate, setCreateDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
@@ -58,6 +66,13 @@ export default function StockCreateForm({ emp }: Props) {
     Array(TOTAL_SLOTS).fill(null),
   );
   const [saving, setSaving] = useState(false);
+
+  // groupId doubles as the DB refId: generated client-side and sent with
+  // every save so "บันทึกรายการถัดไป" keeps appending rows to the same
+  // stockfabrics record instead of starting a new one each click. A fresh
+  // id is issued once the record is closed (บันทึกเสร็จสิ้น / ยกเลิก).
+  const [groupId, setGroupId] = useState<string>(newSessionId);
+  const [savedCount, setSavedCount] = useState(0);
 
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [aiFilledFields, setAiFilledFields] = useState<Set<string>>(new Set());
@@ -173,6 +188,8 @@ export default function StockCreateForm({ emp }: Props) {
     return {};
   }
 
+  // ปิด record ปัจจุบัน: เคลียร์ทุก field และออก groupId/refId ใหม่สำหรับ
+  // record ถัดไป (เรียกจากปุ่ม "ยกเลิก" และท้าย handleSave "บันทึกเสร็จสิ้น")
   function resetForm() {
     setYards(Array(TOTAL_SLOTS).fill(""));
     setStockSearch("");
@@ -183,6 +200,8 @@ export default function StockCreateForm({ emp }: Props) {
     setCustomer("");
     setAiFilledFields(new Set());
     setAiLowConfidence(new Set());
+    setSavedCount(0);
+    setGroupId(newSessionId());
   }
 
   async function handleSave() {
@@ -204,12 +223,62 @@ export default function StockCreateForm({ emp }: Props) {
           emp,
           createDate,
           yards,
+          // ถ้าเคยกด "บันทึกรายการถัดไป" มาก่อน ให้ผูก rows ชุดสุดท้ายนี้เข้า
+          // record เดิม (groupId เดิม) แล้วค่อยปิด record ผ่าน resetForm()
+          refId: groupId,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "บันทึกไม่สำเร็จ");
       alert(`บันทึกสำเร็จ ${data.count} รายการ`);
       resetForm();
+      router.push("/warehouse/fabric-in/review");
+    } catch (err: unknown) {
+      alert(
+        "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)),
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // เคลียร์เฉพาะตารางหลา/พับ ใช้ต่อจากบันทึกสำเร็จของ "บันทึกรายการถัดไป" เท่านั้น
+  // คงค่า fabricStruct/Pattern/W/Code/customer/createDate ไว้ทั้งหมด เพราะรายการ
+  // ถัดไปในชุดเดียวกัน (groupId เดิม) เป็นผ้าตัวเดิม ต่างกันแค่จำนวนพับ/หลาที่คีย์รอบใหม่
+  function resetYardsOnly() {
+    setYards(Array(TOTAL_SLOTS).fill(""));
+  }
+
+  // ต่อเนื่อง: บันทึกรายการปัจจุบัน แล้วเคลียร์เฉพาะ field รายการ (ไม่ redirect,
+  // ไม่ reset วันที่/พนักงาน) เพื่อคีย์รายการถัดไปในชุดเดียวกัน (groupId เดิม) ได้ทันที
+  async function handleSaveNext() {
+    if (!fabricStruct || totalFold === 0) {
+      alert("กรุณากรอกข้อมูลให้ครบ: โครงสร้างผ้า และหลาผ้าอย่างน้อย 1 ช่อง");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/warehouse/stock/entry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fabricStruct,
+          fabricPattern,
+          fabricW,
+          fabricCode,
+          customer: customer || "AST",
+          emp,
+          createDate,
+          yards,
+          // ส่ง refId เดิมทุกครั้ง เพื่อให้ rows ชุดใหม่ผูกเข้า record เดิม
+          // แทนที่จะสร้าง record ใหม่ทุกครั้งที่กด
+          refId: groupId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "บันทึกไม่สำเร็จ");
+      setSavedCount((c) => c + 1);
+      resetYardsOnly();
     } catch (err: unknown) {
       alert(
         "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)),
@@ -606,6 +675,11 @@ export default function StockCreateForm({ emp }: Props) {
 
       {/* Buttons */}
       <div className="flex items-center justify-end gap-3">
+        {savedCount > 0 && (
+          <span className="mr-auto text-xs text-gray-500">
+            บันทึกแล้ว {savedCount} รายการ
+          </span>
+        )}
         <button
           type="button"
           onClick={resetForm}
@@ -614,7 +688,7 @@ export default function StockCreateForm({ emp }: Props) {
           ยกเลิก
         </button>
         <button
-          onClick={handleSave}
+          onClick={handleSaveNext}
           disabled={saving}
           className="px-6 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium disabled:opacity-50"
         >

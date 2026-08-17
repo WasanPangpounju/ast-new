@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { fabricStruct, fabricPattern, fabricW, fabricCode, customer, emp, createDate, yards, supplier, billRef, pricePerYard, dyeLot } = body
+  const { fabricStruct, fabricPattern, fabricW, fabricCode, customer, emp, createDate, yards, supplier, billRef, pricePerYard, dyeLot, refId: refIdInput } = body
 
   if (!fabricStruct || !emp) {
     return Response.json({ error: 'fabricStruct and emp are required' }, { status: 400 })
@@ -24,7 +24,10 @@ export async function POST(request: NextRequest) {
     .map((y, i) => ({ yard: parseFloat(y), slot: i + 1 }))
     .filter(r => r.yard > 0)
 
-  const refId = randomUUID()
+  // caller may pass an existing refId to append these rows to a record it
+  // already started (e.g. "บันทึกรายการถัดไป" continuing the same batch);
+  // otherwise start a new record as before.
+  const refId = typeof refIdInput === 'string' && refIdInput ? refIdInput : randomUUID()
   const date = new Date(createDate)
 
   await prisma.stockFabric.createMany({

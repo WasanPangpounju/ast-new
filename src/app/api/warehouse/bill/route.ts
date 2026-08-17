@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { vatType, vatNo, customerName, receiveName, orderId, purchaseOrder,
           fabricStruct, fabricPattern, fabricW, createDate, yards,
-          isDeposit, altFabricStruct, altPurchaseOrder } = body
+          isDeposit, altFabricStruct, altPurchaseOrder, refId: refIdInput } = body
 
   if (!vatType || !customerName) {
     return Response.json({ error: 'vatType and customerName are required' }, { status: 400 })
@@ -138,11 +138,16 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'At least one yard value is required' }, { status: 400 })
   }
 
+  // caller may pass an existing refId to append more rolls to a bill it
+  // already started (e.g. "บันทึกรายการถัดไป" continuing the same delivery);
+  // only block as a real duplicate when a different session opened this vatNo.
+  const refId = typeof refIdInput === 'string' && refIdInput ? refIdInput : randomUUID()
+
   const existing = await prisma.fabricOut.findFirst({
     where: { vatType, vatNo: Number(vatNo), deletedAt: null },
-    select: { id: true },
+    select: { id: true, refId: true },
   })
-  if (existing) {
+  if (existing && existing.refId !== refId) {
     return Response.json({ error: `บิล ${vatType}-${vatNo} มีอยู่แล้ว` }, { status: 409 })
   }
 
@@ -150,7 +155,6 @@ export async function POST(request: NextRequest) {
     .map((y, i) => ({ yard: parseFloat(y), slot: i + 1 }))
     .filter(r => r.yard > 0)
 
-  const refId = randomUUID()
   const date = new Date(createDate)
 
   try {

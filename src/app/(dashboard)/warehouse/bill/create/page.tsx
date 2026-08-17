@@ -1,11 +1,18 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import AiPhotoModal from "@/components/AiPhotoModal";
 import { AiReadResult } from "@/hooks/useAiPhotoRead";
 
 const GROUPS = 8;
 const ROWS = 20;
 const TOTAL_SLOTS = GROUPS * ROWS;
+
+function newSessionId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+}
 
 interface StockResult {
   fabricStruct: string;
@@ -38,6 +45,15 @@ interface OrderSearchResult {
 }
 
 export default function BillCreatePage() {
+  const router = useRouter();
+
+  // refId doubles as the DB refId: generated client-side and sent with every
+  // save so "บันทึกรายการถัดไป" keeps appending rolls to the same fabricouts
+  // record instead of tripping the duplicate-vatNo guard. A fresh id is
+  // issued once the bill is closed (บันทึกเสร็จสิ้น / ล้างฟอร์ม).
+  const [refId, setRefId] = useState<string>(newSessionId);
+  const [savedCount, setSavedCount] = useState(0);
+
   // Bill header
   const [billType, setBillType] = useState("A");
   const [billNo, setBillNo] = useState("");
@@ -304,6 +320,8 @@ export default function BillCreatePage() {
     return {};
   }
 
+  // ปิดบิลปัจจุบัน: เคลียร์ทุก field และออก refId ใหม่สำหรับบิลถัดไป
+  // (เรียกจากปุ่ม "ล้างฟอร์ม" และท้าย handleSave "บันทึกเสร็จสิ้น")
   function resetForm() {
     setYards(Array(TOTAL_SLOTS).fill(""));
     setStockSearch("");
@@ -323,6 +341,15 @@ export default function BillCreatePage() {
     setAltPurchaseOrder("");
     setAiFilledFields(new Set());
     setAiLowConfidence(new Set());
+    setSavedCount(0);
+    setRefId(newSessionId());
+  }
+
+  // เคลียร์เฉพาะตารางหลา/พับ ใช้ต่อจากบันทึกสำเร็จของ "บันทึกรายการถัดไป" เท่านั้น
+  // คงค่า field หลัก (ประเภทบิล/เลขบิล/ผู้สั่ง/ผู้รับ/โครงสร้างผ้า ฯลฯ) ไว้ทั้งหมด
+  // เพราะม้วนถัดไปในบิลเดียวกัน (refId เดิม) เป็นบิลเดิม ต่างกันแค่จำนวนหลาที่คีย์รอบใหม่
+  function resetYardsOnly() {
+    setYards(Array(TOTAL_SLOTS).fill(""));
   }
 
   async function handleSave() {
@@ -352,14 +379,63 @@ export default function BillCreatePage() {
           altPurchaseOrder,
           purchaseOrder: purchaseOrderParam || undefined,
           orderId: linkedOrderId || undefined,
+          // ถ้าเคยกด "บันทึกรายการถัดไป" มาก่อน ให้ผูกม้วนชุดสุดท้ายนี้เข้า
+          // บิลเดิม (refId เดิม) แล้วค่อยปิดบิลผ่าน resetForm()
+          refId,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "บันทึกไม่สำเร็จ");
       alert(`บันทึกสำเร็จ ${data.count} รายการ บิลเลขที่ ${data.vatNo}`);
       resetForm();
+      router.push("/warehouse/bill");
     } catch (err: any) {
       alert("เกิดข้อผิดพลาด: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // ต่อเนื่อง: บันทึกม้วนปัจจุบันเข้าบิลเดิม (refId เดิม) แล้วเคลียร์เฉพาะตารางหลา
+  // ไม่ redirect เพื่อคีย์ม้วนถัดไปในบิลเดียวกันได้ทันที
+  async function handleSaveNext() {
+    if (!billType || !orderer || totalFold === 0) {
+      alert(
+        "กรุณากรอกข้อมูลให้ครบ: ประเภทบิล, ผู้สั่ง, และหลาผ้าอย่างน้อย 1 ช่อง",
+      );
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/warehouse/bill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vatType: billType,
+          vatNo: Number(billNo),
+          customerName: orderer,
+          receiveName: receiver || orderer,
+          fabricStruct,
+          fabricPattern,
+          fabricW,
+          createDate: new Date(billDate).toISOString(),
+          yards,
+          isDeposit,
+          altFabricStruct,
+          altPurchaseOrder,
+          purchaseOrder: purchaseOrderParam || undefined,
+          orderId: linkedOrderId || undefined,
+          refId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "บันทึกไม่สำเร็จ");
+      setSavedCount((c) => c + 1);
+      resetYardsOnly();
+    } catch (err: unknown) {
+      alert(
+        "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)),
+      );
     } finally {
       setSaving(false);
     }
@@ -1017,6 +1093,11 @@ export default function BillCreatePage() {
 
       {/* Action buttons */}
       <div className="flex items-center justify-end gap-3">
+        {savedCount > 0 && (
+          <span className="mr-auto text-xs text-gray-500">
+            บันทึกแล้ว {savedCount} รายการ
+          </span>
+        )}
         <button
           type="button"
           onClick={resetForm}
@@ -1025,7 +1106,7 @@ export default function BillCreatePage() {
           ล้างฟอร์ม
         </button>
         <button
-          onClick={handleSave}
+          onClick={handleSaveNext}
           disabled={saving}
           className="px-6 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium disabled:opacity-50"
         >
