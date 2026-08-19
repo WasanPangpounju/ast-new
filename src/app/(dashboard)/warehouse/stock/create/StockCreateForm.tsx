@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import AiPhotoModal from "@/components/AiPhotoModal";
 import { AiReadResult } from "@/hooks/useAiPhotoRead";
 
@@ -39,7 +38,6 @@ interface Props {
 }
 
 export default function StockCreateForm({ emp }: Props) {
-  const router = useRouter();
   const [createDate, setCreateDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
@@ -230,9 +228,8 @@ export default function StockCreateForm({ emp }: Props) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "บันทึกไม่สำเร็จ");
-      alert(`บันทึกสำเร็จ ${data.count} รายการ`);
       resetForm();
-      router.push("/warehouse/fabric-in/review");
+      alert("บันทึกเรียบร้อย");
     } catch (err: unknown) {
       alert(
         "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)),

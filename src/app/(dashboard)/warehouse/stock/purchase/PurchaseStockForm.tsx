@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 
 const GROUPS = 8
 const ROWS = 20
@@ -37,8 +36,6 @@ interface Props {
 }
 
 export default function PurchaseStockForm({ emp }: Props) {
-  const router = useRouter()
-
   // refId doubles as the DB refId: generated client-side and sent with every
   // save so "บันทึกรายการถัดไป" keeps appending rows to the same stockfabrics
   // record instead of starting a new one each click. A fresh id is issued
@@ -175,10 +172,9 @@ export default function PurchaseStockForm({ emp }: Props) {
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'บันทึกไม่สำเร็จ')
-        alert(`บันทึกสำเร็จ ${data.count} รายการ`)
       }
       resetForm()
-      router.push('/warehouse/stock/purchase/review')
+      alert('บันทึกเรียบร้อย')
     } catch (err: unknown) {
       alert('เกิดข้อผิดพลาด: ' + (err instanceof Error ? err.message : String(err)))
     } finally {

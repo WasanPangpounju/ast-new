@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
 import AiPhotoModal from "@/components/AiPhotoModal";
 import { AiReadResult } from "@/hooks/useAiPhotoRead";
 
@@ -45,8 +44,6 @@ interface OrderSearchResult {
 }
 
 export default function BillCreatePage() {
-  const router = useRouter();
-
   // refId doubles as the DB refId: generated client-side and sent with every
   // save so "บันทึกรายการถัดไป" keeps appending rolls to the same fabricouts
   // record instead of tripping the duplicate-vatNo guard. A fresh id is
@@ -386,9 +383,8 @@ export default function BillCreatePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "บันทึกไม่สำเร็จ");
-      alert(`บันทึกสำเร็จ ${data.count} รายการ บิลเลขที่ ${data.vatNo}`);
       resetForm();
-      router.push("/warehouse/bill");
+      alert("บันทึกเรียบร้อย");
     } catch (err: any) {
       alert("เกิดข้อผิดพลาด: " + err.message);
     } finally {
