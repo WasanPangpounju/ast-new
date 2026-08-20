@@ -633,7 +633,7 @@ function Tab3() {
     if (!printRef.current || !result) return;
     const thaiDate = toThaiDate(asOfDate);
     const vatLabel = vatType === "all" ? "ทั้งหมด" : vatType;
-    const rows = details
+    const rows = visibleDetails
       .map(
         (r, i) => `
       <tr>
