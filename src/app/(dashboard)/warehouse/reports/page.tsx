@@ -608,6 +608,7 @@ function Tab3() {
   );
   const [result, setResult] = useState<StockSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hideZero, setHideZero] = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   const fetch3 = useCallback(() => {
@@ -624,6 +625,9 @@ function Tab3() {
   }, [fetch3]);
 
   const details = result?.details ?? [];
+  const visibleDetails = hideZero
+    ? details.filter((r) => !(r.balanceAnomaly || Number(r.balanceYard) === 0))
+    : details;
 
   const handlePrint = () => {
     if (!printRef.current || !result) return;
@@ -725,6 +729,17 @@ function Tab3() {
           />
         </div>
         <div className="flex items-end">
+          <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none py-1.5">
+            <input
+              type="checkbox"
+              checked={hideZero}
+              onChange={(e) => setHideZero(e.target.checked)}
+              className="w-3.5 h-3.5 cursor-pointer"
+            />
+            ซ่อนรายการที่คงเหลือ = 0
+          </label>
+        </div>
+        <div className="flex items-end">
           <button
             onClick={handlePrint}
             disabled={!result || details.length === 0}
@@ -794,14 +809,14 @@ function Tab3() {
                   กำลังโหลด...
                 </td>
               </tr>
-            ) : details.length === 0 ? (
+            ) : visibleDetails.length === 0 ? (
               <tr>
                 <td colSpan={6} className="text-center py-8 text-gray-400">
                   ไม่พบข้อมูล
                 </td>
               </tr>
             ) : (
-              details.map((r, i) => (
+              visibleDetails.map((r, i) => (
                 <tr
                   key={i}
                   className="border-t border-gray-100 hover:bg-gray-50"
