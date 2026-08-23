@@ -788,6 +788,8 @@ model PackageReturnObligation {
 
   // ── ยอด ──
   qtyDue      Int // จำนวนที่ต้องคืน ณ ตอนเกิดรายการ — คงที่ ไม่แก้ย้อนหลังหลังสร้าง
+  // ข้อยกเว้น: category=SPOOL sync กับ MaterialOutside.spoolReturnCount ตอน obligation ยัง
+  // PENDING เท่านั้น (แก้ผ่าน outside PATCH route) — ดู material/outside/route.ts
   qtyReturned Int                 @default(0) // denormalized running total (sync กับ PackageReturnEntry ในทรานแซกชันเดียวกันเสมอ)
   status      PackageReturnStatus @default(PENDING)
 

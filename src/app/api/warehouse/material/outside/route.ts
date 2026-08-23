@@ -186,12 +186,38 @@ export async function PATCH(request: NextRequest) {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
     const { withdrawDate, ...rest } = parsed.data
-    const updated = await prisma.materialOutside.update({
-      where: { id },
-      data: {
-        ...rest,
-        ...(withdrawDate !== undefined && { withdrawDate: new Date(withdrawDate) }),
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.materialOutside.update({
+        where: { id },
+        data: {
+          ...rest,
+          ...(withdrawDate !== undefined && { withdrawDate: new Date(withdrawDate) }),
+        },
+      })
+
+      // qtyDue is normally immutable after obligation creation (see schema comment on
+      // PackageReturnObligation.qtyDue), but spoolReturnCount is the field that qtyDue was
+      // copied from — if it's corrected here (breakage/loss discovered after entry) and the
+      // obligation is still PENDING (no return activity recorded), sync qtyDue to match so
+      // the two don't drift. Never touch PARTIALLY_RETURNED/RETURNED obligations — those
+      // already reflect real return activity against the original qtyDue.
+      if ('spoolReturnCount' in rest) {
+        const before = existing.spoolReturnCount ?? existing.spool
+        const after  = row.spoolReturnCount ?? row.spool
+        if (after !== before && after > 0) {
+          await tx.packageReturnObligation.updateMany({
+            where: {
+              materialOutsideId: id,
+              category: 'SPOOL',
+              status: 'PENDING',
+              deletedAt: null,
+            },
+            data: { qtyDue: after },
+          })
+        }
+      }
+
+      return row
     })
     return Response.json({ success: true, data: updated })
   } catch (err: unknown) {
