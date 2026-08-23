@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 import type { Prisma } from '@/generated/prisma/client/client'
-import { buildOutsideObligationsData } from '@/lib/package-return-obligations'
+import { buildOutsideObligationsData, PackageReturnError } from '@/lib/package-return-obligations'
 
 const LBS_PER_KG = 2.2046
 
@@ -298,12 +298,34 @@ export async function DELETE(request: NextRequest) {
     if (!existing || existing.deletedAt !== null) {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
+
+    // Block deletion while any package-return obligation tied to this withdrawal is still
+    // open — deleting the source record used to silently orphan the obligation (it stayed
+    // PENDING/PARTIALLY_RETURNED forever with no way to trace it back). Once every obligation
+    // is RETURNED (or already soft-deleted), there's nothing left to strand.
+    const openObligations = await prisma.packageReturnObligation.findMany({
+      where: { materialOutsideId: id, deletedAt: null, status: { not: 'RETURNED' } },
+      select: { category: true, variant: true, qtyDue: true, qtyReturned: true, status: true },
+    })
+    if (openObligations.length > 0) {
+      const summary = openObligations
+        .map(o => `${o.category}${o.variant ? `(${o.variant})` : ''} ${o.qtyReturned}/${o.qtyDue} ${o.status}`)
+        .join(', ')
+      throw new PackageReturnError(
+        `ลบไม่ได้ — มีรายการค้างคืนบรรจุภัณฑ์ที่ยังไม่เสร็จสิ้น: ${summary}`,
+        409
+      )
+    }
+
     await prisma.materialOutside.update({
       where: { id },
       data: { deletedAt: new Date() },
     })
     return Response.json({ success: true })
   } catch (err: unknown) {
+    if (err instanceof PackageReturnError) {
+      return Response.json({ error: err.message }, { status: err.status })
+    }
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[material/outside DELETE] error:', msg)
     return Response.json({ error: msg }, { status: 500 })
