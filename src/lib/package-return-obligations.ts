@@ -46,6 +46,11 @@ interface PackagingSource {
   sackType?: string | null
   spool: number | null
   spoolType?: string | null
+  // Only present on MaterialOutside — the returnable spool count can differ from `spool`
+  // (spools damaged/lost between withdrawal and return), so it overrides `spool` for the
+  // SPOOL category's qtyDue when set. Material (import) has no such field and always falls
+  // back to `spool`.
+  spoolReturnCount?: number | null
   paperBar: number | null
   returnPallet: boolean
   returnBox: boolean
@@ -55,11 +60,11 @@ interface PackagingSource {
 }
 
 const CATEGORY_FIELDS = [
-  { category: 'PALLET', qtyKey: 'pallet', flagKey: 'returnPallet', variantKey: 'palletType' },
-  { category: 'BOX', qtyKey: 'box', flagKey: 'returnBox', variantKey: null },
-  { category: 'SACK', qtyKey: 'sack', flagKey: 'returnSack', variantKey: 'sackType' },
-  { category: 'SPOOL', qtyKey: 'spool', flagKey: 'returnSpool', variantKey: 'spoolType' },
-  { category: 'PAPER_BAR', qtyKey: 'paperBar', flagKey: 'returnPaperBar', variantKey: null },
+  { category: 'PALLET', qtyKey: 'pallet', flagKey: 'returnPallet', variantKey: 'palletType', overrideKey: null },
+  { category: 'BOX', qtyKey: 'box', flagKey: 'returnBox', variantKey: null, overrideKey: null },
+  { category: 'SACK', qtyKey: 'sack', flagKey: 'returnSack', variantKey: 'sackType', overrideKey: null },
+  { category: 'SPOOL', qtyKey: 'spool', flagKey: 'returnSpool', variantKey: 'spoolType', overrideKey: 'spoolReturnCount' },
+  { category: 'PAPER_BAR', qtyKey: 'paperBar', flagKey: 'returnPaperBar', variantKey: null, overrideKey: null },
 ] as const
 
 function buildObligationsData(
@@ -69,10 +74,10 @@ function buildObligationsData(
 ): Prisma.PackageReturnObligationCreateManyInput[] {
   const data: Prisma.PackageReturnObligationCreateManyInput[] = []
 
-  for (const { category, qtyKey, flagKey, variantKey } of CATEGORY_FIELDS) {
+  for (const { category, qtyKey, flagKey, variantKey, overrideKey } of CATEGORY_FIELDS) {
     if (!source[flagKey]) continue
 
-    const qtyDue = source[qtyKey]
+    const qtyDue = (overrideKey ? source[overrideKey] : null) ?? source[qtyKey]
     if (!qtyDue || qtyDue <= 0) {
       console.warn(`[package-return-obligation] Skip ${category} for ${entityLabel}#${source.id}: qtyDue is ${qtyDue ?? 'null'}`)
       continue

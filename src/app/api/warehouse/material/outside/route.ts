@@ -29,6 +29,7 @@ const outsideSchema = z.object({
   sackType:        z.string().optional(),
   paperBar:        z.number().int().optional(),
   spoolType:       z.string().optional(),
+  spoolReturnCount: z.number().int().optional(),
   returnPallet:    z.boolean().optional(),
   returnBox:       z.boolean().optional(),
   returnSack:      z.boolean().optional(),
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
   const { withdrawId, lot, yarnType, supplierName, spool, weightWithdrawn,
           weightPSum, weightKgSum, weightPPackage, weightKgPackage,
           averageP, averageKg, materialId, note, withdrawDate,
-          pallet, palletType, box, sack, sackType, paperBar, spoolType,
+          pallet, palletType, box, sack, sackType, paperBar, spoolType, spoolReturnCount,
           returnPallet, returnBox, returnSack, returnSpool, returnPaperBar,
           recipient, usageNote, paymentComment } = parsed.data
 
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
           sackType:        sackType        || null,
           paperBar:        paperBar        ?? null,
           spoolType:       spoolType       || null,
+          spoolReturnCount: spoolReturnCount ?? null,
           returnPallet:    returnPallet    ?? false,
           returnBox:       returnBox       ?? false,
           returnSack:      returnSack      ?? false,
@@ -152,6 +154,7 @@ const patchSchema = z.object({
   sackType:        z.string().nullable().optional(),
   paperBar:        z.number().int().nullable().optional(),
   spoolType:       z.string().nullable().optional(),
+  spoolReturnCount: z.number().int().nullable().optional(),
   returnPallet:    z.boolean().optional(),
   returnBox:       z.boolean().optional(),
   returnSack:      z.boolean().optional(),

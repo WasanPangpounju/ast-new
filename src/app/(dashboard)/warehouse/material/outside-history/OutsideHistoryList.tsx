@@ -31,6 +31,7 @@ interface Outside {
   sackType:        string | null;
   paperBar:        number | null;
   spoolType:       string | null;
+  spoolReturnCount: number | null;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -92,6 +93,8 @@ interface EditState {
   sackType:        string;
   paperBar:        string;
   spoolType:       string;
+  spoolReturnCount: string;
+  spoolReturnCountTouched: boolean;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -171,6 +174,8 @@ function toEditState(r: Outside): EditState {
     sackType:        r.sackType ?? "plastic",
     paperBar:        r.paperBar != null ? String(r.paperBar) : "",
     spoolType:       r.spoolType ?? "spool_plastic",
+    spoolReturnCount: String(r.spoolReturnCount ?? r.spool),
+    spoolReturnCountTouched: false,
     returnPallet:    r.returnPallet,
     returnBox:       r.returnBox,
     returnSack:      r.returnSack,
@@ -361,8 +366,13 @@ export default function OutsideHistoryList() {
       const pPkg  = parseFloat(s.weightPPackage)  || 0;
       const kgPkg = parseFloat(s.weightKgPackage) || 0;
       const net = calcNet(pSum, pPkg, kgSum, kgPkg, spool);
-      return { ...s, spool: v, ...net };
+      // "จำนวนหลอด" follows "จำนวน (ลูก)" until edited directly in this session (see onEditSpoolReturnCount)
+      const followSpool = !s.spoolReturnCountTouched;
+      return { ...s, spool: v, ...net, ...(followSpool ? { spoolReturnCount: v } : {}) };
     });
+  }
+  function onEditSpoolReturnCount(v: string) {
+    patchEdit({ spoolReturnCount: v, spoolReturnCountTouched: true });
   }
   function onEditWeightWithdrawnP(v: string) {
     const p = parseFloat(v) || 0;
@@ -417,6 +427,7 @@ export default function OutsideHistoryList() {
           sackType:        editState.sackType || null,
           paperBar:        editState.paperBar ? parseInt(editState.paperBar) : null,
           spoolType:       editState.spoolType || null,
+          spoolReturnCount: editState.spoolReturnCount ? parseInt(editState.spoolReturnCount) : null,
           returnPallet:    editState.returnPallet,
           returnBox:       editState.returnBox,
           returnSack:      editState.returnSack,
@@ -676,6 +687,7 @@ export default function OutsideHistoryList() {
                 <DRow label="จำนวนกระสอบ"    value={selected.sack?.toLocaleString()} />
                 <DRow label="ประเภทกระสอบ"   value={selected.sackType ? (SACK_TYPE_LABEL[selected.sackType] ?? selected.sackType) : null} />
                 <DRow label="จำนวนกระดาษกั้น" value={selected.paperBar?.toLocaleString()} />
+                <DRow label="จำนวนหลอด"      value={(selected.spoolReturnCount ?? selected.spool).toLocaleString()} />
                 <DRow label="ประเภทหลอด"     value={selected.spoolType ? (SPOOL_TYPE_LABEL[selected.spoolType] ?? selected.spoolType) : null} />
                 <DRow label="คืนพาเลท"       value={yn(selected.returnPallet)} />
                 <DRow label="คืนกล่อง"       value={yn(selected.returnBox)} />
@@ -830,8 +842,10 @@ export default function OutsideHistoryList() {
                       <option value="p">ปอ</option>
                       <option value="plastic">พลาสติก</option>
                     </select>
+                    <input type="number" min="0" value={editState.spoolReturnCount}
+                      onChange={(e) => onEditSpoolReturnCount(e.target.value)} placeholder="จำนวนหลอด" className={inp} />
                     <select value={editState.spoolType}
-                      onChange={(e) => patchEdit({ spoolType: e.target.value })} className={`${inp} col-span-2`}>
+                      onChange={(e) => patchEdit({ spoolType: e.target.value })} className={inp}>
                       <option value="spool_plastic">หลอดกรวย พลาสติก</option>
                       <option value="spool_paper">หลอดกรวย กระดาษ</option>
                       <option value="spoolC_plastic">หลอดทรงกระบอก พลาสติก</option>

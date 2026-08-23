@@ -510,6 +510,7 @@ model MaterialOutside {
   sackType        String? // "p" (ปอ) | "plastic"
   paperBar        Int? // จำนวนกระดาษกั้นที่เบิกออก
   spoolType       String? // "spool_plastic" | "spool_paper" | "spoolC_plastic" | "spoolC_paper"
+  spoolReturnCount Int? // จำนวนหลอดที่ต้องคืน (auto-fill จาก spool แต่แก้ไขเองได้ กรณีหลอดเสียหาย/สูญหาย); null = ใช้ spool แทน (record เก่าก่อน field นี้)
   recipient       String?
   usageNote       String?
   paymentComment  String?

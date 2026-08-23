@@ -28,6 +28,8 @@ interface FormState {
   sackType:        string;
   paperBar:        string;
   spoolType:       string;
+  spoolReturnCount: string;
+  spoolReturnCountTouched: boolean;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -60,6 +62,7 @@ interface PendingItem {
   sackType:        string;
   paperBar:        number;
   spoolType:       string;
+  spoolReturnCount: number;
   returnPallet:    boolean;
   returnBox:       boolean;
   returnSack:      boolean;
@@ -155,6 +158,7 @@ function makeEmpty(t: string): FormState {
     box: "",
     sack: "", sackType: "plastic",
     paperBar: "", spoolType: "spool_plastic",
+    spoolReturnCount: "", spoolReturnCountTouched: false,
     returnPallet: false, returnBox: false, returnSack: false,
     returnSpool: false, returnPaperBar: false,
     recipient: "", usageNote: "", paymentComment: "",
@@ -319,7 +323,14 @@ export default function MaterialOutsideForm() {
     const pPkg  = parseFloat(formRef.current.weightPPackage)  || 0;
     const kgPkg = parseFloat(formRef.current.weightKgPackage) || 0;
     const net = calcNet(pSum, pPkg, kgSum, kgPkg, spool);
-    patch({ spool: v, ...net });
+    // "จำนวนหลอด" (spoolReturnCount) follows "จำนวน (ลูก)" until the user edits it directly —
+    // once touched, it stops following so a manual correction (breakage/loss) isn't clobbered.
+    const followSpool = !formRef.current.spoolReturnCountTouched;
+    patch({ spool: v, ...net, ...(followSpool ? { spoolReturnCount: v } : {}) });
+  }
+
+  function onSpoolReturnCountChange(v: string) {
+    patch({ spoolReturnCount: v, spoolReturnCountTouched: true });
   }
 
   // ── Validation ──────────────────────────────────────────────────────────────
@@ -363,6 +374,7 @@ export default function MaterialOutsideForm() {
       sackType:        form.sackType,
       paperBar:        parseInt(form.paperBar) || 0,
       spoolType:       form.spoolType,
+      spoolReturnCount: parseInt(form.spoolReturnCount) || 0,
       returnPallet:    form.returnPallet,
       returnBox:       form.returnBox,
       returnSack:      form.returnSack,
@@ -423,6 +435,7 @@ export default function MaterialOutsideForm() {
         sackType:        form.sackType,
         paperBar:        parseInt(form.paperBar) || 0,
         spoolType:       form.spoolType,
+        spoolReturnCount: parseInt(form.spoolReturnCount) || 0,
         returnPallet:    form.returnPallet,
         returnBox:       form.returnBox,
         returnSack:      form.returnSack,
@@ -462,6 +475,7 @@ export default function MaterialOutsideForm() {
           { label: "พาเลท/กล่อง/กระสอบ/กระดาษกั้น", value: [item.pallet, item.box, item.sack, item.paperBar].some((v) => v > 0) ? `${item.pallet || 0}/${item.box || 0}/${item.sack || 0}/${item.paperBar || 0}` : "" },
           { label: "ประเภทพาเลท", value: item.pallet ? (PALLET_TYPE_LABEL[item.palletType] ?? item.palletType) : "" },
           { label: "ประเภทกระสอบ", value: item.sack ? (SACK_TYPE_LABEL[item.sackType] ?? item.sackType) : "" },
+          { label: "จำนวนหลอด", value: item.returnSpool && item.spoolReturnCount ? item.spoolReturnCount.toLocaleString() : "" },
           { label: "ประเภทหลอด", value: item.returnSpool ? (SPOOL_TYPE_LABEL[item.spoolType] ?? item.spoolType) : "" },
           { label: "ส่งคืนบรรจุภัณฑ์", value: returned },
           { label: "การนำไปใช้", value: item.usageNote },
@@ -506,6 +520,7 @@ export default function MaterialOutsideForm() {
             sackType:        item.sackType        || undefined,
             paperBar:        item.paperBar        || undefined,
             spoolType:       item.spoolType       || undefined,
+            spoolReturnCount: item.spoolReturnCount || undefined,
             returnPallet:    item.returnPallet,
             returnBox:       item.returnBox,
             returnSack:      item.returnSack,
@@ -742,10 +757,15 @@ export default function MaterialOutsideForm() {
                 <option value="plastic">พลาสติก</option>
               </select>
             </Field>
+            <Field label="จำนวนหลอด">
+              <input type="number" min="0" value={form.spoolReturnCount}
+                onChange={(e) => onSpoolReturnCountChange(e.target.value)}
+                placeholder="เท่ากับจำนวน (ลูก) โดยปริยาย" className={inp} />
+            </Field>
             <Field label="ประเภทหลอด">
               <select value={form.spoolType}
                 onChange={(e) => patch({ spoolType: e.target.value })}
-                className={`${inp} col-span-2`}>
+                className={inp}>
                 <option value="spool_plastic">หลอดกรวย พลาสติก</option>
                 <option value="spool_paper">หลอดกรวย กระดาษ</option>
                 <option value="spoolC_plastic">หลอดทรงกระบอก พลาสติก</option>
