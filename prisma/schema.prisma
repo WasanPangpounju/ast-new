@@ -825,6 +825,25 @@ model PackageReturnEntry {
   @@map("package_return_entries")
 }
 
+// ─── AUDIT ───────────────────────────────────────────
+
+/// Generic field-level change log — not tied to a specific table via FK
+/// (recordKey is a free-form business key, e.g. "A-1234" for fabricouts vatType-vatNo,
+/// since some tables like fabricouts have no single row id representing "one bill").
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  tableName String   @map("table_name")
+  recordKey String   @map("record_key")
+  fieldName String   @map("field_name")
+  oldValue  String?  @map("old_value")
+  newValue  String?  @map("new_value")
+  changedBy String   @map("changed_by")
+  changedAt DateTime @default(now()) @map("changed_at")
+
+  @@index([tableName, recordKey])
+  @@map("audit_logs")
+}
+
 // ─── LEGACY (DO NOT USE FOR NEW FEATURES) ────────────
 
 /// @deprecated — superseded by AstPurchaseOrder (ast_purchaseorders)

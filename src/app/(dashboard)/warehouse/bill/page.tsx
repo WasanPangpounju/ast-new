@@ -39,6 +39,14 @@ interface FoldItem {
   sumYard: number;
 }
 
+interface DateHistoryEntry {
+  id: number;
+  oldValue: string | null;
+  newValue: string | null;
+  changedBy: string;
+  changedAt: string;
+}
+
 interface StockResult {
   fabricStruct: string;
   fabricPattern: string;
@@ -101,6 +109,13 @@ export default function BillListPage() {
   const [orderSaving, setOrderSaving] = useState(false);
   const orderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // แก้ไขวันที่บิล (createDate) — inline ที่คอลัมน์ "วันที่" ของตารางบิล
+  const [editingDate, setEditingDate] = useState<{ vatType: string; vatNo: number; value: string } | null>(null);
+  const [dateSaving, setDateSaving] = useState(false);
+  const [historyOpenKey, setHistoryOpenKey] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyCache, setHistoryCache] = useState<Record<string, DateHistoryEntry[]>>({});
+
   const fetchBills = useCallback(() => {
     setLoading(true);
     const p = new URLSearchParams({ page: String(page) });
@@ -138,8 +153,60 @@ export default function BillListPage() {
     } catch { return "-"; }
   };
 
+  const fmtDateTime = (d: string) => {
+    try {
+      return new Date(d).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
+    } catch { return "-"; }
+  };
+
+  const dateKey = (vatType: string, vatNo: number) => `${vatType}-${vatNo}`;
+
   const openPrint = (vatType: string, vatNo: number) =>
     window.open(`/warehouse/bill/print/${vatNo}?vatType=${vatType}`, "_blank");
+
+  const openEditDate = (b: Bill) => {
+    setHistoryOpenKey(null);
+    setEditingDate({ vatType: b.vatType, vatNo: b.vatNo, value: new Date(b.createDate).toISOString().slice(0, 10) });
+  };
+
+  const handleSaveDate = async () => {
+    if (!editingDate || dateSaving) return;
+    setDateSaving(true);
+    try {
+      const res = await fetch("/api/warehouse/bill/date", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vatType: editingDate.vatType, vatNo: editingDate.vatNo, newDate: editingDate.value }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const key = dateKey(editingDate.vatType, editingDate.vatNo);
+        setHistoryCache(c => { const n = { ...c }; delete n[key]; return n; }); // invalidate cached history
+        setManageBill(mb => mb && mb.vatType === editingDate.vatType && mb.vatNo === editingDate.vatNo ? { ...mb, createDate: d.createDate } : mb);
+        setEditingDate(null);
+        fetchBills();
+      }
+    } finally {
+      setDateSaving(false);
+    }
+  };
+
+  const toggleHistory = async (b: Bill) => {
+    const key = dateKey(b.vatType, b.vatNo);
+    if (historyOpenKey === key) { setHistoryOpenKey(null); return; }
+    setEditingDate(null);
+    setHistoryOpenKey(key);
+    if (!historyCache[key]) {
+      setHistoryLoading(true);
+      try {
+        const res = await fetch(`/api/warehouse/bill/date?vatType=${encodeURIComponent(b.vatType)}&vatNo=${b.vatNo}`);
+        const d = await res.json();
+        setHistoryCache(c => ({ ...c, [key]: d.history ?? [] }));
+      } finally {
+        setHistoryLoading(false);
+      }
+    }
+  };
 
   const fetchFolds = useCallback((vatType: string, vatNo: number) => {
     setFoldsLoading(true);
@@ -184,6 +251,8 @@ export default function BillListPage() {
     setConfirmDeleteFold(null);
     setStockSearch(""); setStockResults([]);
     setOrderSearch(""); setOrderResults([]);
+    setEditingDate(null);
+    setHistoryOpenKey(null);
   };
 
   const closeManage = () => {
@@ -193,6 +262,8 @@ export default function BillListPage() {
     setConfirmDeleteFold(null);
     setStockResults([]);
     setOrderResults([]);
+    setEditingDate(null);
+    setHistoryOpenKey(null);
   };
 
   const switchTab = (tab: ActiveTab) => {
@@ -200,6 +271,8 @@ export default function BillListPage() {
     setConfirmDelete(false);
     setEditingFold(null);
     setConfirmDeleteFold(null);
+    setEditingDate(null);
+    setHistoryOpenKey(null);
     if (tab === 'folds' && manageBill) {
       fetchFolds(manageBill.vatType, manageBill.vatNo);
     }
@@ -533,6 +606,60 @@ export default function BillListPage() {
                         />
                       </div>
                     ))}
+
+                    {/* วันที่บิล — บันทึกทันทีแยกจากฟอร์มด้านบน (ต่างจากฟิลด์อื่นที่รวมกดบันทึกทีเดียว) */}
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">วันที่บิล</label>
+                      {editingDate?.vatType === manageBill.vatType && editingDate?.vatNo === manageBill.vatNo ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="date"
+                            value={editingDate.value}
+                            onChange={e => setEditingDate(v => v ? { ...v, value: e.target.value } : v)}
+                            title="วันที่บิล"
+                            className="border border-blue-400 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            autoFocus
+                          />
+                          <button type="button" onClick={() => setEditingDate(null)} disabled={dateSaving}
+                            className="px-2 py-0.5 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50">ยกเลิก</button>
+                          <button type="button" onClick={handleSaveDate} disabled={dateSaving}
+                            className="px-2 py-0.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                            {dateSaving ? "กำลังบันทึก..." : "บันทึก"}
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-800">{fmtDate(manageBill.createDate)}</span>
+                          <button type="button" onClick={() => openEditDate(manageBill)}
+                            className="px-2 py-0.5 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50">แก้ไขวันที่</button>
+                          <button type="button" onClick={() => toggleHistory(manageBill)}
+                            className="px-2 py-0.5 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50">
+                            {historyOpenKey === dateKey(manageBill.vatType, manageBill.vatNo) ? "ซ่อนประวัติ" : "ดูประวัติการแก้ไข"}
+                          </button>
+                        </div>
+                      )}
+                      {historyOpenKey === dateKey(manageBill.vatType, manageBill.vatNo) && (
+                        <div className="mt-2 border border-gray-200 divide-y divide-gray-100 max-h-48 overflow-y-auto text-xs">
+                          {historyLoading ? (
+                            <div className="text-center py-3 text-gray-400">กำลังโหลด...</div>
+                          ) : (historyCache[dateKey(manageBill.vatType, manageBill.vatNo)]?.length ?? 0) === 0 ? (
+                            <div className="text-center py-3 text-gray-400">ยังไม่มีประวัติแก้ไขวันที่</div>
+                          ) : (
+                            historyCache[dateKey(manageBill.vatType, manageBill.vatNo)].map(h => (
+                              <div key={h.id} className="px-3 py-2">
+                                <div className="text-gray-400">{fmtDateTime(h.changedAt)} · {h.changedBy}</div>
+                                <div className="text-gray-800 mt-0.5">
+                                  {h.oldValue ? fmtDate(h.oldValue) : "-"}
+                                  <span className="mx-1 text-gray-400">→</span>
+                                  <span className="font-medium text-blue-700">{h.newValue ? fmtDate(h.newValue) : "-"}</span>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     <p className="text-xs text-gray-400">การแก้ไขจะมีผลกับทุกรายการในบิลนี้ ({manageBill.foldCount} รายการ)</p>
                   </div>
                   <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between flex-shrink-0">
