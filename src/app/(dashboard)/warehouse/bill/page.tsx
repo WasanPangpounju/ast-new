@@ -39,8 +39,9 @@ interface FoldItem {
   sumYard: number;
 }
 
-interface DateHistoryEntry {
+interface BillHistoryEntry {
   id: number;
+  fieldName: string;
   oldValue: string | null;
   newValue: string | null;
   changedBy: string;
@@ -109,12 +110,15 @@ export default function BillListPage() {
   const [orderSaving, setOrderSaving] = useState(false);
   const orderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // แก้ไขวันที่บิล (createDate) — inline ที่คอลัมน์ "วันที่" ของตารางบิล
+  // แก้ไขวันที่บิล (createDate) / เลขที่บิล (vatNo) — ในแท็บ "ข้อมูลบิล" ของ modal จัดการ
   const [editingDate, setEditingDate] = useState<{ vatType: string; vatNo: number; value: string } | null>(null);
   const [dateSaving, setDateSaving] = useState(false);
+  const [editingVatNo, setEditingVatNo] = useState<{ vatType: string; vatNo: number; value: string } | null>(null);
+  const [vatNoSaving, setVatNoSaving] = useState(false);
+  const [vatNoError, setVatNoError] = useState<string | null>(null);
   const [historyOpenKey, setHistoryOpenKey] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyCache, setHistoryCache] = useState<Record<string, DateHistoryEntry[]>>({});
+  const [historyCache, setHistoryCache] = useState<Record<string, BillHistoryEntry[]>>({});
 
   const fetchBills = useCallback(() => {
     setLoading(true);
@@ -166,7 +170,49 @@ export default function BillListPage() {
 
   const openEditDate = (b: Bill) => {
     setHistoryOpenKey(null);
+    setEditingVatNo(null);
     setEditingDate({ vatType: b.vatType, vatNo: b.vatNo, value: new Date(b.createDate).toISOString().slice(0, 10) });
+  };
+
+  const openEditVatNo = (b: Bill) => {
+    setHistoryOpenKey(null);
+    setEditingDate(null);
+    setVatNoError(null);
+    setEditingVatNo({ vatType: b.vatType, vatNo: b.vatNo, value: String(b.vatNo) });
+  };
+
+  const handleSaveVatNo = async () => {
+    if (!editingVatNo || vatNoSaving) return;
+    const newNo = Number(editingVatNo.value);
+    // เช็คขั้นต้นฝั่ง frontend — รูปแบบถูกต้องและไม่ใช่เลขเดิม ก่อนยิงไปให้ backend เช็คซ้ำกับข้อมูลจริง (source of truth)
+    if (!Number.isInteger(newNo) || newNo <= 0) {
+      setVatNoError("กรุณากรอกเลขที่บิลเป็นจำนวนเต็มบวก");
+      return;
+    }
+    if (newNo === editingVatNo.vatNo) {
+      setVatNoError("เลขที่บิลใหม่ต้องไม่ซ้ำกับเลขเดิม");
+      return;
+    }
+    setVatNoSaving(true);
+    setVatNoError(null);
+    try {
+      const res = await fetch("/api/warehouse/bill/vatno", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vatType: editingVatNo.vatType, oldVatNo: editingVatNo.vatNo, newVatNo: newNo }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setVatNoError(d.error ?? "บันทึกไม่สำเร็จ");
+        return;
+      }
+      setHistoryOpenKey(null); // key เปลี่ยนตามเลขที่บิลใหม่ — ปิดประวัติเดิมไว้ก่อน เปิดใหม่จะดึงของเลขที่ใหม่
+      setManageBill(mb => mb && mb.vatType === editingVatNo.vatType && mb.vatNo === editingVatNo.vatNo ? { ...mb, vatNo: d.vatNo } : mb);
+      setEditingVatNo(null);
+      fetchBills();
+    } finally {
+      setVatNoSaving(false);
+    }
   };
 
   const handleSaveDate = async () => {
@@ -252,6 +298,7 @@ export default function BillListPage() {
     setStockSearch(""); setStockResults([]);
     setOrderSearch(""); setOrderResults([]);
     setEditingDate(null);
+    setEditingVatNo(null); setVatNoError(null);
     setHistoryOpenKey(null);
   };
 
@@ -263,6 +310,7 @@ export default function BillListPage() {
     setStockResults([]);
     setOrderResults([]);
     setEditingDate(null);
+    setEditingVatNo(null); setVatNoError(null);
     setHistoryOpenKey(null);
   };
 
@@ -272,6 +320,7 @@ export default function BillListPage() {
     setEditingFold(null);
     setConfirmDeleteFold(null);
     setEditingDate(null);
+    setEditingVatNo(null); setVatNoError(null);
     setHistoryOpenKey(null);
     if (tab === 'folds' && manageBill) {
       fetchFolds(manageBill.vatType, manageBill.vatNo);
@@ -649,13 +698,49 @@ export default function BillListPage() {
                               <div key={h.id} className="px-3 py-2">
                                 <div className="text-gray-400">{fmtDateTime(h.changedAt)} · {h.changedBy}</div>
                                 <div className="text-gray-800 mt-0.5">
-                                  {h.oldValue ? fmtDate(h.oldValue) : "-"}
+                                  <span className="text-gray-500">{h.fieldName === "vatNo" ? "เลขที่บิล" : "วันที่"}:</span>{" "}
+                                  {h.fieldName === "vatNo" ? (h.oldValue ?? "-") : (h.oldValue ? fmtDate(h.oldValue) : "-")}
                                   <span className="mx-1 text-gray-400">→</span>
-                                  <span className="font-medium text-blue-700">{h.newValue ? fmtDate(h.newValue) : "-"}</span>
+                                  <span className="font-medium text-blue-700">
+                                    {h.fieldName === "vatNo" ? (h.newValue ?? "-") : (h.newValue ? fmtDate(h.newValue) : "-")}
+                                  </span>
                                 </div>
                               </div>
                             ))
                           )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* เลขที่บิล (vatType-vatNo) — บันทึกทันทีแยกจากฟอร์มด้านบน เหมือนวันที่บิล ประวัติแก้ไขดูรวมกับวันที่บิลได้จากปุ่ม "ดูประวัติการแก้ไข" ด้านบน */}
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">เลขที่บิล</label>
+                      {editingVatNo?.vatType === manageBill.vatType && editingVatNo?.vatNo === manageBill.vatNo ? (
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500">{manageBill.vatType} -</span>
+                            <input
+                              type="number" min="1" step="1"
+                              value={editingVatNo.value}
+                              onChange={e => { setEditingVatNo(v => v ? { ...v, value: e.target.value } : v); setVatNoError(null); }}
+                              title="เลขที่บิล"
+                              className="w-28 border border-blue-400 px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              autoFocus
+                            />
+                            <button type="button" onClick={() => { setEditingVatNo(null); setVatNoError(null); }} disabled={vatNoSaving}
+                              className="px-2 py-0.5 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50">ยกเลิก</button>
+                            <button type="button" onClick={handleSaveVatNo} disabled={vatNoSaving}
+                              className="px-2 py-0.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                              {vatNoSaving ? "กำลังบันทึก..." : "บันทึก"}
+                            </button>
+                          </div>
+                          {vatNoError && <p className="text-xs text-red-500 mt-1">{vatNoError}</p>}
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-800 font-mono">{manageBill.vatType}-{manageBill.vatNo}</span>
+                          <button type="button" onClick={() => openEditVatNo(manageBill)}
+                            className="px-2 py-0.5 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50">แก้ไขเลขที่บิล</button>
                         </div>
                       )}
                     </div>
