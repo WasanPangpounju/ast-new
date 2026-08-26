@@ -36,12 +36,14 @@ export async function GET(request: NextRequest) {
       MAX(f."customerName") as "customerName",
       MAX(f."receiveName") as "receiveName",
       f."fabricStruct",
+      f."fabricPattern",
+      f."fabricW",
       SUM(f.fold)::int as fold,
       ROUND(SUM(f."sumYard")::numeric, 2)::float as "sumYard",
       MIN(f."createDate") as "createDate"
     FROM fabricouts f
     WHERE ${whereClause}
-    GROUP BY f."vatType", f."vatNo", f."fabricStruct"
+    GROUP BY f."vatType", f."vatNo", f."fabricStruct", f."fabricPattern", f."fabricW"
     ORDER BY f."vatType", f."vatNo"
     LIMIT 500
   `) as any[]

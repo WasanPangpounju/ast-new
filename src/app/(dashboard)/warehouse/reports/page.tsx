@@ -9,6 +9,8 @@ interface ExportOutRow {
   customerName: string;
   receiveName: string;
   fabricStruct: string;
+  fabricPattern: string;
+  fabricW: string;
   fold: number;
   sumYard: number;
   createDate: string;
@@ -98,6 +100,21 @@ function trimCompanyName(name: string | null | undefined) {
   return s;
 }
 
+// รวม โครงสร้างผ้า + หน้ากว้าง + ลายผ้า เป็นข้อความเดียวสำหรับ column "โครงสร้างผ้า" เช่น
+// fabricStruct="TC45 * TC45 / 136 * 80", fabricW="63", fabricPattern="1/1"
+// -> `TC45 * TC45 / 136 * 80 63" 1/1`
+function formatFabricStructCol(r: {
+  fabricStruct?: string | null;
+  fabricW?: string | null;
+  fabricPattern?: string | null;
+}) {
+  const parts: string[] = [];
+  if (r.fabricStruct) parts.push(r.fabricStruct);
+  if (r.fabricW) parts.push(`${r.fabricW}"`);
+  if (r.fabricPattern) parts.push(r.fabricPattern);
+  return parts.join(" ");
+}
+
 // ---- Excel helpers ----
 function exportExcelTab1(
   data: ExportOutRow[],
@@ -125,7 +142,7 @@ function exportExcelTab1(
       i + 1,
       `${r.vatType}${r.vatNo}`,
       toThaiDate(r.createDate),
-      r.fabricStruct ?? "",
+      formatFabricStructCol(r),
       trimCompanyName(r.customerName),
       trimCompanyName(r.receiveName),
       Number(r.fold ?? 0),
@@ -331,7 +348,9 @@ function Tab1() {
                   <td className="px-3 py-1.5 whitespace-nowrap">
                     {toThaiDate(r.createDate)}
                   </td>
-                  <td className="px-3 py-1.5">{r.fabricStruct ?? "-"}</td>
+                  <td className="px-3 py-1.5">
+                    {formatFabricStructCol(r) || "-"}
+                  </td>
                   <td className="px-3 py-1.5">
                     {trimCompanyName(r.customerName) || "-"}
                   </td>
