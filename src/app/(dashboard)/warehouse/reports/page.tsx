@@ -94,7 +94,7 @@ function trimCompanyName(name: string | null | undefined) {
   if (!name) return name ?? "";
   let s = name.trim();
   s = s.replace(/^บริษัท/, "").trim();
-  s = s.replace(/จำกัด$/, "").trim();
+  s = s.replace(/จำกัด[\s\S]*$/, "").trim();
   return s;
 }
 
