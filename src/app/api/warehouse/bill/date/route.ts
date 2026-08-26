@@ -1,15 +1,11 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { BILL_AUDIT_TABLE, billRecordKey } from '@/lib/billAudit'
 import type { NextRequest } from 'next/server'
 
-// Business key used for audit_logs.recordKey — fabricouts has no single row id
-// representing "one bill" (1 bill = many rolls sharing vatType+vatNo).
-const recordKey = (vatType: string, vatNo: number) => `${vatType}-${vatNo}`
-
-const TABLE_NAME = 'fabricouts'
 const FIELD_NAME = 'createDate'
 
-// GET — change history for a bill's date (แสดงประวัติการแก้ไขวันที่)
+// GET — combined change history for a bill (createDate + vatNo edits, ดูประวัติการแก้ไข)
 export async function GET(request: NextRequest) {
   const session = await auth()
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -22,12 +18,11 @@ export async function GET(request: NextRequest) {
 
   const history = await prisma.auditLog.findMany({
     where: {
-      tableName: TABLE_NAME,
-      fieldName: FIELD_NAME,
-      recordKey: recordKey(vatType, Number(vatNo)),
+      tableName: BILL_AUDIT_TABLE,
+      recordKey: billRecordKey(vatType, Number(vatNo)),
     },
     orderBy: { changedAt: 'desc' },
-    select: { id: true, oldValue: true, newValue: true, changedBy: true, changedAt: true },
+    select: { id: true, fieldName: true, oldValue: true, newValue: true, changedBy: true, changedAt: true },
   })
 
   return Response.json({ history })
@@ -67,8 +62,8 @@ export async function PATCH(request: NextRequest) {
     }),
     prisma.auditLog.create({
       data: {
-        tableName: TABLE_NAME,
-        recordKey: recordKey(vatType, Number(vatNo)),
+        tableName: BILL_AUDIT_TABLE,
+        recordKey: billRecordKey(vatType, Number(vatNo)),
         fieldName: FIELD_NAME,
         oldValue: oldDate.toISOString(),
         newValue: parsedDate.toISOString(),
