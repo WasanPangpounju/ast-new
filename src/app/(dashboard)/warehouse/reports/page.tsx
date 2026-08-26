@@ -7,9 +7,8 @@ interface ExportOutRow {
   vatType: string;
   vatNo: string;
   customerName: string;
+  receiveName: string;
   fabricStruct: string;
-  fabricPattern: string;
-  fabricW: string;
   fold: number;
   sumYard: number;
   createDate: string;
@@ -106,10 +105,9 @@ function exportExcelTab1(
       "ลำดับ",
       "วันที่",
       "บิล",
-      "ลูกค้า",
       "โครงสร้างผ้า",
-      "ลายผ้า",
-      "หน้ากว้าง",
+      "ชื่อผู้สั่ง",
+      "ชื่อผู้รับ",
       "พับ",
       "หลา",
     ],
@@ -117,14 +115,13 @@ function exportExcelTab1(
       i + 1,
       toThaiDate(r.createDate),
       `${r.vatType}${r.vatNo}`,
-      r.customerName ?? "",
       r.fabricStruct ?? "",
-      r.fabricPattern ?? "",
-      r.fabricW ?? "",
+      r.customerName ?? "",
+      r.receiveName ?? "",
       Number(r.fold ?? 0),
       Number(r.sumYard ?? 0),
     ]),
-    ["", "รวม", "", "", "", "", "", totalFold, totalYard],
+    ["", "รวม", "", "", "", "", totalFold, totalYard],
   ]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "ส่งออก");
@@ -269,7 +266,7 @@ function Tab1() {
           <thead className="bg-gray-100 text-gray-700">
             <tr>
               <th
-                colSpan={9}
+                colSpan={8}
                 className="px-3 py-1.5 text-left text-xs text-gray-500 font-normal border-b border-gray-200"
               >
                 {loading
@@ -282,10 +279,9 @@ function Tab1() {
                 "ลำดับ",
                 "วันที่",
                 "บิล",
-                "ลูกค้า",
                 "โครงสร้างผ้า",
-                "ลายผ้า",
-                "หน้ากว้าง",
+                "ชื่อผู้สั่ง",
+                "ชื่อผู้รับ",
                 "พับ",
                 "หลา",
               ].map((h) => (
@@ -301,13 +297,13 @@ function Tab1() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="text-center py-8 text-gray-400">
+                <td colSpan={8} className="text-center py-8 text-gray-400">
                   กำลังโหลด...
                 </td>
               </tr>
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={9} className="text-center py-8 text-gray-400">
+                <td colSpan={8} className="text-center py-8 text-gray-400">
                   ไม่พบข้อมูลในช่วงเวลาที่เลือก กรุณาเลือกเดือน/ปีอื่น
                 </td>
               </tr>
@@ -325,10 +321,9 @@ function Tab1() {
                     {r.vatType}
                     {r.vatNo}
                   </td>
-                  <td className="px-3 py-1.5">{r.customerName ?? "-"}</td>
                   <td className="px-3 py-1.5">{r.fabricStruct ?? "-"}</td>
-                  <td className="px-3 py-1.5">{r.fabricPattern ?? "-"}</td>
-                  <td className="px-3 py-1.5">{r.fabricW ?? "-"}</td>
+                  <td className="px-3 py-1.5">{r.customerName ?? "-"}</td>
+                  <td className="px-3 py-1.5">{r.receiveName ?? "-"}</td>
                   <td className="px-3 py-1.5 text-right">
                     {fmtNum(Number(r.fold))}
                   </td>
@@ -342,7 +337,7 @@ function Tab1() {
           {data.length > 0 && (
             <tfoot className="bg-blue-50 font-semibold border-t-2 border-blue-200">
               <tr>
-                <td colSpan={7} className="px-3 py-2 text-right text-blue-800">
+                <td colSpan={6} className="px-3 py-2 text-right text-blue-800">
                   รวม
                 </td>
                 <td className="px-3 py-2 text-right text-blue-800">
