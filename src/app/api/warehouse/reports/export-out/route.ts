@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     FROM fabricouts f
     WHERE ${whereClause}
     GROUP BY f."vatType", f."vatNo", f."fabricStruct"
-    ORDER BY MIN(f."createDate") DESC, f."vatType", f."vatNo"
+    ORDER BY f."vatType", f."vatNo"
     LIMIT 500
   `) as any[]
 

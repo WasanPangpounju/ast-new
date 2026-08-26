@@ -88,6 +88,16 @@ function fmtNum(n: number | null | undefined) {
   return Number(n).toLocaleString("th-TH", { maximumFractionDigits: 2 });
 }
 
+// ตัดคำ "บริษัท" นำหน้า และ "จำกัด" ต่อท้าย ออกจากชื่อบริษัท เช่น
+// "บริษัท สมอทองการ์เมนท์ จำกัด" -> "สมอทองการ์เมนท์"
+function trimCompanyName(name: string | null | undefined) {
+  if (!name) return name ?? "";
+  let s = name.trim();
+  s = s.replace(/^บริษัท/, "").trim();
+  s = s.replace(/จำกัด$/, "").trim();
+  return s;
+}
+
 // ---- Excel helpers ----
 function exportExcelTab1(
   data: ExportOutRow[],
@@ -103,8 +113,8 @@ function exportExcelTab1(
     [],
     [
       "ลำดับ",
-      "วันที่",
       "บิล",
+      "วันที่",
       "โครงสร้างผ้า",
       "ชื่อผู้สั่ง",
       "ชื่อผู้รับ",
@@ -113,11 +123,11 @@ function exportExcelTab1(
     ],
     ...data.map((r, i) => [
       i + 1,
-      toThaiDate(r.createDate),
       `${r.vatType}${r.vatNo}`,
+      toThaiDate(r.createDate),
       r.fabricStruct ?? "",
-      r.customerName ?? "",
-      r.receiveName ?? "",
+      trimCompanyName(r.customerName),
+      trimCompanyName(r.receiveName),
       Number(r.fold ?? 0),
       Number(r.sumYard ?? 0),
     ]),
@@ -277,8 +287,8 @@ function Tab1() {
             <tr>
               {[
                 "ลำดับ",
-                "วันที่",
                 "บิล",
+                "วันที่",
                 "โครงสร้างผ้า",
                 "ชื่อผู้สั่ง",
                 "ชื่อผู้รับ",
@@ -314,16 +324,20 @@ function Tab1() {
                   className="border-t border-gray-100 hover:bg-gray-50"
                 >
                   <td className="px-3 py-1.5 text-gray-500">{i + 1}</td>
-                  <td className="px-3 py-1.5 whitespace-nowrap">
-                    {toThaiDate(r.createDate)}
-                  </td>
                   <td className="px-3 py-1.5 font-mono">
                     {r.vatType}
                     {r.vatNo}
                   </td>
+                  <td className="px-3 py-1.5 whitespace-nowrap">
+                    {toThaiDate(r.createDate)}
+                  </td>
                   <td className="px-3 py-1.5">{r.fabricStruct ?? "-"}</td>
-                  <td className="px-3 py-1.5">{r.customerName ?? "-"}</td>
-                  <td className="px-3 py-1.5">{r.receiveName ?? "-"}</td>
+                  <td className="px-3 py-1.5">
+                    {trimCompanyName(r.customerName) || "-"}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    {trimCompanyName(r.receiveName) || "-"}
+                  </td>
                   <td className="px-3 py-1.5 text-right">
                     {fmtNum(Number(r.fold))}
                   </td>
