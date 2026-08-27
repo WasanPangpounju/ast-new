@@ -25,11 +25,6 @@ interface StockResult {
   used_yard: number;
 }
 
-interface CustomerOption {
-  id: number;
-  name: string;
-}
-
 interface OrderSearchResult {
   id: number;
   purchaseOrder: string;
@@ -74,7 +69,7 @@ export default function BillCreatePage() {
 
   // Customer (ผู้สั่ง)
   const [orderer, setOrderer] = useState("");
-  const [ordererResults, setOrdererResults] = useState<CustomerOption[]>([]);
+  const [ordererResults, setOrdererResults] = useState<string[]>([]);
   const [ordererDropdown, setOrdererDropdown] = useState(false);
 
   // Receiver (ผู้รับ)
@@ -206,9 +201,9 @@ export default function BillCreatePage() {
       return;
     }
     const t = setTimeout(() => {
-      fetch("/api/warehouse/customers?q=" + encodeURIComponent(orderer))
+      fetch("/api/warehouse/bill/suggestions?field=customerName&q=" + encodeURIComponent(orderer))
         .then((r) => r.json())
-        .then((d) => setOrdererResults(d.customers ?? []))
+        .then((d) => setOrdererResults(d.data ?? []))
         .catch(() => {});
     }, 300);
     return () => clearTimeout(t);
@@ -846,18 +841,18 @@ export default function BillCreatePage() {
             />
             {ordererDropdown && ordererResults.length > 0 && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
-                {ordererResults.map((c) => (
+                {ordererResults.map((name) => (
                   <button
-                    key={c.id}
+                    key={name}
                     type="button"
                     onMouseDown={() => {
-                      setOrderer(c.name);
-                      setReceiver(c.name);
+                      setOrderer(name);
+                      setReceiver(name);
                       setOrdererDropdown(false);
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0"
                   >
-                    {c.name}
+                    {name}
                   </button>
                 ))}
               </div>
