@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
+import { EFF_STRUCT, EFF_PATTERN, EFF_WIDTH } from '@/lib/fabricOutMatch'
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -15,26 +16,31 @@ export async function GET(request: NextRequest) {
 
   // หน้ากว้างในข้อมูลจริงมีหลายรูปแบบ เช่น "50", "50/V1-V1", "50/V-PST"
   // ให้ถือว่าเป็นหน้ากว้างเดียวกันโดยพิจารณาเฉพาะตัวเลขนำหน้า (ก่อน "/" หรือช่องว่างหรืออักษร)
-  const fabricWNorm = `COALESCE(substring(trim("fabricW") from '^([0-9]+(?:\\.[0-9]+)?)'), trim("fabricW"))`
+  const fabricWNorm = (col: string) =>
+    `COALESCE(substring(trim(${col}) from '^([0-9]+(?:\\.[0-9]+)?)'), trim(${col}))`
 
   const inRows = await prisma.$queryRawUnsafe(`
     SELECT
-      "fabricStruct", "fabricPattern", ${fabricWNorm} as "fabricW",
+      "fabricStruct", "fabricPattern", ${fabricWNorm('"fabricW"')} as "fabricW",
       SUM(fold)::int as fold,
       ROUND(SUM("sumYard")::numeric, 2)::float as "sumYard"
     FROM stockfabrics
     WHERE deleted_at IS NULL ${dateFilter}
-    GROUP BY "fabricStruct", "fabricPattern", ${fabricWNorm}
+    GROUP BY "fabricStruct", "fabricPattern", ${fabricWNorm('"fabricW"')}
   `) as any[]
 
+  // fabricouts ใช้คอลัมน์ stockFabricStruct/stockFabricPattern/stockFabricW เป็นค่าที่แก้ไข
+  // เมื่อหน้างานบันทึกชื่อผ้า/ลาย/หน้ากว้างตอนตัดออกผิดจากที่บันทึกไว้ตอนรับเข้า — ต้องใช้ค่านี้เป็นหลัก
+  // (fallback ไปค่าดิบเมื่อไม่มีการแก้ไข) ไม่เช่นนั้นยอดส่งออกของกลุ่มผ้าที่ถูกแก้ไขจะหายไปจากรายงานนี้
+  // ทั้งที่ /api/warehouse/stock จับคู่ถูกต้องอยู่แล้ว (ดู lib/fabricOutMatch.ts)
   const outRows = await prisma.$queryRawUnsafe(`
     SELECT
-      "fabricStruct", "fabricPattern", ${fabricWNorm} as "fabricW",
+      ${EFF_STRUCT} as "fabricStruct", ${EFF_PATTERN} as "fabricPattern", ${fabricWNorm(`(${EFF_WIDTH})`)} as "fabricW",
       SUM(fold)::int as fold,
       ROUND(SUM("sumYard")::numeric, 2)::float as "sumYard"
     FROM fabricouts
     WHERE deleted_at IS NULL ${vatFilter} ${dateFilter}
-    GROUP BY "fabricStruct", "fabricPattern", ${fabricWNorm}
+    GROUP BY ${EFF_STRUCT}, ${EFF_PATTERN}, ${fabricWNorm(`(${EFF_WIDTH})`)}
   `) as any[]
 
   const totalIn = inRows.reduce((s: number, r: any) => s + Number(r.sumYard ?? 0), 0)
