@@ -1,6 +1,8 @@
 "use client";
 import { Fragment, useEffect, useState } from "react";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useLoadMoreSentinel } from "@/hooks/useLoadMoreSentinel";
+import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -125,7 +127,6 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
   const qc = useQueryClient();
 
   const [statusFilter, setStatusFilter] = useState<"" | Status>("");
-  const [page, setPage] = useState(1);
   const [formOpenFor, setFormOpenFor] = useState<number | null>(null);
   const [qtyInput, setQtyInput] = useState<Record<number, string>>({});
   const [empInput, setEmpInput] = useState<Record<number, string>>({});
@@ -143,30 +144,36 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
   const [batchSubmitting, setBatchSubmitting] = useState(false);
   const [batchResultMsg, setBatchResultMsg] = useState<string | null>(null);
 
-  const queryKey = ["package-returns-obligations", sourceType, statusFilter, page];
+  const queryKey = ["package-returns-obligations", sourceType, statusFilter];
 
-  const { data, isFetching, isError, error } = useQuery<ObligationResponse>({
+  const { data, isFetching, isFetchingNextPage, isError, error, fetchNextPage, hasNextPage } = useInfiniteQuery<ObligationResponse>({
     queryKey,
-    queryFn: async () => {
-      const params = new URLSearchParams({ sourceType, page: String(page), limit: String(LIMIT) });
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ sourceType, page: String(pageParam), limit: String(LIMIT) });
       if (statusFilter) params.set("status", statusFilter);
       const res = await fetch(`/api/warehouse/package-returns/obligations?${params.toString()}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "โหลดข้อมูลไม่สำเร็จ");
       return json;
     },
-    placeholderData: keepPreviousData,
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((s, pg) => s + pg.data.length, 0);
+      return loaded < lastPage.total ? allPages.length + 1 : undefined;
+    },
+    placeholderData: (prev) => prev,
   });
 
-  const rows = data?.data ?? [];
-  const total = data?.total ?? 0;
-  const totalPages = data?.totalPages ?? 1;
-  const from = total === 0 ? 0 : (page - 1) * LIMIT + 1;
-  const to = Math.min(page * LIMIT, total);
+  const sentinelRef = useLoadMoreSentinel(() => {
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  });
 
-  // Selection is page/filter scoped — a row's checkbox state doesn't survive navigating
-  // away since `rows` no longer contains it.
-  useEffect(() => { setSelectedIds(new Set()); }, [sourceType, statusFilter, page]);
+  const rows = data?.pages.flatMap((pg) => pg.data) ?? [];
+  const total = data?.pages[data.pages.length - 1]?.total ?? 0;
+
+  // Selection is filter scoped — a row's checkbox state doesn't survive switching
+  // tab/filter since `rows` no longer contains it.
+  useEffect(() => { setSelectedIds(new Set()); }, [sourceType, statusFilter]);
 
   const selectedRows = rows.filter((r) => selectedIds.has(r.id));
 
@@ -233,18 +240,21 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
         if (!res.ok) throw new Error(json.error ?? "บันทึกการคืนไม่สำเร็จ");
 
         successCount++;
-        qc.setQueryData<ObligationResponse>(queryKey, (old) => {
+        qc.setQueryData<InfiniteData<ObligationResponse>>(queryKey, (old) => {
           if (!old) return old;
-          const updated = old.data.map((o) => {
-            if (o.id !== row.id) return o;
-            const qtyReturned = o.qtyReturned + qty;
-            const status: Status = qtyReturned >= o.qtyDue ? "RETURNED" : qtyReturned > 0 ? "PARTIALLY_RETURNED" : "PENDING";
-            return { ...o, qtyReturned, status };
+          const pages = old.pages.map((pg) => {
+            const updated = pg.data.map((o) => {
+              if (o.id !== row.id) return o;
+              const qtyReturned = o.qtyReturned + qty;
+              const status: Status = qtyReturned >= o.qtyDue ? "RETURNED" : qtyReturned > 0 ? "PARTIALLY_RETURNED" : "PENDING";
+              return { ...o, qtyReturned, status };
+            });
+            const filtered = statusFilter
+              ? updated.filter((o) => o.status === statusFilter)
+              : updated.filter((o) => o.status !== "RETURNED");
+            return { ...pg, data: filtered };
           });
-          const filtered = statusFilter
-            ? updated.filter((o) => o.status === statusFilter)
-            : updated.filter((o) => o.status !== "RETURNED");
-          return { ...old, data: filtered };
+          return { ...old, pages };
         });
         qc.invalidateQueries({ queryKey: ["package-returns-entries", row.id] });
       } catch (err: unknown) {
@@ -269,7 +279,6 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
 
   function handleStatusFilterChange(value: "" | Status) {
     setStatusFilter(value);
-    setPage(1);
   }
 
   function openForm(row: Obligation) {
@@ -309,23 +318,26 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "บันทึกการคืนไม่สำเร็จ");
 
-      qc.setQueryData<ObligationResponse>(queryKey, (old) => {
+      qc.setQueryData<InfiniteData<ObligationResponse>>(queryKey, (old) => {
         if (!old) return old;
-        const updated = old.data.map((o) => {
-          if (o.id !== obligationId) return o;
-          const qtyReturned = o.qtyReturned + qty;
-          const status: Status = qtyReturned >= o.qtyDue ? "RETURNED" : qtyReturned > 0 ? "PARTIALLY_RETURNED" : "PENDING";
-          return { ...o, qtyReturned, status };
+        const pages = old.pages.map((pg) => {
+          const updated = pg.data.map((o) => {
+            if (o.id !== obligationId) return o;
+            const qtyReturned = o.qtyReturned + qty;
+            const status: Status = qtyReturned >= o.qtyDue ? "RETURNED" : qtyReturned > 0 ? "PARTIALLY_RETURNED" : "PENDING";
+            return { ...o, qtyReturned, status };
+          });
+          // If the row's new status no longer matches the active filter, drop it from view.
+          const filtered = statusFilter
+            ? updated.filter((o) => o.status === statusFilter)
+            : updated.filter((o) => o.status !== "RETURNED");
+          return { ...pg, data: filtered };
         });
-        // If the row's new status no longer matches the active filter, drop it from view.
-        const filtered = statusFilter
-          ? updated.filter((o) => o.status === statusFilter)
-          : updated.filter((o) => o.status !== "RETURNED");
-        return { ...old, data: filtered };
+        return { ...old, pages };
       });
 
-      // The optimistic patch above can't recompute total/totalPages (a row may have
-      // moved off this page's filter), so refetch this obligation list in the background —
+      // The optimistic patch above can't recompute total (a row may have
+      // moved off the active filter), so refetch this obligation list in the background —
       // rows already shown stay visible while it settles, no full-page reload.
       qc.invalidateQueries({ queryKey: ["package-returns-obligations", sourceType] });
       qc.invalidateQueries({ queryKey: ["package-returns-entries", obligationId] });
@@ -430,7 +442,7 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
                           />
                         )}
                       </td>
-                      <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
+                      <td className="px-3 py-2 text-center text-gray-400">{i + 1}</td>
                       <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.createdAt)}</td>
                       <td className="px-3 py-2 text-gray-700 max-w-[150px] truncate" title={counterparty ?? ""}>
                         {counterparty ?? "-"}
@@ -531,28 +543,13 @@ function ObligationTable({ sourceType, emp }: { sourceType: SourceType; emp: str
         </table>
       </div>
 
-      {/* Pagination */}
-      {totalPages >= 1 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-          <p className="text-xs text-gray-500">
-            {total === 0
-              ? "ไม่มีข้อมูล"
-              : `แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} รายการ`}
-            {isFetching && <span className="ml-2 text-blue-500">กำลังโหลด...</span>}
-          </p>
-          <div className="flex gap-1">
-            <button type="button" onClick={() => setPage(1)} disabled={page === 1}
-              className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">«</button>
-            <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-              className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">‹</button>
-            <span className="px-3 py-1 text-xs border border-gray-300 bg-white">{page} / {totalPages}</span>
-            <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">›</button>
-            <button type="button" onClick={() => setPage(totalPages)} disabled={page === totalPages}
-              className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">»</button>
-          </div>
-        </div>
-      )}
+      <InfiniteScrollStatus
+        sentinelRef={sentinelRef}
+        hasMore={!!hasNextPage}
+        loadingMore={isFetchingNextPage}
+        total={total}
+        loadedCount={rows.length}
+      />
 
       {/* ── Batch return modal ─────────────────────────────────────────────── */}
       {batchOpen && (

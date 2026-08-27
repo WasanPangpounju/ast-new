@@ -1,5 +1,7 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
+import { InfiniteScrollStatus } from '@/components/InfiniteScrollStatus'
 
 interface StockGroup {
   customer: string
@@ -35,10 +37,6 @@ interface BillEntry {
 }
 
 export default function StockPage() {
-  const [stocks, setStocks] = useState<StockGroup[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [searchBy, setSearchBy] = useState<'fabricCode' | 'fabricStruct' | 'fabricPattern' | 'fabricW'>('fabricCode')
   const [customer, setCustomer] = useState('')
@@ -68,19 +66,17 @@ export default function StockPage() {
   const [billSaving, setBillSaving] = useState(false)
   const [deleteBill, setDeleteBill] = useState<{ vatType: string; vatNo: number } | null>(null)
 
-  const fetchStocks = useCallback(() => {
-    setLoading(true)
+  const fetchStocksPage = useCallback((page: number) => {
     const p = new URLSearchParams({ page: String(page) })
     if (appliedQ) { p.set('q', appliedQ); p.set('searchBy', appliedSearchBy) }
     if (appliedCustomer) p.set('customer', appliedCustomer)
     if (stockType !== 'all') p.set('stockType', stockType)
-    fetch(`/api/warehouse/stock?${p}`)
+    return fetch(`/api/warehouse/stock?${p}`)
       .then(r => r.json())
-      .then(d => { setStocks(d.stocks ?? []); setTotal(d.total ?? 0) })
-      .finally(() => setLoading(false))
-  }, [page, appliedQ, appliedSearchBy, appliedCustomer, stockType])
+      .then(d => ({ items: d.stocks ?? [], total: d.total ?? 0 }))
+  }, [appliedQ, appliedSearchBy, appliedCustomer, stockType])
 
-  useEffect(() => { fetchStocks() }, [fetchStocks])
+  const { items: stocks, total, initialLoading, loadingMore, hasMore, sentinelRef, reload } = useInfiniteScroll<StockGroup>(fetchStocksPage)
 
   const fetchDetail = useCallback((g: StockGroup) => {
     setDetailLoading(true)
@@ -137,7 +133,7 @@ export default function StockPage() {
     setStockSaving(false)
     setEditingStock(null)
     fetchDetail(detailGroup)
-    fetchStocks()
+    reload()
   }
 
   const handleDeleteStock = async (refId: string) => {
@@ -147,7 +143,7 @@ export default function StockPage() {
     setStockSaving(false)
     setDeleteStockRefId(null)
     fetchDetail(detailGroup)
-    fetchStocks()
+    reload()
   }
 
   // ── Bill entry handlers ───────────────────────────────
@@ -179,12 +175,11 @@ export default function StockPage() {
     setBillSaving(false)
     setDeleteBill(null)
     fetchDetail(detailGroup)
-    fetchStocks()
+    reload()
   }
 
-  const totalPages = Math.ceil(total / 20)
-  const handleSearch = () => { setPage(1); setAppliedQ(q); setAppliedSearchBy(searchBy); setAppliedCustomer(customer) }
-  const handleClear = () => { setQ(''); setCustomer(''); setAppliedQ(''); setAppliedCustomer(''); setStockType('all'); setPage(1) }
+  const handleSearch = () => { setAppliedQ(q); setAppliedSearchBy(searchBy); setAppliedCustomer(customer) }
+  const handleClear = () => { setQ(''); setCustomer(''); setAppliedQ(''); setAppliedCustomer(''); setStockType('all') }
 
   const searchByOptions = [
     { value: 'fabricCode',    label: 'รหัสผ้า' },
@@ -251,7 +246,7 @@ export default function StockPage() {
         <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-gray-100">
           <span className="text-xs text-gray-500 mr-1">ประเภท:</span>
           {(['all', 'produced', 'purchased'] as const).map(t => (
-            <button key={t} onClick={() => { setStockType(t); setPage(1) }}
+            <button key={t} onClick={() => { setStockType(t) }}
               className={`px-3 py-1 text-xs rounded-full border transition-colors ${stockType === t ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
               {t === 'all' ? 'ทั้งหมด' : t === 'produced' ? 'ผ้าผลิต' : 'ผ้าซื้อเข้า'}
             </button>
@@ -286,7 +281,7 @@ export default function StockPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {loading ? (
+              {initialLoading ? (
                 <tr><td colSpan={12} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"/>
@@ -325,17 +320,14 @@ export default function StockPage() {
             </tbody>
           </table>
         </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <p className="text-xs text-gray-500">หน้า {page} จาก {totalPages} ({total.toLocaleString()} กลุ่ม)</p>
-            <div className="flex gap-1">
-              <button onClick={() => setPage(1)} disabled={page===1} className="px-2 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white">«</button>
-              <button onClick={() => setPage(p=>Math.max(1,p-1))} disabled={page===1} className="px-3 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white">‹</button>
-              <button onClick={() => setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} className="px-3 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white">›</button>
-              <button onClick={() => setPage(totalPages)} disabled={page===totalPages} className="px-2 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white">»</button>
-            </div>
-          </div>
-        )}
+        <InfiniteScrollStatus
+          sentinelRef={sentinelRef}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          total={total}
+          loadedCount={stocks.length}
+          itemLabel="กลุ่ม"
+        />
       </div>
 
       {/* ── Detail Modal ───────────────────────────────────── */}

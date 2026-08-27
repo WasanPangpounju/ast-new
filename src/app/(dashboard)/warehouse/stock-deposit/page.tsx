@@ -1,5 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
+import { InfiniteScrollStatus } from '@/components/InfiniteScrollStatus'
 
 const GROUPS = 8
 const ROWS = 20
@@ -112,10 +114,6 @@ function YardGrid({
 }
 
 export default function StockDepositPage() {
-  const [bills, setBills] = useState<DepositBill[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [applied, setApplied] = useState('')
 
@@ -146,17 +144,15 @@ export default function StockDepositPage() {
   const [editSaving, setEditSaving] = useState(false)
   const editInputRefs = useRef<(HTMLInputElement | null)[]>(Array(TOTAL_SLOTS).fill(null))
 
-  const fetchBills = useCallback(() => {
-    setLoading(true)
+  const fetchBillsPage = useCallback((page: number) => {
     const p = new URLSearchParams({ page: String(page) })
     if (applied) p.set('search', applied)
-    fetch(`/api/warehouse/stock-deposit?${p}`)
+    return fetch(`/api/warehouse/stock-deposit?${p}`)
       .then(r => r.json())
-      .then(d => { setBills(d.bills ?? []); setTotal(d.total ?? 0) })
-      .finally(() => setLoading(false))
-  }, [page, applied])
+      .then(d => ({ items: d.bills ?? [], total: d.total ?? 0 }))
+  }, [applied])
 
-  useEffect(() => { fetchBills() }, [fetchBills])
+  const { items: bills, total, initialLoading, loadingMore, hasMore, sentinelRef, reload } = useInfiniteScroll<DepositBill>(fetchBillsPage)
 
   useEffect(() => {
     if (!createOpen) return
@@ -165,8 +161,6 @@ export default function StockDepositPage() {
       .then(d => { if (d.nextNo) setCreateBillNo(String(d.nextNo)) })
       .catch(() => {})
   }, [createBillType, createOpen])
-
-  const totalPages = Math.ceil(total / 20)
 
   // ── Fetch withdrawal list for detail modal ──
   const fetchWithdrawals = async (refId: string) => {
@@ -228,7 +222,7 @@ export default function StockDepositPage() {
       if (!res.ok) throw new Error(data.error ?? 'บันทึกไม่สำเร็จ')
       alert(`เบิกผ้าออกสำเร็จ ${data.count} รายการ บิลเลขที่ ${data.vatNo}`)
       closeCreate()
-      fetchBills()
+      reload()
       if (detailOpen && detailBill) fetchWithdrawals(detailBill.refId)
     } catch (err: any) {
       alert('เกิดข้อผิดพลาด: ' + err.message)
@@ -283,7 +277,7 @@ export default function StockDepositPage() {
       if (!res.ok) throw new Error(data.error ?? 'แก้ไขไม่สำเร็จ')
       closeEdit()
       if (detailBill) fetchWithdrawals(detailBill.refId)
-      fetchBills()
+      reload()
     } catch (err: any) {
       alert('เกิดข้อผิดพลาด: ' + err.message)
     } finally {
@@ -303,7 +297,7 @@ export default function StockDepositPage() {
         throw new Error(d.error ?? 'ลบไม่สำเร็จ')
       }
       if (detailBill) fetchWithdrawals(detailBill.refId)
-      fetchBills()
+      reload()
     } catch (err: any) {
       alert('เกิดข้อผิดพลาด: ' + err.message)
     }
@@ -321,12 +315,12 @@ export default function StockDepositPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm flex gap-3">
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="ค้นหาลูกค้า, โครงสร้างผ้า..."
-          onKeyDown={e => e.key === 'Enter' && (setPage(1), setApplied(search))}
+          onKeyDown={e => e.key === 'Enter' && setApplied(search)}
           className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        <button onClick={() => { setPage(1); setApplied(search) }}
+        <button onClick={() => setApplied(search)}
           className="px-6 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">ค้นหา</button>
-        <button onClick={() => { setSearch(''); setApplied(''); setPage(1) }}
+        <button onClick={() => { setSearch(''); setApplied('') }}
           className="px-4 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600">เคลียร์</button>
       </div>
 
@@ -354,7 +348,7 @@ export default function StockDepositPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {loading ? (
+              {initialLoading ? (
                 <tr><td colSpan={11} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -400,17 +394,13 @@ export default function StockDepositPage() {
             </tbody>
           </table>
         </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <p className="text-xs text-gray-500">หน้า {page} จาก {totalPages}</p>
-            <div className="flex gap-1">
-              <button onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white">«</button>
-              <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white">‹</button>
-              <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-3 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white">›</button>
-              <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white">»</button>
-            </div>
-          </div>
-        )}
+        <InfiniteScrollStatus
+          sentinelRef={sentinelRef}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          total={total}
+          loadedCount={bills.length}
+        />
       </div>
 
       {/* ── Detail modal ── */}

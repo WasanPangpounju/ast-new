@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import AutocompleteInput from "@/components/AutocompleteInput";
 import { useFieldSuggestions } from "@/hooks/useFieldSuggestions";
+import { useLoadMoreSentinel } from "@/hooks/useLoadMoreSentinel";
+import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -203,7 +205,6 @@ export default function OutsideHistoryList() {
 
   const [filters, setFilters] = useState<SearchFilters>(emptyFilters);
   const [applied, setApplied] = useState<SearchFilters>(emptyFilters);
-  const [page, setPage] = useState(1);
 
   const yarnTypeSuggest  = useFieldSuggestions("/api/warehouse/material/yarn-types");
   const supplierSuggest  = useFieldSuggestions("/api/warehouse/material/suppliers");
@@ -220,11 +221,11 @@ export default function OutsideHistoryList() {
   const [editSaving, setEditSaving] = useState(false);
   const [editMsg, setEditMsg]       = useState<{ ok: boolean; text: string } | null>(null);
 
-  // ── list query ──────────────────────────────────────────────────────────────
-  const { data, isFetching, isError } = useQuery<OutsideResponse>({
-    queryKey: ["material-outside", applied, page],
-    queryFn: async () => {
-      const p = new URLSearchParams({ page: String(page), limit: String(LIMIT) });
+  // ── list query (infinite scroll) ────────────────────────────────────────────
+  const { data, isFetching, isFetchingNextPage, isError, fetchNextPage, hasNextPage } = useInfiniteQuery<OutsideResponse>({
+    queryKey: ["material-outside", applied],
+    queryFn: async ({ pageParam }) => {
+      const p = new URLSearchParams({ page: String(pageParam), limit: String(LIMIT) });
       if (applied.withdrawId)   p.set("withdrawId",   applied.withdrawId);
       if (applied.yarnType)     p.set("yarnType",     applied.yarnType);
       if (applied.supplierName) p.set("supplierName", applied.supplierName);
@@ -236,27 +237,30 @@ export default function OutsideHistoryList() {
       if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
       return res.json();
     },
-    placeholderData: keepPreviousData,
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((s, pg) => s + pg.data.length, 0);
+      return loaded < lastPage.total ? allPages.length + 1 : undefined;
+    },
   });
 
-  const rows       = data?.data       ?? [];
-  const total      = data?.total      ?? 0;
-  const totalPages = data?.totalPages ?? 1;
-  const from       = total === 0 ? 0 : (page - 1) * LIMIT + 1;
-  const to         = Math.min(page * LIMIT, total);
+  const sentinelRef = useLoadMoreSentinel(() => {
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  });
+
+  const rows  = data?.pages.flatMap((pg) => pg.data) ?? [];
+  const total = data?.pages[data.pages.length - 1]?.total ?? 0;
 
   // ── handlers ────────────────────────────────────────────────────────────────
   function setField<K extends keyof SearchFilters>(key: K, value: SearchFilters[K]) {
     setFilters((f) => ({ ...f, [key]: value }));
   }
   function handleSearch() {
-    setPage(1);
     setApplied(filters);
   }
   function handleClear() {
     setFilters(emptyFilters);
     setApplied(emptyFilters);
-    setPage(1);
     yarnTypeSuggest.clear(); supplierSuggest.clear(); lotSuggest.clear(); recipientSuggest.clear();
   }
 
@@ -577,7 +581,7 @@ export default function OutsideHistoryList() {
               ) : rows.map((row, i) => (
                 <tr key={row.id}
                   className={`hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
-                  <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
+                  <td className="px-3 py-2 text-center text-gray-400">{i + 1}</td>
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.withdrawDate)}</td>
                   <td className="px-3 py-2 text-gray-800 max-w-[120px] truncate" title={row.yarnType}>
                     {row.yarnType}
@@ -601,28 +605,13 @@ export default function OutsideHistoryList() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {totalPages >= 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <p className="text-xs text-gray-500">
-              {total === 0
-                ? "ไม่มีข้อมูล"
-                : `แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} รายการ`}
-              {isFetching && <span className="ml-2 text-blue-500">กำลังโหลด...</span>}
-            </p>
-            <div className="flex gap-1">
-              <button type="button" onClick={() => setPage(1)} disabled={page === 1}
-                className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">«</button>
-              <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">‹</button>
-              <span className="px-3 py-1 text-xs border border-gray-300 bg-white">{page} / {totalPages}</span>
-              <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">›</button>
-              <button type="button" onClick={() => setPage(totalPages)} disabled={page === totalPages}
-                className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">»</button>
-            </div>
-          </div>
-        )}
+        <InfiniteScrollStatus
+          sentinelRef={sentinelRef}
+          hasMore={!!hasNextPage}
+          loadingMore={isFetchingNextPage}
+          total={total}
+          loadedCount={rows.length}
+        />
       </div>
 
       {/* ── Modal ──────────────────────────────────────────────────────────────── */}

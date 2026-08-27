@@ -1,5 +1,7 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
+import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
 
 interface Order {
   id: number;
@@ -25,11 +27,6 @@ interface Order {
 }
 
 export default function WarehouseOrdersPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-
   const [search, setSearch] = useState("");
   const [customer, setCustomer] = useState("");
   const [fabricId, setFabricId] = useState("");
@@ -47,27 +44,19 @@ export default function WarehouseOrdersPage() {
   const [orderBills, setOrderBills] = useState<any[]>([]);
   const [billsLoading, setBillsLoading] = useState(false);
 
-  const fetchOrders = useCallback(() => {
-    setLoading(true);
+  const fetchOrdersPage = useCallback((page: number) => {
     const p = new URLSearchParams({
       page: String(page),
       ...Object.fromEntries(Object.entries(applied).filter(([, v]) => v)),
     });
-    fetch(`/api/warehouse/orders?${p}`)
+    return fetch(`/api/warehouse/orders?${p}`)
       .then((r) => r.json())
-      .then((d) => {
-        setOrders(d.orders ?? []);
-        setTotal(d.total ?? 0);
-      })
-      .finally(() => setLoading(false));
-  }, [page, applied]);
+      .then((d) => ({ items: d.orders ?? [], total: d.total ?? 0 }));
+  }, [applied]);
 
-  useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+  const { items: orders, total, initialLoading, loadingMore, hasMore, sentinelRef } = useInfiniteScroll<Order>(fetchOrdersPage);
 
   const handleSearch = () => {
-    setPage(1);
     setApplied({ search, customer, fabricId, dateFrom, dateTo });
   };
   const handleClear = () => {
@@ -76,7 +65,6 @@ export default function WarehouseOrdersPage() {
     setFabricId("");
     setDateFrom("");
     setDateTo("");
-    setPage(1);
     setApplied({
       search: "",
       customer: "",
@@ -110,8 +98,6 @@ export default function WarehouseOrdersPage() {
     });
     window.location.href = `/warehouse/bill/create?${params}`;
   }
-
-  const totalPages = Math.ceil(total / 20);
 
   const fmtDate = (d: string) => {
     try {
@@ -303,7 +289,7 @@ export default function WarehouseOrdersPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {loading ? (
+              {initialLoading ? (
                 <tr>
                   <td colSpan={11} className="text-center py-12 text-gray-400">
                     <div className="flex flex-col items-center gap-2">
@@ -423,44 +409,14 @@ export default function WarehouseOrdersPage() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <p className="text-xs text-gray-500">
-              หน้า {page} จาก {totalPages} ({total.toLocaleString()} รายการ)
-            </p>
-            <div className="flex gap-1">
-              <button
-                onClick={() => setPage(1)}
-                disabled={page === 1}
-                className="px-2 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white"
-              >
-                «
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white"
-              >
-                ‹ ก่อนหน้า
-              </button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white"
-              >
-                ถัดไป ›
-              </button>
-              <button
-                onClick={() => setPage(totalPages)}
-                disabled={page === totalPages}
-                className="px-2 py-1 text-xs border border-gray-300 rounded disabled:opacity-40 hover:bg-white"
-              >
-                »
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Infinite scroll status */}
+        <InfiniteScrollStatus
+          sentinelRef={sentinelRef}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          total={total}
+          loadedCount={orders.length}
+        />
       </div>
 
       {/* Detail Modal */}

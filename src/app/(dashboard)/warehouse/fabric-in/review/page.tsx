@@ -1,5 +1,7 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
+import { InfiniteScrollStatus } from '@/components/InfiniteScrollStatus'
 
 interface StockGroup {
   refId: string
@@ -29,10 +31,6 @@ interface FoldItem {
 }
 
 export default function StockReviewPage() {
-  const [groups, setGroups] = useState<StockGroup[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(true)
   const [q, setQ] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -52,19 +50,17 @@ export default function StockReviewPage() {
   const [foldSaving, setFoldSaving] = useState(false)
   const [confirmDeleteFold, setConfirmDeleteFold] = useState<number | null>(null)
 
-  const fetchGroups = useCallback(() => {
-    setLoading(true)
+  const fetchGroupsPage = useCallback((page: number) => {
     const p = new URLSearchParams({ page: String(page) })
     if (appliedQ) p.set('q', appliedQ)
     if (appliedDateFrom) p.set('dateFrom', appliedDateFrom)
     if (appliedDateTo) p.set('dateTo', appliedDateTo)
-    fetch(`/api/warehouse/stock/review?${p}`)
+    return fetch(`/api/warehouse/stock/review?${p}`)
       .then(r => r.json())
-      .then(d => { setGroups(d.groups ?? []); setTotal(d.total ?? 0) })
-      .finally(() => setLoading(false))
-  }, [page, appliedQ, appliedDateFrom, appliedDateTo])
+      .then(d => ({ items: d.groups ?? [], total: d.total ?? 0 }))
+  }, [appliedQ, appliedDateFrom, appliedDateTo])
 
-  useEffect(() => { fetchGroups() }, [fetchGroups])
+  const { items: groups, total, initialLoading, loadingMore, hasMore, sentinelRef, reload } = useInfiniteScroll<StockGroup>(fetchGroupsPage)
 
   const fetchFolds = useCallback((refId: string) => {
     setFoldsLoading(true)
@@ -74,8 +70,6 @@ export default function StockReviewPage() {
       .finally(() => setFoldsLoading(false))
   }, [])
 
-  const totalPages = Math.ceil(total / 20)
-
   const fmtDate = (d: string) => {
     if (!d) return '-'
     try {
@@ -84,11 +78,10 @@ export default function StockReviewPage() {
     } catch { return '-' }
   }
 
-  const handleSearch = () => { setPage(1); setAppliedQ(q); setAppliedDateFrom(dateFrom); setAppliedDateTo(dateTo) }
+  const handleSearch = () => { setAppliedQ(q); setAppliedDateFrom(dateFrom); setAppliedDateTo(dateTo) }
   const handleClear = () => {
     setQ(''); setDateFrom(''); setDateTo('')
     setAppliedQ(''); setAppliedDateFrom(''); setAppliedDateTo('')
-    setPage(1)
   }
 
   const openManage = (g: StockGroup) => {
@@ -131,7 +124,7 @@ export default function StockReviewPage() {
     })
     setSaving(false)
     closeManage()
-    fetchGroups()
+    reload()
   }
 
   const handleDelete = async () => {
@@ -140,7 +133,7 @@ export default function StockReviewPage() {
     await fetch(`/api/warehouse/stock/review?refId=${encodeURIComponent(manageGroup.refId)}`, { method: 'DELETE' })
     setSaving(false)
     closeManage()
-    fetchGroups()
+    reload()
   }
 
   const handleSaveFold = async () => {
@@ -154,7 +147,7 @@ export default function StockReviewPage() {
     setFoldSaving(false)
     setEditingFold(null)
     fetchFolds(manageGroup.refId)
-    fetchGroups()
+    reload()
   }
 
   const handleDeleteFold = async (id: number) => {
@@ -164,7 +157,7 @@ export default function StockReviewPage() {
     setFoldSaving(false)
     setConfirmDeleteFold(null)
     fetchFolds(manageGroup.refId)
-    fetchGroups()
+    reload()
   }
 
   return (
@@ -221,7 +214,7 @@ export default function StockReviewPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {loading ? (
+              {initialLoading ? (
                 <tr><td colSpan={9} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"/>
@@ -251,17 +244,13 @@ export default function StockReviewPage() {
             </tbody>
           </table>
         </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <p className="text-xs text-gray-500">หน้า {page} จาก {totalPages} ({total.toLocaleString()} รายการ)</p>
-            <div className="flex gap-1">
-              <button type="button" onClick={() => setPage(1)} disabled={page===1} className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">«</button>
-              <button type="button" onClick={() => setPage(p=>Math.max(1,p-1))} disabled={page===1} className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">‹</button>
-              <button type="button" onClick={() => setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages} className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">›</button>
-              <button type="button" onClick={() => setPage(totalPages)} disabled={page===totalPages} className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">»</button>
-            </div>
-          </div>
-        )}
+        <InfiniteScrollStatus
+          sentinelRef={sentinelRef}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          total={total}
+          loadedCount={groups.length}
+        />
       </div>
 
       {/* Manage Modal */}

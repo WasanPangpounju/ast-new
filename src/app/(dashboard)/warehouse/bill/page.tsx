@@ -1,5 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
+import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
 
 interface Bill {
   vatType: string;
@@ -76,10 +78,6 @@ interface OrderResult {
 type ActiveTab = 'bill' | 'stock' | 'order' | 'folds';
 
 export default function BillListPage() {
-  const [bills, setBills] = useState<Bill[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [applied, setApplied] = useState("");
   const [noStockOnly, setNoStockOnly] = useState(false);
@@ -120,18 +118,16 @@ export default function BillListPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyCache, setHistoryCache] = useState<Record<string, BillHistoryEntry[]>>({});
 
-  const fetchBills = useCallback(() => {
-    setLoading(true);
+  const fetchBillsPage = useCallback((page: number) => {
     const p = new URLSearchParams({ page: String(page) });
     if (applied) p.set("search", applied);
     if (noStockOnly) p.set("noStockOnly", "1");
-    fetch(`/api/warehouse/bill?${p}`)
+    return fetch(`/api/warehouse/bill?${p}`)
       .then((r) => r.json())
-      .then((d) => { setBills(d.bills ?? []); setTotal(d.total ?? 0); })
-      .finally(() => setLoading(false));
-  }, [page, applied, noStockOnly]);
+      .then((d) => ({ items: d.bills ?? [], total: d.total ?? 0 }));
+  }, [applied, noStockOnly]);
 
-  useEffect(() => { fetchBills(); }, [fetchBills]);
+  const { items: bills, total, initialLoading, loadingMore, hasMore, sentinelRef, reload } = useInfiniteScroll<Bill>(fetchBillsPage);
 
   // Search box suggestions (customer / receiver names) debounce
   useEffect(() => {
@@ -147,8 +143,6 @@ export default function BillListPage() {
     }, 300);
     return () => clearTimeout(t);
   }, [search]);
-
-  const totalPages = Math.ceil(total / 20);
 
   const fmtDate = (d: string) => {
     try {
@@ -209,7 +203,7 @@ export default function BillListPage() {
       setHistoryOpenKey(null); // key เปลี่ยนตามเลขที่บิลใหม่ — ปิดประวัติเดิมไว้ก่อน เปิดใหม่จะดึงของเลขที่ใหม่
       setManageBill(mb => mb && mb.vatType === editingVatNo.vatType && mb.vatNo === editingVatNo.vatNo ? { ...mb, vatNo: d.vatNo } : mb);
       setEditingVatNo(null);
-      fetchBills();
+      reload();
     } finally {
       setVatNoSaving(false);
     }
@@ -230,7 +224,7 @@ export default function BillListPage() {
         setHistoryCache(c => { const n = { ...c }; delete n[key]; return n; }); // invalidate cached history
         setManageBill(mb => mb && mb.vatType === editingDate.vatType && mb.vatNo === editingDate.vatNo ? { ...mb, createDate: d.createDate } : mb);
         setEditingDate(null);
-        fetchBills();
+        reload();
       }
     } finally {
       setDateSaving(false);
@@ -359,7 +353,7 @@ export default function BillListPage() {
     });
     setStockSaving(false);
     setManageBill(b => b ? { ...b, stockFabricStruct: s.fabricStruct, stockFabricW: s.fabricW, stockFabricPattern: s.fabricPattern, stockCustomer: s.customer, hasStockMatch: true } : b);
-    fetchBills();
+    reload();
   };
 
   const handleClearStock = async () => {
@@ -376,7 +370,7 @@ export default function BillListPage() {
     });
     setStockSaving(false);
     setManageBill(b => b ? { ...b, stockFabricStruct: null, stockFabricW: null, stockFabricPattern: null, stockCustomer: null } : b);
-    fetchBills();
+    reload();
   };
 
   const handleOrderSearchChange = (v: string) => {
@@ -398,7 +392,7 @@ export default function BillListPage() {
     });
     setOrderSaving(false);
     setManageBill(b => b ? { ...b, orderId: o.id, purchaseOrder: o.purchaseOrder } : b);
-    fetchBills();
+    reload();
   };
 
   const handleUnlinkOrder = async () => {
@@ -414,7 +408,7 @@ export default function BillListPage() {
     });
     setOrderSaving(false);
     setManageBill(b => b ? { ...b, orderId: null, purchaseOrder: null } : b);
-    fetchBills();
+    reload();
   };
 
   const handleSaveFold = async () => {
@@ -428,7 +422,7 @@ export default function BillListPage() {
     setFoldSaving(false);
     setEditingFold(null);
     fetchFolds(manageBill.vatType, manageBill.vatNo);
-    fetchBills();
+    reload();
   };
 
   const handleDeleteFold = async (id: number) => {
@@ -438,7 +432,7 @@ export default function BillListPage() {
     setFoldSaving(false);
     setConfirmDeleteFold(null);
     fetchFolds(manageBill.vatType, manageBill.vatNo);
-    fetchBills();
+    reload();
   };
 
   const handleSave = async () => {
@@ -451,7 +445,7 @@ export default function BillListPage() {
     });
     setSaving(false);
     closeManage();
-    fetchBills();
+    reload();
   };
 
   const handleDelete = async () => {
@@ -460,7 +454,7 @@ export default function BillListPage() {
     await fetch(`/api/warehouse/bill?vatType=${manageBill.vatType}&vatNo=${manageBill.vatNo}`, { method: "DELETE" });
     setSaving(false);
     closeManage();
-    fetchBills();
+    reload();
   };
 
   return (
@@ -480,7 +474,7 @@ export default function BillListPage() {
             onFocus={() => { if (search) setSearchDropdown(true); }}
             onBlur={() => setTimeout(() => setSearchDropdown(false), 200)}
             placeholder="ค้นหาลูกค้า, เลขที่บิล..."
-            onKeyDown={(e) => e.key === "Enter" && (setSearchDropdown(false), setPage(1), setApplied(search))}
+            onKeyDown={(e) => e.key === "Enter" && (setSearchDropdown(false), setApplied(search))}
             className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           {searchDropdown && searchSuggestions.length > 0 && (
@@ -501,17 +495,17 @@ export default function BillListPage() {
             </div>
           )}
         </div>
-        <button type="button" onClick={() => { setPage(1); setApplied(search); }}
+        <button type="button" onClick={() => { setApplied(search); }}
           className="px-6 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium">
           ค้นหา
         </button>
-        <button type="button" onClick={() => { setSearch(""); setApplied(""); setNoStockOnly(false); setPage(1); setSearchDropdown(false); }}
+        <button type="button" onClick={() => { setSearch(""); setApplied(""); setNoStockOnly(false); setSearchDropdown(false); }}
           className="px-4 py-1.5 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600">
           เคลียร์
         </button>
         <button
           type="button"
-          onClick={() => { setNoStockOnly(v => !v); setPage(1); }}
+          onClick={() => { setNoStockOnly(v => !v); }}
           className={`px-4 py-1.5 text-sm font-medium border transition-colors ${noStockOnly ? "bg-red-600 text-white border-red-600 hover:bg-red-700" : "border-red-300 text-red-600 hover:bg-red-50"}`}
         >
           {noStockOnly ? "● ไม่มีสต็อก" : "○ ไม่มีสต็อก"}
@@ -535,7 +529,7 @@ export default function BillListPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {loading ? (
+              {initialLoading ? (
                 <tr><td colSpan={9} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
@@ -588,17 +582,14 @@ export default function BillListPage() {
             </tbody>
           </table>
         </div>
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <p className="text-xs text-gray-500">หน้า {page} จาก {totalPages}</p>
-            <div className="flex gap-1">
-              <button type="button" onClick={() => setPage(1)} disabled={page === 1} className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">«</button>
-              <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">‹</button>
-              <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">›</button>
-              <button type="button" onClick={() => setPage(totalPages)} disabled={page === totalPages} className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">»</button>
-            </div>
-          </div>
-        )}
+        <InfiniteScrollStatus
+          sentinelRef={sentinelRef}
+          hasMore={hasMore}
+          loadingMore={loadingMore}
+          total={total}
+          loadedCount={bills.length}
+          itemLabel="บิล"
+        />
       </div>
 
       {/* Manage Modal */}

@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
-import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useLoadMoreSentinel } from "@/hooks/useLoadMoreSentinel";
+import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -52,7 +54,6 @@ function numFmt(n: number | null | undefined, dec = 3) {
   return n.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
-const LIMIT = 20;
 const LBS_PER_KG = 2.2046;
 const fmt3 = (n: number) => (n > 0 ? n.toFixed(3) : "");
 const inp = "w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
@@ -90,7 +91,6 @@ export default function MaterialReturnHistoryList() {
   const [appliedQ, setAppliedQ]               = useState("");
   const [appliedDateFrom, setAppliedDateFrom] = useState("");
   const [appliedDateTo, setAppliedDateTo]     = useState("");
-  const [page, setPage] = useState(1);
 
   const [selected, setSelected]   = useState<MaterialReturnRecord | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("detail");
@@ -101,11 +101,11 @@ export default function MaterialReturnHistoryList() {
   const [editSaving, setEditSaving] = useState(false);
   const [editMsg, setEditMsg]       = useState<{ ok: boolean; text: string } | null>(null);
 
-  // ── list query ──────────────────────────────────────────────────────────────
-  const { data, isFetching, isError } = useQuery<ReturnResponse>({
-    queryKey: ["material-return", appliedQ, appliedDateFrom, appliedDateTo, page],
-    queryFn: async () => {
-      const p = new URLSearchParams({ page: String(page) });
+  // ── list query (infinite scroll) ────────────────────────────────────────────
+  const { data, isFetching, isFetchingNextPage, isError, fetchNextPage, hasNextPage } = useInfiniteQuery<ReturnResponse>({
+    queryKey: ["material-return", appliedQ, appliedDateFrom, appliedDateTo],
+    queryFn: async ({ pageParam }) => {
+      const p = new URLSearchParams({ page: String(pageParam) });
       if (appliedQ)        p.set("search",   appliedQ);
       if (appliedDateFrom) p.set("dateFrom", appliedDateFrom);
       if (appliedDateTo)   p.set("dateTo",   appliedDateTo);
@@ -113,18 +113,22 @@ export default function MaterialReturnHistoryList() {
       if (!res.ok) throw new Error("โหลดข้อมูลไม่สำเร็จ");
       return res.json();
     },
-    placeholderData: keepPreviousData,
+    initialPageParam: 1,
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((s, pg) => s + pg.records.length, 0);
+      return loaded < lastPage.total ? allPages.length + 1 : undefined;
+    },
   });
 
-  const rows       = data?.records ?? [];
-  const total      = data?.total   ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / LIMIT));
-  const from       = total === 0 ? 0 : (page - 1) * LIMIT + 1;
-  const to         = Math.min(page * LIMIT, total);
+  const sentinelRef = useLoadMoreSentinel(() => {
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  });
+
+  const rows  = data?.pages.flatMap((pg) => pg.records) ?? [];
+  const total = data?.pages[data.pages.length - 1]?.total ?? 0;
 
   // ── handlers ────────────────────────────────────────────────────────────────
   function handleSearch() {
-    setPage(1);
     setAppliedQ(q);
     setAppliedDateFrom(dateFrom);
     setAppliedDateTo(dateTo);
@@ -132,7 +136,6 @@ export default function MaterialReturnHistoryList() {
   function handleClear() {
     setQ(""); setDateFrom(""); setDateTo("");
     setAppliedQ(""); setAppliedDateFrom(""); setAppliedDateTo("");
-    setPage(1);
   }
 
   function openModal(row: MaterialReturnRecord) {
@@ -308,7 +311,7 @@ export default function MaterialReturnHistoryList() {
               ) : rows.map((row, i) => (
                 <tr key={row.id}
                   className={`hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
-                  <td className="px-3 py-2 text-center text-gray-400">{(page - 1) * LIMIT + i + 1}</td>
+                  <td className="px-3 py-2 text-center text-gray-400">{i + 1}</td>
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(row.returnDate)}</td>
                   <td className="px-3 py-2 text-gray-800 max-w-[120px] truncate" title={row.yarnType}>
                     {row.yarnType}
@@ -331,28 +334,13 @@ export default function MaterialReturnHistoryList() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {totalPages >= 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <p className="text-xs text-gray-500">
-              {total === 0
-                ? "ไม่มีข้อมูล"
-                : `แสดง ${from.toLocaleString()}–${to.toLocaleString()} จาก ${total.toLocaleString()} รายการ`}
-              {isFetching && <span className="ml-2 text-blue-500">กำลังโหลด...</span>}
-            </p>
-            <div className="flex gap-1">
-              <button type="button" onClick={() => setPage(1)} disabled={page === 1}
-                className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">«</button>
-              <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-                className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">‹</button>
-              <span className="px-3 py-1 text-xs border border-gray-300 bg-white">{page} / {totalPages}</span>
-              <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                className="px-3 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">›</button>
-              <button type="button" onClick={() => setPage(totalPages)} disabled={page === totalPages}
-                className="px-2 py-1 text-xs border border-gray-300 disabled:opacity-40 hover:bg-white">»</button>
-            </div>
-          </div>
-        )}
+        <InfiniteScrollStatus
+          sentinelRef={sentinelRef}
+          hasMore={!!hasNextPage}
+          loadingMore={isFetchingNextPage}
+          total={total}
+          loadedCount={rows.length}
+        />
       </div>
 
       {/* ── Modal ──────────────────────────────────────────────────────────────── */}
