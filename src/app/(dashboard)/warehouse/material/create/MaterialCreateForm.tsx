@@ -53,10 +53,12 @@ interface FormState {
   weightKgSum: string;
   weightPPackage: string;
   weightKgPackage: string;
-  weightPNet: string;   // calculated
-  weightKgNet: string;  // calculated
-  averageP: string;     // calculated
-  averageKg: string;    // calculated
+  weightPNet: string;   // calculated (editable — see netTouched)
+  weightKgNet: string;  // calculated (editable — see netTouched)
+  averageP: string;     // calculated (editable — see avgTouched)
+  averageKg: string;    // calculated (editable — see avgTouched)
+  netTouched: boolean;  // true once user edits weightPNet/weightKgNet directly
+  avgTouched: boolean;  // true once user edits averageP/averageKg directly
   // ── return packaging (sent to API)
   returnPallet: boolean;
   returnBox: boolean;
@@ -67,26 +69,32 @@ interface FormState {
   note: string;
 }
 
+// น้ำหนักสุทธิ (weightPNet/weightKgNet) และน้ำหนักเฉลี่ยต่อลูก (averageP/averageKg)
+// auto-fill จาก รวม−บรรจุภัณฑ์ และ สุทธิ÷จำนวนลูก ตามลำดับ — จนกว่าผู้ใช้จะแก้เอง
+// (netTouched/avgTouched) ซึ่งจุดนั้นจะหยุดถูกทับ เหมือน pattern "จำนวนหลอด" ใน
+// MaterialOutsideForm. ค่าเฉลี่ยยังคง cascade ตามน้ำหนักสุทธิที่แก้เอง จนกว่า
+// ค่าเฉลี่ยเองจะถูกแก้ตรงๆ ด้วย
 function recalc(s: FormState, p: Partial<FormState>): FormState {
   const n = { ...s, ...p };
-  const pSum  = parseFloat(n.weightPSum) || 0;
-  const pPkg  = parseFloat(n.weightPPackage) || 0;
-  const kgSum = parseFloat(n.weightKgSum) || 0;
-  const kgPkg = parseFloat(n.weightKgPackage) || 0;
-  const sp    = parseInt(n.spool) || 0;
 
-  const pNet  = pSum  - pPkg;
-  const kgNet = kgSum - kgPkg;
-  const avP   = sp > 0 && pNet  > 0 ? pNet  / sp : 0;
-  const avKg  = sp > 0 && kgNet > 0 ? kgNet / sp : 0;
+  if (!n.netTouched) {
+    const pSum  = parseFloat(n.weightPSum) || 0;
+    const pPkg  = parseFloat(n.weightPPackage) || 0;
+    const kgSum = parseFloat(n.weightKgSum) || 0;
+    const kgPkg = parseFloat(n.weightKgPackage) || 0;
+    n.weightPNet  = fmt(pSum  - pPkg);
+    n.weightKgNet = fmt(kgSum - kgPkg);
+  }
 
-  return {
-    ...n,
-    weightPNet:  fmt(pNet),
-    weightKgNet: fmt(kgNet),
-    averageP:    fmt(avP),
-    averageKg:   fmt(avKg),
-  };
+  if (!n.avgTouched) {
+    const sp    = parseInt(n.spool) || 0;
+    const pNet  = parseFloat(n.weightPNet)  || 0;
+    const kgNet = parseFloat(n.weightKgNet) || 0;
+    n.averageP  = sp > 0 && pNet  > 0 ? fmt(pNet  / sp) : "";
+    n.averageKg = sp > 0 && kgNet > 0 ? fmt(kgNet / sp) : "";
+  }
+
+  return n;
 }
 
 function makeEmpty(today: string, emp: string): FormState {
@@ -101,6 +109,7 @@ function makeEmpty(today: string, emp: string): FormState {
     weightPPackage: "", weightKgPackage: "",
     weightPNet: "", weightKgNet: "",
     averageP: "", averageKg: "",
+    netTouched: false, avgTouched: false,
     returnPallet: false, returnBox: false, returnSack: false,
     returnSpool: false, returnPaperBar: false,
     note: "",
@@ -136,7 +145,6 @@ function Field({
 
 const inp  = "w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500";
 const sel  = "border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
-const ro   = "w-full border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-blue-700 font-medium";
 const errB = "border-red-400";
 
 // ─── Component ─────────────────────────────────────────────────────────────────
@@ -246,6 +254,27 @@ export default function MaterialCreateForm({ emp }: Props) {
   function onKgPkg(v: string) {
     const k = parseFloat(v) || 0;
     patch({ weightKgPackage: v, weightPPackage: k > 0 ? fmt(k * LBS_PER_KG) : "" });
+  }
+
+  // น้ำหนักสุทธิ: แก้เองได้ — พอแก้แล้วหยุด auto-calc จาก รวม−บรรจุภัณฑ์ (netTouched)
+  // และ cascade ต่อไปยังน้ำหนักเฉลี่ยต่อลูกเหมือนเดิม ตราบใดที่ยังไม่ถูกแก้เอง
+  function onPNet(v: string) {
+    const p = parseFloat(v) || 0;
+    patch({ weightPNet: v, weightKgNet: p > 0 ? fmt(p / LBS_PER_KG) : "", netTouched: true });
+  }
+  function onKgNet(v: string) {
+    const k = parseFloat(v) || 0;
+    patch({ weightKgNet: v, weightPNet: k > 0 ? fmt(k * LBS_PER_KG) : "", netTouched: true });
+  }
+
+  // น้ำหนักเฉลี่ยต่อลูก: แก้เองได้ — พอแก้แล้วหยุด auto-calc จาก สุทธิ÷จำนวนลูก (avgTouched)
+  function onPAvg(v: string) {
+    const p = parseFloat(v) || 0;
+    patch({ averageP: v, averageKg: p > 0 ? fmt(p / LBS_PER_KG) : "", avgTouched: true });
+  }
+  function onKgAvg(v: string) {
+    const k = parseFloat(v) || 0;
+    patch({ averageKg: v, averageP: k > 0 ? fmt(k * LBS_PER_KG) : "", avgTouched: true });
   }
 
   // ── spool ↔ yarnSum sync ────────────────────────────────────────────────────
@@ -585,35 +614,43 @@ export default function MaterialCreateForm({ emp }: Props) {
           </div>
         </div>
 
-        {/* 9. น้ำหนักสุทธิ (calculated) */}
+        {/* 9. น้ำหนักสุทธิ (auto-calculated, editable) */}
         <div className="mb-1 mt-4">
           <p className="text-xs font-medium text-gray-600 mb-2">
             น้ำหนักสุทธิ
-            <span className="text-gray-400 font-normal ml-1">(คำนวณอัตโนมัติ: รวม − บรรจุภัณฑ์)</span>
+            <span className="text-gray-400 font-normal ml-1">(คำนวณอัตโนมัติ: รวม − บรรจุภัณฑ์ — แก้ไขเองได้)</span>
           </p>
           <div className="grid grid-cols-2 gap-4">
             <Field label="ปอนด์">
-              <input readOnly value={form.weightPNet} placeholder="—" className={ro} />
+              <input type="number" step="0.0001" value={form.weightPNet}
+                onChange={(e) => onPNet(e.target.value)}
+                placeholder="ปอนด์" className={inp} />
             </Field>
             <Field label="กิโลกรัม" error={errors.weightKgNet}>
-              <input id="f-weightKgNet" readOnly value={form.weightKgNet} placeholder="—"
-                className={`${ro} ${errors.weightKgNet ? "border-red-300" : ""}`} />
+              <input id="f-weightKgNet" type="number" step="0.0001" value={form.weightKgNet}
+                onChange={(e) => onKgNet(e.target.value)}
+                placeholder="กิโลกรัม"
+                className={`${inp} ${errors.weightKgNet ? errB : ""}`} />
             </Field>
           </div>
         </div>
 
-        {/* 10. น้ำหนักเฉลี่ยต่อลูก (calculated) */}
+        {/* 10. น้ำหนักเฉลี่ยต่อลูก (auto-calculated, editable) */}
         <div className="mb-1 mt-4 py-2">
           <p className="text-xs font-medium text-gray-600 mb-2">
             น้ำหนักเฉลี่ยต่อลูก
-            <span className="text-gray-400 font-normal ml-1">(คำนวณอัตโนมัติ: สุทธิ ÷ จำนวนลูก)</span>
+            <span className="text-gray-400 font-normal ml-1">(คำนวณอัตโนมัติ: สุทธิ ÷ จำนวนลูก — แก้ไขเองได้)</span>
           </p>
           <div className="grid grid-cols-2 gap-4">
             <Field label="ปอนด์">
-              <input readOnly value={form.averageP} placeholder="—" className={ro} />
+              <input type="number" step="0.0001" value={form.averageP}
+                onChange={(e) => onPAvg(e.target.value)}
+                placeholder="ปอนด์" className={inp} />
             </Field>
             <Field label="กิโลกรัม">
-              <input readOnly value={form.averageKg} placeholder="—" className={ro} />
+              <input type="number" step="0.0001" value={form.averageKg}
+                onChange={(e) => onKgAvg(e.target.value)}
+                placeholder="กิโลกรัม" className={inp} />
             </Field>
           </div>
         </div>
