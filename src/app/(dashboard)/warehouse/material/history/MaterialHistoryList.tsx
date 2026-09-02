@@ -356,6 +356,7 @@ export default function MaterialHistoryList() {
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ชนิดด้าย</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ชื่อบริษัท</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600">Spool</th>
+                <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">น้ำหนักสุทธิ (lbs)</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">น้ำหนักสุทธิ (kg)</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">เลขที่ใบส่งสินค้า</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-16"></th>
@@ -363,16 +364,16 @@ export default function MaterialHistoryList() {
             </thead>
             <tbody>
               {isFetching && rows.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={10} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     กำลังโหลด...
                   </div>
                 </td></tr>
               ) : isError ? (
-                <tr><td colSpan={9} className="text-center py-12 text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
               ) : rows.map((row, i) => (
                 <tr key={row.id}
                   className={`hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
@@ -382,9 +383,8 @@ export default function MaterialHistoryList() {
                   <td className="px-3 py-2 text-gray-800 max-w-[150px] truncate" title={row.yarnType}>{row.yarnType}</td>
                   <td className="px-3 py-2 text-gray-700 max-w-[180px] truncate" title={row.supplierName}>{row.supplierName}</td>
                   <td className="px-3 py-2 text-right font-medium text-gray-900">{row.spool.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right font-medium text-gray-900">
-                    {row.weightKgNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
+                  <td className="px-3 py-2 text-right font-medium text-gray-900">{numFmt(row.weightPNet)}</td>
+                  <td className="px-3 py-2 text-right font-medium text-gray-900">{numFmt(row.weightKgNet)}</td>
                   <td className="px-3 py-2 text-gray-500 max-w-[120px] truncate">{row.importStatus || "-"}</td>
                   <td className="px-3 py-2 text-center">
                     <button type="button" onClick={() => openModal(row)}

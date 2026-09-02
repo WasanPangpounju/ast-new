@@ -292,22 +292,23 @@ export default function MaterialReturnHistoryList() {
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ชื่อบริษัท</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">Lot</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">จำนวน (ลูก)</th>
+                <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">น้ำหนักคืน (lbs)</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">น้ำหนักคืน (kg)</th>
                 <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-16">จัดการ</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isFetching && rows.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     กำลังโหลด...
                   </div>
                 </td></tr>
               ) : isError ? (
-                <tr><td colSpan={8} className="text-center py-12 text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={9} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
               ) : rows.map((row, i) => (
                 <tr key={row.id}
                   className={`hover:bg-blue-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
@@ -321,6 +322,7 @@ export default function MaterialReturnHistoryList() {
                   </td>
                   <td className="px-3 py-2 text-gray-500 max-w-[100px] truncate">{row.lot ?? "-"}</td>
                   <td className="px-3 py-2 text-right font-medium text-gray-900">{row.spool.toLocaleString()}</td>
+                  <td className="px-3 py-2 text-right font-medium text-gray-900">{numFmt(row.weightReturnP)}</td>
                   <td className="px-3 py-2 text-right font-medium text-gray-900">{numFmt(row.weightReturn)}</td>
                   <td className="px-3 py-2 text-center">
                     <button type="button" onClick={() => openModal(row)}
