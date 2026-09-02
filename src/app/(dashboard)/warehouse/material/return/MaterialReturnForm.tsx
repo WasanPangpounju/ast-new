@@ -152,12 +152,64 @@ export default function MaterialReturnForm() {
   const supTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const yarnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lotTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const avgTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formRef   = useRef(form);
+  // น้ำหนักเฉลี่ย/ลูก (kg) ของ yarnType+supplierName+lot ปัจจุบัน ดึงจาก stock — ใช้คูณกับ "จำนวน (ลูก)"
+  // เพื่อ auto-fill ช่อง "น้ำหนักที่คืน" client-side โดยไม่ต้องยิง API ทุกครั้งที่ spool เปลี่ยน
+  const avgKgRef = useRef<number | null>(null);
+  // true เมื่อ user แก้ช่องน้ำหนักเอง — กันไม่ให้ auto-fill ทับค่าที่แก้ไว้ตอน spool เปลี่ยนอีกครั้ง
+  const weightDirtyRef = useRef(false);
+  // นับรอบ reset เพื่อทิ้งผลลัพธ์ fetch ที่ค้างอยู่ (in-flight) หลังจากบริบท (yarnType/supplierName/lot) เปลี่ยนไปแล้ว
+  const avgEpochRef = useRef(0);
 
   useEffect(() => { formRef.current = form; }, [form]);
 
   function patch(changes: Partial<FormState>) {
     setForm((prev) => ({ ...prev, ...changes }));
+  }
+
+  // ── น้ำหนักเฉลี่ยจากสต็อก (auto-fill) ────────────────────────────────────────
+
+  function resetAutoFillState() {
+    if (avgTimer.current) clearTimeout(avgTimer.current);
+    avgEpochRef.current += 1;
+    avgKgRef.current = null;
+    weightDirtyRef.current = false;
+  }
+
+  function applyAutoWeight(spoolStr: string) {
+    if (weightDirtyRef.current) return;
+    const avg = avgKgRef.current;
+    if (!avg || avg <= 0) return;
+    const sp = parseInt(spoolStr, 10);
+    if (isNaN(sp) || sp < 1) return;
+    const kg = sp * avg;
+    patch({ weightReturn: fmt3(kg), weightReturnP: fmt3(kg * LBS_PER_KG) });
+  }
+
+  function scheduleAverageFetch() {
+    if (avgTimer.current) clearTimeout(avgTimer.current);
+    const epoch = avgEpochRef.current;
+    avgTimer.current = setTimeout(async () => {
+      const yarnType = formRef.current.yarnType.trim();
+      const supplierName = formRef.current.supplierName.trim();
+      const lot = formRef.current.lot.trim();
+      if (!yarnType || !supplierName) {
+        if (avgEpochRef.current === epoch) avgKgRef.current = null;
+        return;
+      }
+      try {
+        const p = new URLSearchParams({ yarnType, supplierName });
+        if (lot) p.set("lot", lot);
+        const res = await fetch(`/api/warehouse/material/average-weight?${p}`);
+        const data = await res.json();
+        if (avgEpochRef.current !== epoch) return; // บริบทเปลี่ยนไปแล้วระหว่างรอ response ทิ้งผลลัพธ์นี้
+        avgKgRef.current = typeof data.averageKgTotal === "number" ? data.averageKgTotal : null;
+        applyAutoWeight(formRef.current.spool);
+      } catch {
+        if (avgEpochRef.current === epoch) avgKgRef.current = null;
+      }
+    }, 300);
   }
 
   function showToast(type: "success" | "error", msg: string) {
@@ -169,6 +221,8 @@ export default function MaterialReturnForm() {
 
   function onSupplierChange(v: string) {
     patch({ supplierName: v });
+    resetAutoFillState();
+    scheduleAverageFetch();
     if (supTimer.current) clearTimeout(supTimer.current);
     supTimer.current = setTimeout(async () => {
       if (!v.trim()) { setSupOptions([]); return; }
@@ -182,6 +236,8 @@ export default function MaterialReturnForm() {
 
   function onYarnTypeChange(v: string) {
     patch({ yarnType: v });
+    resetAutoFillState();
+    scheduleAverageFetch();
     if (!v.trim()) setLotOptions([]);
     if (yarnTimer.current) clearTimeout(yarnTimer.current);
     yarnTimer.current = setTimeout(async () => {
@@ -210,10 +266,17 @@ export default function MaterialReturnForm() {
 
   function onLotChange(v: string) {
     patch({ lot: v });
+    resetAutoFillState();
+    scheduleAverageFetch();
     if (lotTimer.current) clearTimeout(lotTimer.current);
     lotTimer.current = setTimeout(() => {
       fetchLots(formRef.current.yarnType, formRef.current.supplierName, v);
     }, 300);
+  }
+
+  function onSpoolChange(v: string) {
+    patch({ spool: v });
+    applyAutoWeight(v);
   }
 
   // ── Weight (kg ↔ lbs two-way bind) ──────────────────────────────────────────
@@ -221,10 +284,12 @@ export default function MaterialReturnForm() {
   // client-only convenience field, converted the same way as MaterialOutsideForm.
 
   function onWeightReturnP(v: string) {
+    weightDirtyRef.current = true;
     const p = parseFloat(v) || 0;
     patch({ weightReturnP: v, weightReturn: p > 0 ? fmt3(p / LBS_PER_KG) : "" });
   }
   function onWeightReturnKg(v: string) {
+    weightDirtyRef.current = true;
     const k = parseFloat(v) || 0;
     patch({ weightReturn: v, weightReturnP: k > 0 ? fmt3(k * LBS_PER_KG) : "" });
   }
@@ -263,6 +328,7 @@ export default function MaterialReturnForm() {
     }));
     setErrors({});
     setSupOptions([]); setYarnOptions([]); setLotOptions([]);
+    resetAutoFillState();
   }
 
   // ── Save ─────────────────────────────────────────────────────────────────────
@@ -329,12 +395,14 @@ export default function MaterialReturnForm() {
       setPendingItems([]);
       setForm(makeEmpty(form.returnDate));
       setErrors({});
+      resetAutoFillState();
       showToast("success", `บันทึกสำเร็จ ${successCount} รายการ`);
       setTimeout(() => router.push("/warehouse/material/return-history"), 1200);
     } else {
       setPendingItems(toSubmit.filter((i) => failedKeys.includes(i.key) && i.key !== currentKey));
       if (currentKey !== null && !failedKeys.includes(currentKey)) {
         setForm(makeEmpty(form.returnDate));
+        resetAutoFillState();
       }
       showToast("error", `บันทึกสำเร็จ ${successCount}/${toSubmit.length} รายการ — ${failedKeys.length} รายการล้มเหลว`);
     }
@@ -370,7 +438,7 @@ export default function MaterialReturnForm() {
             <AutocompleteInput
               value={form.supplierName}
               onChange={onSupplierChange}
-              onSelect={(v) => { patch({ supplierName: v }); setSupOptions([]); }}
+              onSelect={(v) => { patch({ supplierName: v }); setSupOptions([]); resetAutoFillState(); scheduleAverageFetch(); }}
               options={supOptions}
               placeholder="พิมพ์ชื่อบริษัท"
             />
@@ -380,7 +448,7 @@ export default function MaterialReturnForm() {
             <AutocompleteInput
               value={form.yarnType}
               onChange={onYarnTypeChange}
-              onSelect={(v) => { patch({ yarnType: v }); setYarnOptions([]); fetchLots(v, formRef.current.supplierName, formRef.current.lot); }}
+              onSelect={(v) => { patch({ yarnType: v }); setYarnOptions([]); fetchLots(v, formRef.current.supplierName, formRef.current.lot); resetAutoFillState(); scheduleAverageFetch(); }}
               options={yarnOptions}
               placeholder="เช่น CP 30/1, R 30"
               inputClassName={`${inp} ${errors.yarnType ? errB : ""}`}
@@ -391,7 +459,7 @@ export default function MaterialReturnForm() {
             <AutocompleteInput
               value={form.lot}
               onChange={onLotChange}
-              onSelect={(v) => { patch({ lot: v }); setLotOptions([]); }}
+              onSelect={(v) => { patch({ lot: v }); setLotOptions([]); resetAutoFillState(); scheduleAverageFetch(); }}
               options={lotOptions}
               placeholder="ล็อตที่ (พิมพ์หรือเลือกจากรายการ)"
             />
@@ -399,7 +467,7 @@ export default function MaterialReturnForm() {
 
           <Field label="จำนวน (ลูก)" required error={errors.spool}>
             <input type="number" min="1" value={form.spool}
-              onChange={(e) => patch({ spool: e.target.value })}
+              onChange={(e) => onSpoolChange(e.target.value)}
               placeholder="จำนวน"
               className={`${inp} ${errors.spool ? errB : ""}`} />
           </Field>
@@ -444,7 +512,7 @@ export default function MaterialReturnForm() {
             + เพิ่มรายการใหม่
           </button>
           <button type="button"
-            onClick={() => { setForm(makeEmpty(initDate)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); }}
+            onClick={() => { setForm(makeEmpty(initDate)); setErrors({}); setSupOptions([]); setYarnOptions([]); setLotOptions([]); resetAutoFillState(); }}
             className="px-4 py-2 text-sm border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors">
             เคลียร์ข้อมูล
           </button>

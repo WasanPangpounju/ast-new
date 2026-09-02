@@ -9,10 +9,13 @@ import { esc, KG_TO_LB, MATERIAL_STOCK_CTES, MATERIAL_STOCK_JOINS, AGGREGATE_COL
 // - averageKgRemaining = remainingWeightKg / remainingSpool (ของเดิม) เก็บไว้เผื่อ use case อื่น
 //   ในอนาคต แต่ไม่แนะนำให้ใช้ auto-fill เพราะพิสูจน์แล้วว่าให้ค่าผิดปกติ/ติดลบได้ใน 27/177 yarnType
 // ใช้ exact match (ไม่ใช่ ILIKE) เพราะต้องเจาะจงคู่เดียว ไม่ใช่ค้นหา
+// lot เป็น optional — หน้าคืนวัตถุดิบส่ง lot มาด้วยเพื่อเจาะจงเฉพาะล็อตนั้น (แม่นกว่า เพราะ
+// น้ำหนัก/ลูกต่างกันได้ระหว่างล็อต) ส่วนหน้าเบิกภายในไม่ส่ง lot มา ก็เฉลี่ยรวมทั้ง yarnType+supplierName เหมือนเดิม
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams
   const yarnType = (params.get('yarnType') ?? '').trim()
   const supplierName = (params.get('supplierName') ?? '').trim()
+  const lot = (params.get('lot') ?? '').trim()
 
   if (!yarnType || !supplierName) {
     return Response.json({ error: 'yarnType and supplierName are required' }, { status: 400 })
@@ -32,6 +35,7 @@ export async function GET(request: NextRequest) {
       WHERE m."deletedAt" IS NULL
         AND m."yarnType" = '${esc(yarnType)}'
         AND m."supplierName" = '${esc(supplierName)}'
+        ${lot ? `AND m."lot" = '${esc(lot)}'` : ''}
     `)
 
     const totalSpool = row?.totalSpool ?? 0
