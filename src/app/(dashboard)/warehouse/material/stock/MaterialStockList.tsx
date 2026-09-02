@@ -192,12 +192,12 @@ export default function MaterialStockList() {
       </div>
 
       {/* Table */}
-      <div className="bg-white shadow-sm border border-gray-200 overflow-hidden rounded-lg">
-        <div className="overflow-x-auto">
+      <div className="bg-white shadow-sm border border-gray-200 rounded-lg">
+        <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-10">#</th>
+              <tr className="sticky top-14 md:top-0 z-10 bg-gray-50 border-b border-gray-200">
+                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-10 rounded-tl-lg">#</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ชนิดด้าย</th>
                 <th className="text-left px-3 py-2.5 font-medium text-gray-600">ชื่อบริษัท</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">Spool ทั้งหมด</th>
@@ -206,21 +206,21 @@ export default function MaterialStockList() {
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">น้ำหนักรวม ({weightUnit})</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">ใช้ไปแล้ว ({weightUnit})</th>
                 <th className="text-right px-3 py-2.5 font-medium text-gray-600 whitespace-nowrap">คงเหลือ ({weightUnit})</th>
-                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-20">สถานะ</th>
+                <th className="text-center px-3 py-2.5 font-medium text-gray-600 w-20 rounded-tr-lg">สถานะ</th>
               </tr>
             </thead>
             <tbody>
               {isFetching && isEmpty ? (
-                <tr><td colSpan={10} className="text-center py-12 text-gray-400">
+                <tr><td colSpan={10} className="text-center py-12 text-gray-400 rounded-b-lg">
                   <div className="flex flex-col items-center gap-2">
                     <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                     กำลังโหลด...
                   </div>
                 </td></tr>
               ) : isError ? (
-                <tr><td colSpan={10} className="text-center py-12 text-red-400">โหลดข้อมูลไม่สำเร็จ</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-red-400 rounded-b-lg">โหลดข้อมูลไม่สำเร็จ</td></tr>
               ) : isEmpty ? (
-                <tr><td colSpan={10} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
+                <tr><td colSpan={10} className="text-center py-12 text-gray-400 rounded-b-lg">ไม่พบข้อมูล</td></tr>
               ) : mode === "grouped" ? (
                 groups.map((group, i) => (
                   <MaterialStockGroupRow

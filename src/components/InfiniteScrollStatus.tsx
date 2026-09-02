@@ -21,7 +21,7 @@ export function InfiniteScrollStatus({
   if (total === 0) return null;
 
   return (
-    <div className="flex items-center justify-center px-4 py-3 border-t border-gray-200 bg-gray-50 text-xs text-gray-500">
+    <div className="flex items-center justify-center px-4 py-3 border-t border-gray-200 bg-gray-50 text-xs text-gray-500 rounded-b-lg">
       {hasMore ? (
         <div ref={sentinelRef} className="flex items-center gap-2 py-1">
           {loadingMore && (
