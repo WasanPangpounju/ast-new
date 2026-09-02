@@ -332,7 +332,6 @@ export default function MaterialCreateForm({ emp }: Props) {
         { label: "ชื่อบริษัท", value: form.supplierName },
         { label: "เลขที่ใบส่งสินค้า", value: form.importStatus },
         { label: "วันที่", value: fmtDate(form.createDate) },
-        { label: "พนักงาน", value: form.emp },
         { label: "ชนิดด้าย", value: form.yarnType },
         { label: "ล็อตที่", value: form.lot },
         { label: "จำนวนหลอดทั้งหมด", value: form.spool ? `${form.spool} หลอด (${SPOOL_TYPE_LABEL[form.spoolType] ?? form.spoolType})` : "" },
@@ -470,18 +469,12 @@ export default function MaterialCreateForm({ emp }: Props) {
               inputClassName={inp}
             />
           </Field>
-          <Field label="พนักงาน">
-            <input value={form.emp}
-              onChange={(e) => patch({ emp: e.target.value })}
-              placeholder="ชื่อพนักงาน"
-              className={inp} />
-          </Field>
         </div>
 
         {/* ── บรรจุภัณฑ์ ──────────────────────────────────────────── */}
         <SectionLabel>บรรจุภัณฑ์</SectionLabel>
 
-        {/* 1. พาเลท */}
+        {/* 1. พาเลท + กระดาษกั้น */}
         <div className="flex items-end gap-2 mb-3">
           <div className="w-28">
             <label className="block text-xs font-medium text-gray-700 mb-1">พาเลท</label>
@@ -497,6 +490,12 @@ export default function MaterialCreateForm({ emp }: Props) {
               <option value="wood">ไม้</option>
               <option value="steel">เหล็ก</option>
             </select>
+          </div>
+          <div className="w-28">
+            <label className="block text-xs font-medium text-gray-700 mb-1">กระดาษกั้น</label>
+            <input type="number" min="0" value={form.paperBar}
+              onChange={(e) => patch({ paperBar: e.target.value })}
+              placeholder="จำนวน" className={inp} />
           </div>
         </div>
 
@@ -525,14 +524,6 @@ export default function MaterialCreateForm({ emp }: Props) {
               <option value="plastic">พลาสติก</option>
             </select>
           </div>
-        </div>
-
-        {/* 4. กระดาษกั้น */}
-        <div className="mb-3">
-          <label className="block text-xs font-medium text-gray-700 mb-1">กระดาษกั้น</label>
-          <input type="number" min="0" value={form.paperBar}
-            onChange={(e) => patch({ paperBar: e.target.value })}
-            placeholder="จำนวน" className={`${inp} w-28`} />
         </div>
 
         {/* ── จำนวน ───────────────────────────────────────────────── */}
