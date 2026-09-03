@@ -82,6 +82,59 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// DELETE: bulk soft-delete every entry in one tab (stock or bill) for this fabric group
+export async function DELETE(request: NextRequest) {
+  const session = await auth()
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = request.nextUrl
+  const tab            = searchParams.get('tab') ?? ''
+  const customer       = searchParams.get('customer')      ?? ''
+  const fabricCode     = searchParams.get('fabricCode')    ?? ''
+  const fabricStruct   = searchParams.get('fabricStruct')  ?? ''
+  const fabricPattern  = searchParams.get('fabricPattern') ?? ''
+  const fabricW        = searchParams.get('fabricW')       ?? ''
+
+  if (tab !== 'stock' && tab !== 'bill') {
+    return Response.json({ error: 'tab must be stock or bill' }, { status: 400 })
+  }
+
+  const esc = (s: string) => s.replace(/'/g, "''")
+
+  try {
+    if (tab === 'stock') {
+      // Same group filter as the GET above
+      const count = await prisma.$executeRawUnsafe(`
+        UPDATE stockfabrics
+        SET deleted_at = NOW()
+        WHERE deleted_at IS NULL
+          AND COALESCE("customer",      'AST') = '${esc(customer)}'
+          AND COALESCE("fabricCode",    '')    = '${esc(fabricCode)}'
+          AND COALESCE("fabricStruct",  '')    = '${esc(fabricStruct)}'
+          AND COALESCE("fabricPattern", '')    = '${esc(fabricPattern)}'
+          AND COALESCE("fabricW",       '')    = '${esc(fabricW)}'
+      `)
+      return Response.json({ ok: true, count })
+    }
+
+    // tab === 'bill' — same normalized match as the GET above
+    const count = await prisma.$executeRawUnsafe(`
+      UPDATE fabricouts
+      SET deleted_at = NOW()
+      WHERE deleted_at IS NULL
+        AND ${NS(EFF_STRUCT)}   = ${NS(`'${esc(fabricStruct)}'`)}
+        AND ${NW(EFF_WIDTH)}    = ${NW(`'${esc(fabricW)}'`)}
+        AND ${NP(EFF_PATTERN)}  = ${NP(`'${esc(fabricPattern)}'`)}
+        AND ${NP(`'${esc(fabricPattern)}'`)} <> ''
+        AND ${EFF_CUSTOMER}     = COALESCE(NULLIF(TRIM('${esc(customer)}'), ''), 'AST')
+    `)
+    return Response.json({ ok: true, count })
+  } catch (e) {
+    console.error('[stock/detail DELETE]', e)
+    return Response.json({ error: String(e) }, { status: 500 })
+  }
+}
+
 // PATCH: update emp and/or createDate for a stock entry group
 export async function PATCH(request: NextRequest) {
   const session = await auth()

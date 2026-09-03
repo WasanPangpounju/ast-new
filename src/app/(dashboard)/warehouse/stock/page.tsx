@@ -66,6 +66,12 @@ export default function StockPage() {
   const [billSaving, setBillSaving] = useState(false)
   const [deleteBill, setDeleteBill] = useState<{ vatType: string; vatNo: number } | null>(null)
 
+  // Bulk delete (whole tab) — 2-step confirm
+  const [bulkDeleteTab, setBulkDeleteTab] = useState<'stock' | 'bill' | null>(null)
+  const [bulkDeleteStep, setBulkDeleteStep] = useState<1 | 2>(1)
+  const [bulkDeleteCodeInput, setBulkDeleteCodeInput] = useState('')
+  const [bulkDeleting, setBulkDeleting] = useState(false)
+
   const fetchStocksPage = useCallback((page: number) => {
     const p = new URLSearchParams({ page: String(page) })
     if (appliedQ) { p.set('q', appliedQ); p.set('searchBy', appliedSearchBy) }
@@ -111,6 +117,7 @@ export default function StockPage() {
     setEditingBill(null)
     setDeleteStockRefId(null)
     setDeleteBill(null)
+    closeBulkDelete()
   }
 
   const switchDetailTab = (tab: 'stock' | 'bill') => {
@@ -119,6 +126,40 @@ export default function StockPage() {
     setEditingBill(null)
     setDeleteStockRefId(null)
     setDeleteBill(null)
+  }
+
+  // ── Bulk delete (whole tab) ────────────────────────────
+  const openBulkDelete = (tab: 'stock' | 'bill') => {
+    setBulkDeleteTab(tab)
+    setBulkDeleteStep(1)
+    setBulkDeleteCodeInput('')
+  }
+
+  const closeBulkDelete = () => {
+    setBulkDeleteTab(null)
+    setBulkDeleteStep(1)
+    setBulkDeleteCodeInput('')
+  }
+
+  // The code the user must retype to unlock the confirm button
+  const bulkDeleteConfirmCode = detailGroup?.fabricCode || detailGroup?.fabricStruct || detailGroup?.customer || ''
+
+  const handleBulkDelete = async () => {
+    if (!detailGroup || !bulkDeleteTab) return
+    setBulkDeleting(true)
+    const p = new URLSearchParams({
+      tab:           bulkDeleteTab,
+      customer:      detailGroup.customer      ?? '',
+      fabricCode:    detailGroup.fabricCode    ?? '',
+      fabricStruct:  detailGroup.fabricStruct  ?? '',
+      fabricPattern: detailGroup.fabricPattern ?? '',
+      fabricW:       detailGroup.fabricW       ?? '',
+    })
+    await fetch(`/api/warehouse/stock/detail?${p}`, { method: 'DELETE' })
+    setBulkDeleting(false)
+    closeBulkDelete()
+    fetchDetail(detailGroup)
+    reload()
   }
 
   // ── Stock entry handlers ──────────────────────────────
@@ -365,6 +406,21 @@ export default function StockPage() {
                 เปิดบิลผ้า ({billEntries.length})
               </button>
             </div>
+
+            {/* Bulk delete toolbar */}
+            {!detailLoading && (
+              (activeDetailTab === 'stock' && stockEntries.length > 0) ||
+              (activeDetailTab === 'bill' && billEntries.length > 0)
+            ) && (
+              <div className="flex justify-end px-3 py-1.5 border-b border-gray-100 bg-gray-50/50 shrink-0">
+                <button
+                  onClick={() => openBulkDelete(activeDetailTab)}
+                  className="px-2.5 py-1 text-xs border border-red-200 text-red-500 hover:bg-red-50 rounded transition-colors"
+                >
+                  ลบรายการทั้งหมด
+                </button>
+              </div>
+            )}
 
             {/* Body */}
             <div className="overflow-y-auto flex-1">
@@ -655,6 +711,72 @@ export default function StockPage() {
               >
                 ปิด
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bulk delete confirm dialog ─────────────────────── */}
+      {bulkDeleteTab && detailGroup && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={closeBulkDelete} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 overflow-hidden flex flex-col">
+            <div className="px-5 py-3 border-b border-gray-100">
+              <h2 className="font-semibold text-gray-900 text-sm">
+                ลบรายการทั้งหมด — {bulkDeleteTab === 'stock' ? 'คีย์เข้าสต็อก' : 'เปิดบิลผ้า'}
+              </h2>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              {bulkDeleteStep === 1 ? (
+                <p className="text-sm text-gray-700">
+                  คุณกำลังจะลบ{' '}
+                  <span className="font-semibold text-red-600">
+                    {bulkDeleteTab === 'stock' ? stockEntries.length : billEntries.length} รายการ
+                  </span>{' '}
+                  ของ {detailGroup.customer}
+                  {detailGroup.fabricCode ? ` · ${detailGroup.fabricCode}` : ''} ทั้งหมด
+                  การลบนี้ไม่สามารถย้อนกลับได้ผ่านหน้านี้
+                </p>
+              ) : (
+                <>
+                  <p className="text-sm text-gray-700">
+                    เพื่อยืนยัน กรุณาพิมพ์ <span className="font-mono font-semibold text-gray-900">{bulkDeleteConfirmCode}</span> ให้ตรงกับรายการที่จะลบ
+                  </p>
+                  <input
+                    autoFocus
+                    value={bulkDeleteCodeInput}
+                    onChange={ev => setBulkDeleteCodeInput(ev.target.value)}
+                    placeholder={bulkDeleteConfirmCode}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2 shrink-0">
+              <button
+                onClick={closeBulkDelete}
+                className="px-4 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600"
+              >
+                ยกเลิก
+              </button>
+              {bulkDeleteStep === 1 ? (
+                <button
+                  onClick={() => setBulkDeleteStep(2)}
+                  className="px-4 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+                >
+                  ดำเนินการต่อ
+                </button>
+              ) : (
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting || bulkDeleteCodeInput !== bulkDeleteConfirmCode}
+                  className="px-4 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {bulkDeleting ? 'กำลังลบ...' : 'ยืนยันลบทั้งหมด'}
+                </button>
+              )}
             </div>
           </div>
         </div>
