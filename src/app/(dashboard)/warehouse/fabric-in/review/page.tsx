@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
 import { InfiniteScrollStatus } from '@/components/InfiniteScrollStatus'
 
@@ -37,6 +37,21 @@ export default function StockReviewPage() {
   const [appliedQ, setAppliedQ] = useState('')
   const [appliedDateFrom, setAppliedDateFrom] = useState('')
   const [appliedDateTo, setAppliedDateTo] = useState('')
+
+  // ── Search autocomplete ──
+  const [qSuggestions, setQSuggestions] = useState<string[]>([])
+  const [qDropdown, setQDropdown] = useState(false)
+
+  useEffect(() => {
+    if (!q) { setQSuggestions([]); return }
+    const t = setTimeout(() => {
+      fetch('/api/warehouse/stock/review/suggestions?q=' + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(d => setQSuggestions(d.data ?? []))
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [q])
 
   const [manageGroup, setManageGroup] = useState<StockGroup | null>(null)
   const [activeTab, setActiveTab] = useState<'group' | 'folds'>('group')
@@ -170,12 +185,26 @@ export default function StockReviewPage() {
       {/* Search */}
       <div className="bg-white border border-gray-200 p-4 mb-4 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 relative">
             <label className="block text-xs text-gray-500 mb-1">ค้นหา (โครงสร้างผ้า, ลูกค้า)</label>
-            <input value={q} onChange={e => setQ(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            <input value={q}
+              onChange={e => { setQ(e.target.value); setQDropdown(true) }}
+              onFocus={() => { if (q) setQDropdown(true) }}
+              onBlur={() => setTimeout(() => setQDropdown(false), 200)}
+              onKeyDown={e => e.key === 'Enter' && (setQDropdown(false), handleSearch())}
               placeholder="พิมพ์ค้นหา..."
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            {qDropdown && qSuggestions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
+                {qSuggestions.map(v => (
+                  <button key={v} type="button"
+                    onMouseDown={() => { setQ(v); setQDropdown(false) }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                    {v}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">วันที่เริ่ม</label>

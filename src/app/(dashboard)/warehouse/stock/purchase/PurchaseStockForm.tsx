@@ -61,6 +61,9 @@ export default function PurchaseStockForm({ emp }: Props) {
   const [fabricCodeResults, setFabricCodeResults] = useState<FabricCodeOption[]>([])
   const [fabricCodeDropdown, setFabricCodeDropdown] = useState(false)
 
+  const [supplierResults, setSupplierResults] = useState<string[]>([])
+  const [supplierDropdown, setSupplierDropdown] = useState(false)
+
   const [customerResults, setCustomerResults] = useState<CustomerOption[]>([])
   const [customerDropdown, setCustomerDropdown] = useState(false)
 
@@ -100,6 +103,17 @@ export default function PurchaseStockForm({ emp }: Props) {
     }, 300)
     return () => clearTimeout(t)
   }, [fabricCode])
+
+  useEffect(() => {
+    if (!supplier) { setSupplierResults([]); return }
+    const t = setTimeout(() => {
+      fetch('/api/warehouse/stock/purchase/suggestions?field=supplier&q=' + encodeURIComponent(supplier))
+        .then(r => r.json())
+        .then(d => setSupplierResults(d.data ?? []))
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [supplier])
 
   const setYard = (idx: number, val: string) => {
     setYards(prev => { const next = [...prev]; next[idx] = val; return next })
@@ -284,13 +298,27 @@ export default function PurchaseStockForm({ emp }: Props) {
           </div>
 
           {/* Supplier - required */}
-          <div>
+          <div className="relative">
             <label className="block text-xs font-medium text-gray-700 mb-1">
               ชื่อผู้ขาย / โรงงาน <span className="text-red-500">*</span>
             </label>
-            <input value={supplier} onChange={e => setSupplier(e.target.value)}
+            <input value={supplier}
+              onChange={e => { setSupplier(e.target.value); setSupplierDropdown(true) }}
+              onFocus={() => { if (supplier) setSupplierDropdown(true) }}
+              onBlur={() => setTimeout(() => setSupplierDropdown(false), 200)}
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="ชื่อผู้ขาย หรือโรงงาน" />
+            {supplierDropdown && supplierResults.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
+                {supplierResults.map(name => (
+                  <button key={name} type="button"
+                    onMouseDown={() => { setSupplier(name); setSupplierDropdown(false) }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Bill ref - required */}

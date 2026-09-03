@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
 
@@ -39,6 +39,47 @@ export default function WarehouseOrdersPage() {
     dateFrom: "",
     dateTo: "",
   });
+
+  // ── Search autocomplete ──
+  const [customerSuggestions, setCustomerSuggestions] = useState<string[]>([]);
+  const [customerDropdown, setCustomerDropdown] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const [searchDropdown, setSearchDropdown] = useState(false);
+  const [fabricIdSuggestions, setFabricIdSuggestions] = useState<string[]>([]);
+  const [fabricIdDropdown, setFabricIdDropdown] = useState(false);
+
+  useEffect(() => {
+    if (!customer) { setCustomerSuggestions([]); return; }
+    const t = setTimeout(() => {
+      fetch("/api/warehouse/orders/suggestions?field=customerName&q=" + encodeURIComponent(customer))
+        .then((r) => r.json())
+        .then((d) => setCustomerSuggestions(d.data ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [customer]);
+
+  useEffect(() => {
+    if (!search) { setSearchSuggestions([]); return; }
+    const t = setTimeout(() => {
+      fetch("/api/warehouse/orders/suggestions?field=purchaseOrder&q=" + encodeURIComponent(search))
+        .then((r) => r.json())
+        .then((d) => setSearchSuggestions(d.data ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    if (!fabricId) { setFabricIdSuggestions([]); return; }
+    const t = setTimeout(() => {
+      fetch("/api/warehouse/orders/suggestions?field=fabricId&q=" + encodeURIComponent(fabricId))
+        .then((r) => r.json())
+        .then((d) => setFabricIdSuggestions(d.data ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [fabricId]);
 
   const [detailOrder, setDetailOrder] = useState<Order | null>(null);
   const [orderBills, setOrderBills] = useState<any[]>([]);
@@ -125,37 +166,76 @@ export default function WarehouseOrdersPage() {
       {/* Search form */}
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div>
+          <div className="relative">
             <label className="block text-xs text-gray-500 mb-1">ลูกค้า</label>
             <input
               value={customer}
-              onChange={(e) => setCustomer(e.target.value)}
+              onChange={(e) => { setCustomer(e.target.value); setCustomerDropdown(true); }}
+              onFocus={() => { if (customer) setCustomerDropdown(true); }}
+              onBlur={() => setTimeout(() => setCustomerDropdown(false), 200)}
               placeholder="ค้นหาลูกค้า..."
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              onKeyDown={(e) => e.key === "Enter" && (setCustomerDropdown(false), handleSearch())}
               className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {customerDropdown && customerSuggestions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {customerSuggestions.map((v) => (
+                  <button key={v} type="button"
+                    onMouseDown={() => { setCustomer(v); setCustomerDropdown(false); }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                    {v}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-xs text-gray-500 mb-1">
               เลขที่ใบสั่งซื้อ
             </label>
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setSearchDropdown(true); }}
+              onFocus={() => { if (search) setSearchDropdown(true); }}
+              onBlur={() => setTimeout(() => setSearchDropdown(false), 200)}
               placeholder="SO number..."
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              onKeyDown={(e) => e.key === "Enter" && (setSearchDropdown(false), handleSearch())}
               className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {searchDropdown && searchSuggestions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {searchSuggestions.map((v) => (
+                  <button key={v} type="button"
+                    onMouseDown={() => { setSearch(v); setSearchDropdown(false); }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                    {v}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-xs text-gray-500 mb-1">รหัสผ้า</label>
             <input
               value={fabricId}
-              onChange={(e) => setFabricId(e.target.value)}
+              onChange={(e) => { setFabricId(e.target.value); setFabricIdDropdown(true); }}
+              onFocus={() => { if (fabricId) setFabricIdDropdown(true); }}
+              onBlur={() => setTimeout(() => setFabricIdDropdown(false), 200)}
               placeholder="รหัสผ้า..."
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+              onKeyDown={(e) => e.key === "Enter" && (setFabricIdDropdown(false), handleSearch())}
               className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {fabricIdDropdown && fabricIdSuggestions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {fabricIdSuggestions.map((v) => (
+                  <button key={v} type="button"
+                    onMouseDown={() => { setFabricId(v); setFabricIdDropdown(false); }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                    {v}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-xs text-gray-500 mb-1">

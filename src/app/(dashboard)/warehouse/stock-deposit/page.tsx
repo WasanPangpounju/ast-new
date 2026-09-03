@@ -7,6 +7,14 @@ const GROUPS = 8
 const ROWS = 20
 const TOTAL_SLOTS = GROUPS * ROWS
 
+interface SearchSuggestion {
+  fabricStruct: string
+  fabricPattern: string
+  fabricW: string
+  fabricCode: string | null
+  customer: string
+}
+
 interface DepositBill {
   refId: string
   vatType: string
@@ -116,6 +124,34 @@ function YardGrid({
 export default function StockDepositPage() {
   const [search, setSearch] = useState('')
   const [applied, setApplied] = useState('')
+
+  // ── Search autocomplete ──
+  const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestion[]>([])
+  const [searchDropdown, setSearchDropdown] = useState(false)
+
+  useEffect(() => {
+    if (!search) { setSearchSuggestions([]); return }
+    const t = setTimeout(() => {
+      fetch(`/api/warehouse/stock/search?q=${encodeURIComponent(search)}`)
+        .then(r => r.json())
+        .then(d => setSearchSuggestions(d.results ?? []))
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  // Dedupe by struct+customer combo so the same fabric/customer pair isn't repeated
+  const searchSuggestionOptions = (() => {
+    const seen = new Set<string>()
+    const out: SearchSuggestion[] = []
+    for (const s of searchSuggestions) {
+      const key = `${s.fabricStruct}|${s.customer}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(s)
+    }
+    return out
+  })()
 
   // Withdrawal create modal
   const [createOpen, setCreateOpen] = useState(false)
@@ -313,11 +349,31 @@ export default function StockDepositPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm flex gap-3">
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="ค้นหาลูกค้า, โครงสร้างผ้า..."
-          onKeyDown={e => e.key === 'Enter' && setApplied(search)}
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        <div className="relative flex-1">
+          <input value={search}
+            onChange={e => { setSearch(e.target.value); setSearchDropdown(true) }}
+            onFocus={() => { if (search) setSearchDropdown(true) }}
+            onBlur={() => setTimeout(() => setSearchDropdown(false), 200)}
+            placeholder="ค้นหาลูกค้า, โครงสร้างผ้า..."
+            onKeyDown={e => e.key === 'Enter' && (setSearchDropdown(false), setApplied(search))}
+            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {searchDropdown && searchSuggestionOptions.length > 0 && (
+            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+              {searchSuggestionOptions.map((s, i) => (
+                <button key={i} type="button"
+                  onMouseDown={() => { setSearch(s.fabricStruct); setSearchDropdown(false) }}
+                  className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs border-b border-gray-100 last:border-0">
+                  <div className="font-medium text-gray-800">{s.fabricStruct}</div>
+                  <div className="text-gray-500 flex gap-3 mt-0.5">
+                    <span>{s.fabricPattern || '-'}</span>
+                    <span>{s.customer}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button onClick={() => setApplied(search)}
           className="px-6 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">ค้นหา</button>
         <button onClick={() => { setSearch(''); setApplied('') }}

@@ -1,7 +1,15 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll'
 import { InfiniteScrollStatus } from '@/components/InfiniteScrollStatus'
+
+interface SearchSuggestion {
+  fabricStruct: string
+  fabricPattern: string
+  fabricW: string
+  fabricCode: string | null
+  customer: string
+}
 
 interface StockGroup {
   customer: string
@@ -45,6 +53,60 @@ export default function StockPage() {
   const [appliedCustomer, setAppliedCustomer] = useState('')
   const [stockType, setStockType] = useState<'all' | 'produced' | 'purchased'>('all')
   const [hideZero, setHideZero] = useState(false)
+
+  // ── Search autocomplete ─────────────────────────────
+  const [qSuggestions, setQSuggestions] = useState<SearchSuggestion[]>([])
+  const [qDropdown, setQDropdown] = useState(false)
+  const [customerSuggestions, setCustomerSuggestions] = useState<SearchSuggestion[]>([])
+  const [customerDropdown, setCustomerDropdown] = useState(false)
+
+  useEffect(() => {
+    if (!q) { setQSuggestions([]); return }
+    const t = setTimeout(() => {
+      const p = new URLSearchParams({ [searchBy]: q })
+      fetch(`/api/warehouse/stock/search?${p}`)
+        .then(r => r.json())
+        .then(d => setQSuggestions(d.results ?? []))
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [q, searchBy])
+
+  useEffect(() => {
+    if (!customer) { setCustomerSuggestions([]); return }
+    const t = setTimeout(() => {
+      fetch(`/api/warehouse/stock/search?customer=${encodeURIComponent(customer)}`)
+        .then(r => r.json())
+        .then(d => setCustomerSuggestions(d.results ?? []))
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [customer])
+
+  // Dedupe suggestions by the value of the field actually being searched,
+  // since /api/warehouse/stock/search groups by the full struct+pattern+width+customer combo
+  const qSuggestionOptions = (() => {
+    const seen = new Set<string>()
+    const out: SearchSuggestion[] = []
+    for (const s of qSuggestions) {
+      const v = s[searchBy]
+      if (!v || seen.has(v)) continue
+      seen.add(v)
+      out.push(s)
+    }
+    return out
+  })()
+
+  const customerSuggestionOptions = (() => {
+    const seen = new Set<string>()
+    const out: SearchSuggestion[] = []
+    for (const s of customerSuggestions) {
+      if (!s.customer || seen.has(s.customer)) continue
+      seen.add(s.customer)
+      out.push(s)
+    }
+    return out
+  })()
 
   // ── Detail modal ─────────────────────────────────────
   const [detailGroup, setDetailGroup] = useState<StockGroup | null>(null)
@@ -258,7 +320,7 @@ export default function StockPage() {
 
       <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 shadow-sm">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 relative">
             <label className="block text-xs text-gray-500 mb-1">ค้นหา</label>
             <div className="flex">
               <select
@@ -269,18 +331,51 @@ export default function StockPage() {
                   <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
               </select>
-              <input value={q} onChange={e => setQ(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+              <input value={q}
+                onChange={e => { setQ(e.target.value); setQDropdown(true) }}
+                onFocus={() => { if (q) setQDropdown(true) }}
+                onBlur={() => setTimeout(() => setQDropdown(false), 200)}
+                onKeyDown={e => e.key === 'Enter' && (setQDropdown(false), handleSearch())}
                 placeholder="พิมพ์ค้นหา..."
                 className="flex-1 border border-gray-300 rounded-r-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
+            {qDropdown && qSuggestionOptions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                {qSuggestionOptions.map((s, i) => (
+                  <button key={i} type="button"
+                    onMouseDown={() => { setQ(s[searchBy] ?? ''); setQDropdown(false) }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs border-b border-gray-100 last:border-0">
+                    <div className="font-medium text-gray-800">{s.fabricStruct}</div>
+                    <div className="text-gray-500 flex gap-3 mt-0.5">
+                      <span>{s.fabricPattern || '-'}</span>
+                      <span>หน้า: {s.fabricW || '-'}</span>
+                      <span>{s.customer}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div>
+          <div className="relative">
             <label className="block text-xs text-gray-500 mb-1">ลูกค้า</label>
-            <input value={customer} onChange={e => setCustomer(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            <input value={customer}
+              onChange={e => { setCustomer(e.target.value); setCustomerDropdown(true) }}
+              onFocus={() => { if (customer) setCustomerDropdown(true) }}
+              onBlur={() => setTimeout(() => setCustomerDropdown(false), 200)}
+              onKeyDown={e => e.key === 'Enter' && (setCustomerDropdown(false), handleSearch())}
               placeholder="ชื่อลูกค้า..."
               className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            {customerDropdown && customerSuggestionOptions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {customerSuggestionOptions.map((s, i) => (
+                  <button key={i} type="button"
+                    onMouseDown={() => { setCustomer(s.customer); setCustomerDropdown(false) }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                    {s.customer}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex items-end gap-2">
             <button onClick={handleSearch}
