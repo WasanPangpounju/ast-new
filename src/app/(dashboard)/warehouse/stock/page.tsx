@@ -44,6 +44,7 @@ export default function StockPage() {
   const [appliedSearchBy, setAppliedSearchBy] = useState<'fabricCode' | 'fabricStruct' | 'fabricPattern' | 'fabricW'>('fabricCode')
   const [appliedCustomer, setAppliedCustomer] = useState('')
   const [stockType, setStockType] = useState<'all' | 'produced' | 'purchased'>('all')
+  const [hideZero, setHideZero] = useState(false)
 
   // ── Detail modal ─────────────────────────────────────
   const [detailGroup, setDetailGroup] = useState<StockGroup | null>(null)
@@ -83,6 +84,10 @@ export default function StockPage() {
   }, [appliedQ, appliedSearchBy, appliedCustomer, stockType])
 
   const { items: stocks, total, initialLoading, loadingMore, hasMore, sentinelRef, reload } = useInfiniteScroll<StockGroup>(fetchStocksPage)
+
+  const visibleStocks = hideZero
+    ? stocks.filter(s => Number(s.produced_yard ?? 0) - Number(s.used_yard ?? 0) > 0)
+    : stocks
 
   const fetchDetail = useCallback((g: StockGroup) => {
     setDetailLoading(true)
@@ -292,6 +297,15 @@ export default function StockPage() {
               {t === 'all' ? 'ทั้งหมด' : t === 'produced' ? 'ผ้าผลิต' : 'ผ้าซื้อเข้า'}
             </button>
           ))}
+          <label className="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer select-none py-1.5 ml-3">
+            <input
+              type="checkbox"
+              checked={hideZero}
+              onChange={(e) => setHideZero(e.target.checked)}
+              className="w-3.5 h-3.5 cursor-pointer"
+            />
+            ซ่อนรายการที่คงเหลือ = 0
+          </label>
         </div>
       </div>
 
@@ -329,9 +343,9 @@ export default function StockPage() {
                     กำลังโหลด...
                   </div>
                 </td></tr>
-              ) : stocks.length === 0 ? (
+              ) : visibleStocks.length === 0 ? (
                 <tr><td colSpan={12} className="text-center py-12 text-gray-400">ไม่พบข้อมูล</td></tr>
-              ) : stocks.map((s, i) => {
+              ) : visibleStocks.map((s, i) => {
                 const remFold = (s.lot_count ?? 0) - (s.used_fold ?? 0)
                 const remYard = Number(s.produced_yard ?? 0) - Number(s.used_yard ?? 0)
                 return (
