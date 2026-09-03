@@ -53,12 +53,14 @@ interface FormState {
   weightKgSum: string;
   weightPPackage: string;
   weightKgPackage: string;
-  weightPNet: string;   // calculated (editable — see netTouched)
-  weightKgNet: string;  // calculated (editable — see netTouched)
-  averageP: string;     // calculated (editable — see avgTouched)
-  averageKg: string;    // calculated (editable — see avgTouched)
-  netTouched: boolean;  // true once user edits weightPNet/weightKgNet directly
-  avgTouched: boolean;  // true once user edits averageP/averageKg directly
+  weightPNet: string;   // calculated (editable — see weightPNetTouched)
+  weightKgNet: string;  // calculated (editable — see weightKgNetTouched)
+  averageP: string;     // calculated (editable — see averagePTouched)
+  averageKg: string;    // calculated (editable — see averageKgTouched)
+  weightPNetTouched: boolean;  // true once user edits weightPNet directly
+  weightKgNetTouched: boolean; // true once user edits weightKgNet directly
+  averagePTouched: boolean;    // true once user edits averageP directly
+  averageKgTouched: boolean;   // true once user edits averageKg directly
   // ── return packaging (sent to API)
   returnPallet: boolean;
   returnBox: boolean;
@@ -71,26 +73,31 @@ interface FormState {
 
 // น้ำหนักสุทธิ (weightPNet/weightKgNet) และน้ำหนักเฉลี่ยต่อลูก (averageP/averageKg)
 // auto-fill จาก รวม−บรรจุภัณฑ์ และ สุทธิ÷จำนวนลูก ตามลำดับ — จนกว่าผู้ใช้จะแก้เอง
-// (netTouched/avgTouched) ซึ่งจุดนั้นจะหยุดถูกทับ เหมือน pattern "จำนวนหลอด" ใน
-// MaterialOutsideForm. ค่าเฉลี่ยยังคง cascade ตามน้ำหนักสุทธิที่แก้เอง จนกว่า
-// ค่าเฉลี่ยเองจะถูกแก้ตรงๆ ด้วย
+// เหมือน pattern "จำนวนหลอด" ใน MaterialOutsideForm แต่ต่างจากคู่อื่น (Sum/Package)
+// ตรงที่ lb กับ kg ไม่ auto-convert หากันอีกต่อไป — แต่ละหน่วยมี touched flag
+// อิสระของตัวเอง (weightPNetTouched/weightKgNetTouched/averagePTouched/averageKgTouched)
+// แก้หน่วยไหนก็หยุด auto-calc เฉพาะหน่วยนั้น ไม่กระทบอีกหน่วย
 function recalc(s: FormState, p: Partial<FormState>): FormState {
   const n = { ...s, ...p };
 
-  if (!n.netTouched) {
-    const pSum  = parseFloat(n.weightPSum) || 0;
-    const pPkg  = parseFloat(n.weightPPackage) || 0;
+  if (!n.weightPNetTouched) {
+    const pSum = parseFloat(n.weightPSum) || 0;
+    const pPkg = parseFloat(n.weightPPackage) || 0;
+    n.weightPNet = fmt(pSum - pPkg);
+  }
+  if (!n.weightKgNetTouched) {
     const kgSum = parseFloat(n.weightKgSum) || 0;
     const kgPkg = parseFloat(n.weightKgPackage) || 0;
-    n.weightPNet  = fmt(pSum  - pPkg);
     n.weightKgNet = fmt(kgSum - kgPkg);
   }
 
-  if (!n.avgTouched) {
-    const sp    = parseInt(n.spool) || 0;
-    const pNet  = parseFloat(n.weightPNet)  || 0;
+  const sp = parseInt(n.spool) || 0;
+  if (!n.averagePTouched) {
+    const pNet = parseFloat(n.weightPNet) || 0;
+    n.averageP = sp > 0 && pNet > 0 ? fmt(pNet / sp) : "";
+  }
+  if (!n.averageKgTouched) {
     const kgNet = parseFloat(n.weightKgNet) || 0;
-    n.averageP  = sp > 0 && pNet  > 0 ? fmt(pNet  / sp) : "";
     n.averageKg = sp > 0 && kgNet > 0 ? fmt(kgNet / sp) : "";
   }
 
@@ -109,7 +116,8 @@ function makeEmpty(today: string, emp: string): FormState {
     weightPPackage: "", weightKgPackage: "",
     weightPNet: "", weightKgNet: "",
     averageP: "", averageKg: "",
-    netTouched: false, avgTouched: false,
+    weightPNetTouched: false, weightKgNetTouched: false,
+    averagePTouched: false, averageKgTouched: false,
     returnPallet: false, returnBox: false, returnSack: false,
     returnSpool: false, returnPaperBar: false,
     note: "",
@@ -256,25 +264,21 @@ export default function MaterialCreateForm({ emp }: Props) {
     patch({ weightKgPackage: v, weightPPackage: k > 0 ? fmt(k * LBS_PER_KG) : "" });
   }
 
-  // น้ำหนักสุทธิ: แก้เองได้ — พอแก้แล้วหยุด auto-calc จาก รวม−บรรจุภัณฑ์ (netTouched)
-  // และ cascade ต่อไปยังน้ำหนักเฉลี่ยต่อลูกเหมือนเดิม ตราบใดที่ยังไม่ถูกแก้เอง
+  // น้ำหนักสุทธิ: แก้เองได้ — พอแก้แล้วหยุด auto-calc จาก รวม−บรรจุภัณฑ์ เฉพาะหน่วยที่แก้
+  // (weightPNetTouched/weightKgNetTouched แยกกัน ไม่ auto-convert หากันอีกต่อไป)
   function onPNet(v: string) {
-    const p = parseFloat(v) || 0;
-    patch({ weightPNet: v, weightKgNet: p > 0 ? fmt(p / LBS_PER_KG) : "", netTouched: true });
+    patch({ weightPNet: v, weightPNetTouched: true });
   }
   function onKgNet(v: string) {
-    const k = parseFloat(v) || 0;
-    patch({ weightKgNet: v, weightPNet: k > 0 ? fmt(k * LBS_PER_KG) : "", netTouched: true });
+    patch({ weightKgNet: v, weightKgNetTouched: true });
   }
 
-  // น้ำหนักเฉลี่ยต่อลูก: แก้เองได้ — พอแก้แล้วหยุด auto-calc จาก สุทธิ÷จำนวนลูก (avgTouched)
+  // น้ำหนักเฉลี่ยต่อลูก: แก้เองได้ — พอแก้แล้วหยุด auto-calc จาก สุทธิ÷จำนวนลูก เฉพาะหน่วยที่แก้
   function onPAvg(v: string) {
-    const p = parseFloat(v) || 0;
-    patch({ averageP: v, averageKg: p > 0 ? fmt(p / LBS_PER_KG) : "", avgTouched: true });
+    patch({ averageP: v, averagePTouched: true });
   }
   function onKgAvg(v: string) {
-    const k = parseFloat(v) || 0;
-    patch({ averageKg: v, averageP: k > 0 ? fmt(k * LBS_PER_KG) : "", avgTouched: true });
+    patch({ averageKg: v, averageKgTouched: true });
   }
 
   // ── spool ↔ yarnSum sync ────────────────────────────────────────────────────
@@ -336,9 +340,13 @@ export default function MaterialCreateForm({ emp }: Props) {
         { label: "ล็อตที่", value: form.lot },
         { label: "จำนวนหลอดทั้งหมด", value: form.spool ? `${form.spool} หลอด (${SPOOL_TYPE_LABEL[form.spoolType] ?? form.spoolType})` : "" },
         { label: "จำนวนด้ายทั้งหมด (ลูก)", value: form.yarnSum },
+        { label: "น้ำหนักรวม (lb)", value: form.weightPSum },
         { label: "น้ำหนักรวม (kg)", value: form.weightKgSum },
+        { label: "น้ำหนักบรรจุภัณฑ์ (lb)", value: form.weightPPackage },
         { label: "น้ำหนักบรรจุภัณฑ์ (kg)", value: form.weightKgPackage },
+        { label: "น้ำหนักสุทธิ (lb)", value: form.weightPNet },
         { label: "น้ำหนักสุทธิ (kg)", value: form.weightKgNet },
+        { label: "น้ำหนักเฉลี่ยต่อลูก (lb)", value: form.averageP },
         { label: "น้ำหนักเฉลี่ยต่อลูก (kg)", value: form.averageKg },
         { label: "พาเลท", value: form.pallet ? `${form.pallet} (${PALLET_TYPE_LABEL[form.palletType] ?? form.palletType})` : "" },
         { label: "กล่อง", value: form.box },
