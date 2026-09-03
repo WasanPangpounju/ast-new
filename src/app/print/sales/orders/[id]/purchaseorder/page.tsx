@@ -365,16 +365,20 @@ export default function PurchaseOrderPrintPage({
               <span>{order.customerName ?? "-"}</span>
             </div>
             <div className="flex gap-2">
-              <span className="font-bold w-32 flex-shrink-0">ที่อยู่</span>
+              <span className="font-bold w-32 flex-shrink-0">
+                {order.vat === "SOB" ? " " : "ที่อยู่"}
+              </span>
               <span className="leading-relaxed">
-                {customer?.address ?? "-"}
+                {order.vat === "SOB" ? " " : (customer?.address ?? "-")}
               </span>
             </div>
             <div className="flex gap-2 text-sm">
               <span className="font-bold w-32 flex-shrink-0 whitespace-nowrap text-[0.87rem]">
-                เลขประจำตัวผู้เสียภาษี
+                {order.vat === "SOB" ? " " : "เลขประจำตัวผู้เสียภาษี"}
               </span>
-              <span className="font-mono">{customer?.tax ?? "-"}</span>
+              <span className="font-mono">
+                {order.vat === "SOB" ? " " : (customer?.tax ?? "-")}
+              </span>
             </div>
           </div>
           <div className="space-y-2">

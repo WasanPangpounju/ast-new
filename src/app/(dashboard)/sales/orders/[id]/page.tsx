@@ -253,18 +253,22 @@ export default function OrderDetailPage({
                 <span className="text-gray-500 text-xs">ชื่อ:</span>{" "}
                 <span className="font-medium">{customer.name}</span>
               </div>
-              <div>
-                <span className="text-gray-500 text-xs">
-                  เลขที่ผู้เสียภาษี:
-                </span>{" "}
-                <span className="font-mono">{customer.tax ?? "-"}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 text-xs">ที่อยู่:</span>{" "}
-                <span className="text-xs text-gray-700">
-                  {customer.address ?? "-"}
-                </span>
-              </div>
+              {order.vat !== "SOB" && (
+                <div>
+                  <span className="text-gray-500 text-xs">
+                    เลขที่ผู้เสียภาษี:
+                  </span>{" "}
+                  <span className="font-mono">{customer.tax ?? "-"}</span>
+                </div>
+              )}
+              {order.vat !== "SOB" && (
+                <div>
+                  <span className="text-gray-500 text-xs">ที่อยู่:</span>{" "}
+                  <span className="text-xs text-gray-700">
+                    {customer.address ?? "-"}
+                  </span>
+                </div>
+              )}
               <div>
                 <span className="text-gray-500 text-xs">โทร:</span>{" "}
                 <span>{customer.tel ?? "-"}</span>
