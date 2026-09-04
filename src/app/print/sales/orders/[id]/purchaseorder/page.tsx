@@ -340,13 +340,23 @@ export default function PurchaseOrderPrintPage({
             <p className="text-base font-semibold text-gray-700">
               {COMPANY.nameEN}
             </p>
-            <p className="text-sm text-gray-600 mt-1">{COMPANY.address}</p>
-            <p className="text-sm text-gray-600">
-              โทร : {COMPANY.tel} &nbsp;|&nbsp; แฟกซ์ {COMPANY.fax}{" "}
-              &nbsp;|&nbsp; Email : {COMPANY.email}
+            <p className="text-sm text-gray-600 mt-1">
+              {order.vat === "SOB" ? " " : COMPANY.address}
             </p>
             <p className="text-sm text-gray-600">
-              เลขประจำตัวผู้เสียภาษี : {COMPANY.tax}
+              {order.vat === "SOB" ? (
+                " "
+              ) : (
+                <>
+                  โทร : {COMPANY.tel} &nbsp;|&nbsp; แฟกซ์ {COMPANY.fax}{" "}
+                  &nbsp;|&nbsp; Email : {COMPANY.email}
+                </>
+              )}
+            </p>
+            <p className="text-sm text-gray-600">
+              {order.vat === "SOB"
+                ? " "
+                : `เลขประจำตัวผู้เสียภาษี : ${COMPANY.tax}`}
             </p>
           </div>
         </div>
@@ -365,20 +375,16 @@ export default function PurchaseOrderPrintPage({
               <span>{order.customerName ?? "-"}</span>
             </div>
             <div className="flex gap-2">
-              <span className="font-bold w-32 flex-shrink-0">
-                {order.vat === "SOB" ? " " : "ที่อยู่"}
-              </span>
+              <span className="font-bold w-32 flex-shrink-0">ที่อยู่</span>
               <span className="leading-relaxed">
-                {order.vat === "SOB" ? " " : (customer?.address ?? "-")}
+                {customer?.address ?? "-"}
               </span>
             </div>
             <div className="flex gap-2 text-sm">
               <span className="font-bold w-32 flex-shrink-0 whitespace-nowrap text-[0.87rem]">
-                {order.vat === "SOB" ? " " : "เลขประจำตัวผู้เสียภาษี"}
+                เลขประจำตัวผู้เสียภาษี
               </span>
-              <span className="font-mono">
-                {order.vat === "SOB" ? " " : (customer?.tax ?? "-")}
-              </span>
+              <span className="font-mono">{customer?.tax ?? "-"}</span>
             </div>
           </div>
           <div className="space-y-2">
