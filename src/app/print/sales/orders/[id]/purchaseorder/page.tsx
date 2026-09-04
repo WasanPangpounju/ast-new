@@ -335,10 +335,10 @@ export default function PurchaseOrderPrintPage({
           </div>
           <div className="flex-1">
             <h1 className="text-xl font-bold text-blue-900">
-              {COMPANY.nameTH}
+              {order.vat === "SOB" ? "AST" : COMPANY.nameTH}
             </h1>
             <p className="text-base font-semibold text-gray-700">
-              {COMPANY.nameEN}
+              {order.vat === "SOB" ? " " : COMPANY.nameEN}
             </p>
             <p className="text-sm text-gray-600 mt-1">
               {order.vat === "SOB" ? " " : COMPANY.address}
