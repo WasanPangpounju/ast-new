@@ -82,6 +82,21 @@ export default function SalesOrdersReviewPage() {
   const [updatingId, setUpdatingId] = useState<number | null>(null)
   const [orFallback, setOrFallback] = useState(false)
 
+  // ── Search autocomplete ──
+  const [qSuggestions, setQSuggestions] = useState<string[]>([])
+  const [qDropdown, setQDropdown] = useState(false)
+
+  useEffect(() => {
+    if (!q) { setQSuggestions([]); return }
+    const t = setTimeout(() => {
+      fetch('/api/sales/orders/suggestions?q=' + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(d => setQSuggestions(d.data ?? []))
+        .catch(() => {})
+    }, 300)
+    return () => clearTimeout(t)
+  }, [q])
+
   const totalPages = Math.ceil(total / 20)
 
   const fetchOrders = useCallback(() => {
@@ -183,13 +198,28 @@ export default function SalesOrdersReviewPage() {
       <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4 shadow-sm">
         {/* Row 1: search + status */}
         <div className="flex flex-wrap gap-2 mb-2">
-          <input
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && applyFilter()}
-            placeholder="ค้นหา SO หรือชื่อลูกค้า..."
-            className="flex-1 min-w-[200px] border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <div className="relative flex-1 min-w-[200px]">
+            <input
+              value={q}
+              onChange={e => { setQ(e.target.value); setQDropdown(true) }}
+              onFocus={() => { if (q) setQDropdown(true) }}
+              onBlur={() => setTimeout(() => setQDropdown(false), 200)}
+              onKeyDown={e => e.key === 'Enter' && (setQDropdown(false), applyFilter())}
+              placeholder="ค้นหา SO หรือชื่อลูกค้า..."
+              className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {qDropdown && qSuggestions.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {qSuggestions.map(v => (
+                  <button key={v} type="button"
+                    onMouseDown={() => { setQ(v); setQDropdown(false); setPage(1); setApplied(a => ({ ...a, q: v })) }}
+                    className="w-full text-left px-3 py-2 hover:bg-blue-50 text-sm border-b border-gray-100 last:border-0">
+                    {v}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <select
             value={statusFilter}
             onChange={e => setStatusFilter(e.target.value)}
