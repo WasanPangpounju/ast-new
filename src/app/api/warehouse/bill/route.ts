@@ -64,8 +64,14 @@ export async function GET(request: NextRequest) {
             COALESCE(MAX("stockFabricW"),       '') AS s_w,
             COALESCE(MAX("stockFabricPattern"), '') AS s_pattern,
             COALESCE(MAX("stockCustomer"),      '') AS s_customer,
-            MAX("orderId")       AS order_id,
-            MAX("purchaseOrder") AS purchase_order
+            -- Every distinct order actually linked to a row in this bill (not
+            -- just one, collapsed via MAX) — a bill can span multiple orders
+            -- when it was used to cover overflow past the first order's yard.
+            COALESCE(
+              jsonb_agg(DISTINCT jsonb_build_object('orderId', "orderId", 'purchaseOrder', "purchaseOrder"))
+                FILTER (WHERE "orderId" IS NOT NULL),
+              '[]'::jsonb
+            ) AS orders_json
           FROM fabricouts
           WHERE ${baseWhere}
           GROUP BY "vatType", "vatNo", "customerName", "receiveName", "fabricStruct", "fabricPattern", "fabricW"
@@ -101,19 +107,34 @@ export async function GET(request: NextRequest) {
       `) as Promise<any[]>,
     ])
 
-    const mappedBills = (bills as any[]).map(b => ({
-      ...b,
-      foldCount:          Number(b.foldCount),
-      totalYard:          Number(b.totalYard),
-      vatNo:              Number(b.vatNo),
-      hasStockMatch:      Boolean(b.has_stock_match),
-      stockFabricStruct:  b.s_struct  || null,
-      stockFabricW:       b.s_w       || null,
-      stockFabricPattern: b.s_pattern || null,
-      stockCustomer:      b.s_customer || null,
-      orderId:            b.order_id !== null && b.order_id !== undefined ? Number(b.order_id) : null,
-      purchaseOrder:      b.purchase_order || null,
-    }))
+    const mappedBills = (bills as any[]).map(b => {
+      // node-postgres already parses jsonb columns into plain JS values.
+      const rawOrders = Array.isArray(b.orders_json) ? b.orders_json : []
+      const orders = rawOrders
+        .map((o: { orderId: number | string | null; purchaseOrder: string | null }) => ({
+          orderId: Number(o.orderId),
+          purchaseOrder: o.purchaseOrder || null,
+        }))
+        .sort((a: { orderId: number }, b2: { orderId: number }) => a.orderId - b2.orderId)
+
+      return {
+        ...b,
+        foldCount:          Number(b.foldCount),
+        totalYard:          Number(b.totalYard),
+        vatNo:              Number(b.vatNo),
+        hasStockMatch:      Boolean(b.has_stock_match),
+        stockFabricStruct:  b.s_struct  || null,
+        stockFabricW:       b.s_w       || null,
+        stockFabricPattern: b.s_pattern || null,
+        stockCustomer:      b.s_customer || null,
+        orders,
+        // Back-compat single-order view (first linked order) — bills with
+        // exactly one order (the common case) see the exact same values here
+        // as before this field became an array.
+        orderId:       orders[0]?.orderId ?? null,
+        purchaseOrder: orders[0]?.purchaseOrder ?? null,
+      }
+    })
 
     return Response.json({ bills: mappedBills, total: Number((totalRaw as any[])[0]?.cnt ?? 0), page, limit })
   } catch (e) {
@@ -122,12 +143,72 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// Resolves the ordered list of order ids the caller wants to fill (order 1
+// first, then order 2 for overflow, ...) into their current DB capacity —
+// same remainingYard formula as /api/warehouse/orders/search — so the split
+// below is computed from fresh data rather than trusting client-side numbers.
+async function loadOrderCapacities(orderIdList: number[]) {
+  if (orderIdList.length === 0) return []
+
+  const orders = await prisma.astPurchaseOrder.findMany({
+    where: { id: { in: orderIdList } },
+    select: { id: true, purchaseOrder: true, orderSumYard: true },
+  })
+  const orderMap = new Map(orders.map(o => [o.id, o]))
+
+  const poNumbers = orders.map(o => o.purchaseOrder).filter((p): p is string => !!p)
+  const stats = poNumbers.length > 0
+    ? await prisma.fabricOut.groupBy({
+        by: ['purchaseOrder'],
+        where: { purchaseOrder: { in: poNumbers }, deletedAt: null },
+        _sum: { sumYard: true },
+      })
+    : []
+  const deliveredMap = new Map(stats.map(s => [s.purchaseOrder ?? '', Number(s._sum.sumYard ?? 0)]))
+
+  // Preserve the caller's priority order; silently drop ids that no longer resolve.
+  return orderIdList
+    .map(id => orderMap.get(id))
+    .filter((o): o is NonNullable<typeof o> => !!o)
+    .map(o => ({
+      id: o.id,
+      purchaseOrder: o.purchaseOrder ?? '',
+      remaining: Number(o.orderSumYard ?? 0) - (deliveredMap.get(o.purchaseOrder ?? '') ?? 0),
+    }))
+}
+
+// Assigns each roll to an order, filling order 1 to capacity before spilling
+// over to order 2, etc. A single roll (ม้วน) is never split across orders —
+// once adding a roll would exceed the current order's remaining capacity, the
+// whole roll moves to the next order instead. Any yard left over past the
+// last order in the list still lands on that last order (no orphaned rows);
+// the UI's warning banner is what nudges the user to queue enough orders.
+function assignOrders<T extends { yard: number }>(
+  rows: T[],
+  capacities: { id: number; purchaseOrder: string; remaining: number }[],
+) {
+  if (capacities.length === 0) {
+    return rows.map(r => ({ ...r, orderId: null as number | null, purchaseOrder: null as string | null }))
+  }
+  let idx = 0
+  let usedInCurrent = 0
+  return rows.map(r => {
+    while (idx < capacities.length - 1 && usedInCurrent + r.yard > capacities[idx].remaining) {
+      idx += 1
+      usedInCurrent = 0
+    }
+    usedInCurrent += r.yard
+    const cur = capacities[idx]
+    return { ...r, orderId: cur.id, purchaseOrder: cur.purchaseOrder || null }
+  })
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth()
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { vatType, vatNo, customerName, receiveName, orderId, purchaseOrder,
+  const { vatType, vatNo, customerName, receiveName, orderId, orderIds, purchaseOrder,
           fabricStruct, fabricPattern, fabricW, createDate, yards,
           isDeposit, altFabricStruct, altPurchaseOrder, refId: refIdInput } = body
 
@@ -157,9 +238,18 @@ export async function POST(request: NextRequest) {
 
   const date = new Date(createDate)
 
+  // orderIds (new, multi-order flow) takes priority; fall back to the legacy
+  // single orderId field so any other/older caller keeps working unchanged.
+  const orderIdList: number[] = Array.isArray(orderIds) && orderIds.length > 0
+    ? orderIds.map((v: unknown) => Number(v)).filter((n: number) => Number.isFinite(n) && n > 0)
+    : (orderId ? [Number(orderId)] : [])
+
   try {
+    const capacities = await loadOrderCapacities(orderIdList)
+    const assigned = assignOrders(rows, capacities)
+
     await prisma.fabricOut.createMany({
-      data: rows.map(r => ({
+      data: assigned.map(r => ({
         refId,
         vatType,
         vatNo: Number(vatNo),
@@ -170,8 +260,10 @@ export async function POST(request: NextRequest) {
         fabricW: fabricW || '',
         customerName,
         receiveName: receiveName || customerName,
-        orderId: orderId ? Number(orderId) : null,
-        purchaseOrder: purchaseOrder || null,
+        orderId: r.orderId,
+        // Per-row PO from its assigned order when one was linked; otherwise
+        // fall back to the single purchaseOrder string the form submitted.
+        purchaseOrder: r.orderId ? r.purchaseOrder : (purchaseOrder || null),
         createDate: date,
         isDeposit: isDeposit ?? false,
         altFabricStruct: altFabricStruct || null,
@@ -195,8 +287,33 @@ export async function PATCH(request: NextRequest) {
   const { vatType, vatNo, customerName, receiveName, fabricStruct, fabricPattern, fabricW,
           altFabricStruct, altPurchaseOrder,
           stockFabricStruct, stockFabricW, stockFabricPattern, stockCustomer,
-          orderId, purchaseOrder } = body
+          orderId, purchaseOrder, linkOrderId, unlinkOrderId } = body
   if (!vatType || vatNo == null) return Response.json({ error: 'vatType and vatNo required' }, { status: 400 })
+
+  // Multi-order ops target only a subset of this bill's rolls, so linking or
+  // unlinking one order never touches the others already on the bill — unlike
+  // the legacy `orderId` field below, which replaces every row and stays for
+  // the single-order "replace the whole bill's order" UI action.
+  if (linkOrderId != null) {
+    const order = await prisma.astPurchaseOrder.findUnique({
+      where: { id: Number(linkOrderId) },
+      select: { purchaseOrder: true },
+    })
+    // Only rolls not already claimed by another order pick this one up —
+    // it's additive, not a replacement.
+    const result = await prisma.fabricOut.updateMany({
+      where: { vatType, vatNo: Number(vatNo), deletedAt: null, orderId: null },
+      data: { orderId: Number(linkOrderId), purchaseOrder: order?.purchaseOrder ?? null },
+    })
+    return Response.json({ ok: true, count: result.count })
+  }
+  if (unlinkOrderId != null) {
+    const result = await prisma.fabricOut.updateMany({
+      where: { vatType, vatNo: Number(vatNo), deletedAt: null, orderId: Number(unlinkOrderId) },
+      data: { orderId: null, purchaseOrder: null },
+    })
+    return Response.json({ ok: true, count: result.count })
+  }
 
   await prisma.fabricOut.updateMany({
     where: { vatType, vatNo: Number(vatNo), deletedAt: null },

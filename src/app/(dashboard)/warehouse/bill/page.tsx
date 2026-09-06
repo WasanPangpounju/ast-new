@@ -3,6 +3,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
 
+// One order linked to a bill. A bill normally has at most one, but can span
+// several when it was used to cover overflow past the first order's yard.
+interface LinkedOrderRef {
+  orderId: number;
+  purchaseOrder: string | null;
+}
+
 interface Bill {
   vatType: string;
   vatNo: number;
@@ -21,8 +28,7 @@ interface Bill {
   stockFabricW: string | null;
   stockFabricPattern: string | null;
   stockCustomer: string | null;
-  orderId: number | null;
-  purchaseOrder: string | null;
+  orders: LinkedOrderRef[];
 }
 
 interface EditForm {
@@ -325,7 +331,7 @@ export default function BillListPage() {
       if (q) doStockSearch(q);
     }
     if (tab === 'order' && manageBill) {
-      const q = manageBill.purchaseOrder || manageBill.customerName || "";
+      const q = manageBill.orders[0]?.purchaseOrder || manageBill.customerName || "";
       setOrderSearch(q);
       if (q) doOrderSearch(q);
     }
@@ -379,6 +385,9 @@ export default function BillListPage() {
     orderTimer.current = setTimeout(() => doOrderSearch(v), 400);
   };
 
+  // Replaces every order currently linked to this bill with just this one —
+  // the original single-order edit action, unchanged for bills that only
+  // ever have one order.
   const handleSelectOrder = async (o: OrderResult) => {
     if (!manageBill || orderSaving) return;
     setOrderSaving(true);
@@ -391,10 +400,34 @@ export default function BillListPage() {
       }),
     });
     setOrderSaving(false);
-    setManageBill(b => b ? { ...b, orderId: o.id, purchaseOrder: o.purchaseOrder } : b);
+    setManageBill(b => b ? { ...b, orders: [{ orderId: o.id, purchaseOrder: o.purchaseOrder }] } : b);
     reload();
   };
 
+  // Links this order to whichever rolls in the bill aren't already claimed by
+  // another order — additive, so it never disturbs orders already linked.
+  const handleAddOrder = async (o: OrderResult) => {
+    if (!manageBill || orderSaving) return;
+    setOrderSaving(true);
+    const res = await fetch("/api/warehouse/bill", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vatType: manageBill.vatType, vatNo: manageBill.vatNo,
+        linkOrderId: o.id,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setOrderSaving(false);
+    if (!data.count) {
+      alert("บิลนี้ไม่มีม้วนที่ยังไม่ได้ผูกออร์เดอร์ให้เพิ่มออร์เดอร์นี้ (ทุกม้วนถูกผูกกับออร์เดอร์อยู่แล้ว)");
+      return;
+    }
+    setManageBill(b => b ? { ...b, orders: [...b.orders, { orderId: o.id, purchaseOrder: o.purchaseOrder }] } : b);
+    reload();
+  };
+
+  // Unlinks every order from the bill at once (legacy footer action).
   const handleUnlinkOrder = async () => {
     if (!manageBill || orderSaving) return;
     setOrderSaving(true);
@@ -407,7 +440,24 @@ export default function BillListPage() {
       }),
     });
     setOrderSaving(false);
-    setManageBill(b => b ? { ...b, orderId: null, purchaseOrder: null } : b);
+    setManageBill(b => b ? { ...b, orders: [] } : b);
+    reload();
+  };
+
+  // Unlinks just this one order, leaving any other orders on the bill intact.
+  const handleUnlinkOneOrder = async (orderId: number) => {
+    if (!manageBill || orderSaving) return;
+    setOrderSaving(true);
+    await fetch("/api/warehouse/bill", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vatType: manageBill.vatType, vatNo: manageBill.vatNo,
+        unlinkOrderId: orderId,
+      }),
+    });
+    setOrderSaving(false);
+    setManageBill(b => b ? { ...b, orders: b.orders.filter(x => x.orderId !== orderId) } : b);
     reload();
   };
 
@@ -874,13 +924,31 @@ export default function BillListPage() {
             {activeTab === 'order' && (
               <div className="flex flex-col flex-1 overflow-hidden">
                 <div className="px-5 py-4 space-y-3 flex-1 overflow-y-auto">
-                  {/* Current order */}
-                  {manageBill.orderId && (
-                    <div className="bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs">
-                      <p className="text-blue-600 font-medium mb-0.5">ออร์เดอร์ปัจจุบัน</p>
-                      <p className="text-blue-800 font-medium">
-                        {manageBill.purchaseOrder || `#${manageBill.orderId}`}
+                  {/* Current order(s) — usually one, but a bill can span
+                      several when it covers overflow past the first order's yard */}
+                  {manageBill.orders.length > 0 && (
+                    <div className="space-y-1.5">
+                      <p className="text-blue-600 font-medium text-xs">
+                        ออร์เดอร์ปัจจุบัน ({manageBill.orders.length})
                       </p>
+                      {manageBill.orders.map((o) => (
+                        <div
+                          key={o.orderId}
+                          className="bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs flex items-center justify-between gap-2"
+                        >
+                          <span className="text-blue-800 font-medium">
+                            {o.purchaseOrder || `#${o.orderId}`}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleUnlinkOneOrder(o.orderId)}
+                            disabled={orderSaving}
+                            className="px-2 py-0.5 text-xs border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-50 transition-colors flex-shrink-0"
+                          >
+                            ยกเลิก
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -902,14 +970,11 @@ export default function BillListPage() {
                   ) : orderResults.length > 0 ? (
                     <div className="border border-gray-200 divide-y divide-gray-100 max-h-64 overflow-y-auto">
                       {orderResults.map((o, i) => {
-                        const isLinked = manageBill.orderId === o.id;
+                        const isLinked = manageBill.orders.some(lo => lo.orderId === o.id);
                         return (
-                          <button
+                          <div
                             key={i}
-                            type="button"
-                            onClick={() => handleSelectOrder(o)}
-                            disabled={orderSaving}
-                            className={`w-full text-left px-3 py-2.5 text-xs transition-colors disabled:opacity-50 ${isLinked ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'}`}
+                            className={`w-full text-left px-3 py-2.5 text-xs transition-colors ${isLinked ? 'bg-blue-50' : ''}`}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div>
@@ -927,10 +992,31 @@ export default function BillListPage() {
                                 <div className="text-gray-400">คงเหลือ</div>
                               </div>
                             </div>
-                            {isLinked && (
+                            {isLinked ? (
                               <span className="mt-1 inline-block text-blue-600 font-medium">✓ เชื่อมอยู่</span>
+                            ) : (
+                              <div className="mt-1.5 flex gap-1.5">
+                                {manageBill.orders.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectOrder(o)}
+                                    disabled={orderSaving}
+                                    className="px-2 py-0.5 text-xs border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors"
+                                  >
+                                    แทนที่ทั้งหมด
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddOrder(o)}
+                                  disabled={orderSaving}
+                                  className="px-2 py-0.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                >
+                                  {manageBill.orders.length > 0 ? "+ เพิ่มออร์เดอร์นี้" : "เชื่อมออร์เดอร์นี้"}
+                                </button>
+                              </div>
                             )}
-                          </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -940,7 +1026,7 @@ export default function BillListPage() {
                 </div>
 
                 {/* Footer */}
-                {manageBill.orderId && (
+                {manageBill.orders.length > 0 && (
                   <div className="px-5 py-3 border-t border-gray-100 flex-shrink-0">
                     <button
                       type="button"
@@ -948,7 +1034,11 @@ export default function BillListPage() {
                       disabled={orderSaving}
                       className="w-full py-1.5 text-xs border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-50 transition-colors"
                     >
-                      {orderSaving ? "กำลังบันทึก..." : "ยกเลิกการเชื่อมออร์เดอร์"}
+                      {orderSaving
+                        ? "กำลังบันทึก..."
+                        : manageBill.orders.length > 1
+                          ? "ยกเลิกการเชื่อมออร์เดอร์ทั้งหมด"
+                          : "ยกเลิกการเชื่อมออร์เดอร์"}
                     </button>
                   </div>
                 )}

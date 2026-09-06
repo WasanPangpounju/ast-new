@@ -38,6 +38,14 @@ interface OrderSearchResult {
   remainingYard: number;
 }
 
+// An order queued up to receive rolls from this bill. Multiple orders can be
+// linked when the yard total overflows the first one — see linkedOrders below.
+interface LinkedOrder {
+  id: number;
+  purchaseOrder: string;
+  remainingYard: number;
+}
+
 export default function BillCreatePage() {
   // refId doubles as the DB refId: generated client-side and sent with every
   // save so "บันทึกรายการถัดไป" keeps appending rolls to the same fabricouts
@@ -91,8 +99,10 @@ export default function BillCreatePage() {
   const [orderSearch, setOrderSearch] = useState("");
   const [orderResults, setOrderResults] = useState<OrderSearchResult[]>([]);
   const [orderDropdown, setOrderDropdown] = useState(false);
-  const [linkedOrderId, setLinkedOrderId] = useState<number | null>(null);
-  const [linkedSO, setLinkedSO] = useState("");
+  // Orders queued to receive this bill's rolls, in the order they were picked.
+  // When the entered yard total overflows order 1, the overflow auto-assigns
+  // to order 2, then order 3, etc. (see remainingYardTotal / handleSave).
+  const [linkedOrders, setLinkedOrders] = useState<LinkedOrder[]>([]);
 
   // Yards grid
   const [yards, setYards] = useState<string[]>(Array(TOTAL_SLOTS).fill(""));
@@ -122,11 +132,30 @@ export default function BillCreatePage() {
     if (fs) setFabricStruct(fs);
     if (fp) setFabricPattern(fp);
     if (fw) setFabricW(fw);
-    if (p.get("purchaseOrder")) {
-      setPurchaseOrderParam(p.get("purchaseOrder")!);
-      setLinkedSO(p.get("purchaseOrder")!);
+    const preOrderId = p.get("orderId");
+    const prePO = p.get("purchaseOrder");
+    if (prePO) setPurchaseOrderParam(prePO);
+    if (preOrderId && prePO) {
+      // No remainingYard is passed via query params, so look it up the same
+      // way the order search dropdown does before queuing it as linked order 1.
+      fetch("/api/warehouse/orders/search?q=" + encodeURIComponent(prePO))
+        .then((r) => r.json())
+        .then((d) => {
+          const match = (d.orders ?? []).find(
+            (o: OrderSearchResult) => o.id === Number(preOrderId),
+          );
+          if (match) {
+            setLinkedOrders([
+              {
+                id: match.id,
+                purchaseOrder: match.purchaseOrder,
+                remainingYard: match.remainingYard,
+              },
+            ]);
+          }
+        })
+        .catch(() => {});
     }
-    if (p.get("orderId")) setLinkedOrderId(Number(p.get("orderId")));
 
     if (fs || customerName) {
       const sp = new URLSearchParams();
@@ -254,6 +283,15 @@ export default function BillCreatePage() {
   const totalFold = yardNums.filter((v) => v > 0).length;
   const totalYard = yardNums.reduce((a, b) => a + b, 0);
 
+  // Combined remaining capacity across every linked order, and how much the
+  // entered total overflows it (used for the over-order warning banner below).
+  const remainingYardTotal = linkedOrders.reduce(
+    (s, o) => s + o.remainingYard,
+    0,
+  );
+  const overflowYard =
+    linkedOrders.length > 0 ? totalYard - remainingYardTotal : 0;
+
   function handleAiResult(data: AiReadResult) {
     const filled = new Set<string>();
     const lowConf = new Set<string>();
@@ -323,6 +361,7 @@ export default function BillCreatePage() {
     setOrderSearch("");
     setOrderResults([]);
     setOrderDropdown(false);
+    setLinkedOrders([]);
     setFabricStruct("");
     setFabricPattern("");
     setFabricW("");
@@ -370,7 +409,12 @@ export default function BillCreatePage() {
           altFabricStruct,
           altPurchaseOrder,
           purchaseOrder: purchaseOrderParam || undefined,
-          orderId: linkedOrderId || undefined,
+          // Ordered list of linked orders — the API fills order 1 first and
+          // auto-assigns any overflow rolls to order 2, 3, ... in this order.
+          orderIds:
+            linkedOrders.length > 0
+              ? linkedOrders.map((o) => o.id)
+              : undefined,
           // ถ้าเคยกด "บันทึกรายการถัดไป" มาก่อน ให้ผูกม้วนชุดสุดท้ายนี้เข้า
           // บิลเดิม (refId เดิม) แล้วค่อยปิดบิลผ่าน resetForm()
           refId,
@@ -415,7 +459,10 @@ export default function BillCreatePage() {
           altFabricStruct,
           altPurchaseOrder,
           purchaseOrder: purchaseOrderParam || undefined,
-          orderId: linkedOrderId || undefined,
+          orderIds:
+            linkedOrders.length > 0
+              ? linkedOrders.map((o) => o.id)
+              : undefined,
           refId,
         }),
       });
@@ -695,15 +742,31 @@ export default function BillCreatePage() {
                     type="button"
                     onMouseDown={async () => {
                       setOrderSearch(o.purchaseOrder);
+                      setOrderDropdown(false);
+                      const isFirstOrder = linkedOrders.length === 0;
+                      setLinkedOrders((prev) =>
+                        prev.some((lo) => lo.id === o.id)
+                          ? prev
+                          : [
+                              ...prev,
+                              {
+                                id: o.id,
+                                purchaseOrder: o.purchaseOrder,
+                                remainingYard: o.remainingYard,
+                              },
+                            ],
+                      );
+                      // Only order 1 drives the fabric/customer auto-fill and
+                      // stock auto-match below — orders added afterwards (to
+                      // absorb overflow) are queued as-is, since they're
+                      // picked precisely because they match the same fabric.
+                      if (!isFirstOrder) return;
                       setFabricStruct(o.fabricStructure);
                       setFabricPattern(o.fabricPattern);
                       setFabricW(o.fabricW);
                       setOrderer(o.customerName);
                       setReceiver(o.customerName);
                       setPurchaseOrderParam(o.purchaseOrder);
-                      setLinkedOrderId(o.id);
-                      setLinkedSO(o.purchaseOrder);
-                      setOrderDropdown(false);
                       setSelectedStock(null);
                       setStockSearch("");
                       // Auto-match stock by order's fabric details
@@ -769,14 +832,60 @@ export default function BillCreatePage() {
                 ))}
               </div>
             )}
-            {linkedSO && (
-              <div className="mt-1 px-3 py-1.5 bg-green-50 border border-green-200 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
-                <span className="font-mono font-semibold text-green-800">
-                  SO: {linkedSO}
-                </span>
-                <span className="text-green-700">
-                  เชื่อมออร์เดอร์นี้แล้ว — ยอดคงค้างจะอัปเดตอัตโนมัติเมื่อบันทึก
-                </span>
+            {linkedOrders.length > 0 && (
+              <div className="mt-1 space-y-1">
+                {linkedOrders.map((lo, i) => (
+                  <div
+                    key={lo.id}
+                    className="px-3 py-1.5 bg-green-50 border border-green-200 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs"
+                  >
+                    <span className="font-mono font-semibold text-green-800">
+                      {linkedOrders.length > 1 ? `${i + 1}. ` : ""}SO:{" "}
+                      {lo.purchaseOrder}
+                    </span>
+                    <span className="text-green-700">
+                      คงค้าง:{" "}
+                      {lo.remainingYard.toLocaleString(undefined, {
+                        maximumFractionDigits: 2,
+                      })}{" "}
+                      หลา
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setLinkedOrders((prev) =>
+                          prev.filter((x) => x.id !== lo.id),
+                        )
+                      }
+                      className="ml-auto text-green-700 hover:text-red-600"
+                    >
+                      ลบ
+                    </button>
+                  </div>
+                ))}
+                <div className="px-3 text-xs text-green-700">
+                  เชื่อมออร์เดอร์แล้ว {linkedOrders.length} รายการ —
+                  ยอดคงค้างจะอัปเดตอัตโนมัติเมื่อบันทึก
+                </div>
+                {overflowYard > 0 && (
+                  <div className="px-3 py-1.5 bg-amber-50 border border-amber-300 text-xs text-amber-800">
+                    ยอดที่กรอก (
+                    {totalYard.toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    หลา) เกินออร์เดอร์ที่เลือก (
+                    {remainingYardTotal.toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    หลา) อยู่{" "}
+                    {overflowYard.toLocaleString(undefined, {
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    หลา
+                    <br />
+                    กรุณาเลือกออร์เดอร์เพิ่มเติมเพื่อรับส่วนที่เกิน
+                  </div>
+                )}
               </div>
             )}
           </div>
