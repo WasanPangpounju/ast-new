@@ -178,11 +178,15 @@ async function loadOrderCapacities(orderIdList: number[]) {
 }
 
 // Assigns each roll to an order, filling order 1 to capacity before spilling
-// over to order 2, etc. A single roll (ม้วน) is never split across orders —
-// once adding a roll would exceed the current order's remaining capacity, the
-// whole roll moves to the next order instead. Any yard left over past the
-// last order in the list still lands on that last order (no orphaned rows);
-// the UI's warning banner is what nudges the user to queue enough orders.
+// over to order 2, etc. A roll (ม้วน) that would push the running total past
+// the current order's remaining capacity gets split at the crossing point:
+// the portion that still fits stays on the current order, and the excess
+// carries onto the next order as a second row for the same roll — so a roll
+// can straddle two (or more) orders' yard totals without ever letting an
+// order's delivered yard exceed its remaining capacity by a fraction of a
+// roll. Any yard left over past the last order in the list still lands on
+// that last order (no orphaned rows); the UI's warning banner is what nudges
+// the user to queue enough orders.
 function assignOrders<T extends { yard: number }>(
   rows: T[],
   capacities: { id: number; purchaseOrder: string; remaining: number }[],
@@ -192,15 +196,28 @@ function assignOrders<T extends { yard: number }>(
   }
   let idx = 0
   let usedInCurrent = 0
-  return rows.map(r => {
-    while (idx < capacities.length - 1 && usedInCurrent + r.yard > capacities[idx].remaining) {
+  const out: (T & { orderId: number | null; purchaseOrder: string | null })[] = []
+  for (const r of rows) {
+    let left = r.yard
+    // Peel off exactly what fits in each order this roll overflows past,
+    // advancing to the next order only once the current one is exactly full.
+    while (idx < capacities.length - 1 && usedInCurrent + left > capacities[idx].remaining) {
+      const cur = capacities[idx]
+      const portion = Math.max(0, cur.remaining - usedInCurrent)
+      if (portion > 0) {
+        out.push({ ...r, yard: portion, orderId: cur.id, purchaseOrder: cur.purchaseOrder || null })
+      }
+      left -= portion
       idx += 1
       usedInCurrent = 0
     }
-    usedInCurrent += r.yard
-    const cur = capacities[idx]
-    return { ...r, orderId: cur.id, purchaseOrder: cur.purchaseOrder || null }
-  })
+    if (left > 0) {
+      usedInCurrent += left
+      const cur = capacities[idx]
+      out.push({ ...r, yard: left, orderId: cur.id, purchaseOrder: cur.purchaseOrder || null })
+    }
+  }
+  return out
 }
 
 export async function POST(request: NextRequest) {
