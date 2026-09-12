@@ -281,6 +281,8 @@ model FabricOut {
   updatedAt          DateTime  @updatedAt @map("updated_at")
   deletedAt          DateTime? @map("deleted_at")
   isDeposit          Boolean   @default(false)
+  /// true = ขายผ้าจากคลังโดยตรง ไม่มีออร์เดอร์อ้างอิง (orderId/purchaseOrder ต้องเป็น null)
+  isStockSale        Boolean   @default(false)
   altFabricStruct    String?
   altPurchaseOrder   String?
   stockCustomer      String?

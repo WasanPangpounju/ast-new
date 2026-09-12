@@ -227,7 +227,12 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { vatType, vatNo, customerName, receiveName, orderId, orderIds, purchaseOrder,
           fabricStruct, fabricPattern, fabricW, createDate, yards,
-          isDeposit, altFabricStruct, altPurchaseOrder, refId: refIdInput } = body
+          isDeposit, altFabricStruct, altPurchaseOrder, isStockSale, refId: refIdInput } = body
+
+  // ขายผ้าจากคลังโดยตรง (ไม่มีออร์เดอร์อ้างอิง) — ignore orderIds/orderId/purchaseOrder
+  // ที่หลุดมาจาก client เสมอไม่ว่า UI จะส่งอะไรมาก็ตาม (defensive: UI เคลียร์ state
+  // พวกนี้เองอยู่แล้วตอนสลับโหมด แต่ backend ต้องไม่เชื่อ client เพียงอย่างเดียว)
+  const isStock = Boolean(isStockSale)
 
   if (!vatType || !customerName) {
     return Response.json({ error: 'vatType and customerName are required' }, { status: 400 })
@@ -257,9 +262,13 @@ export async function POST(request: NextRequest) {
 
   // orderIds (new, multi-order flow) takes priority; fall back to the legacy
   // single orderId field so any other/older caller keeps working unchanged.
-  const orderIdList: number[] = Array.isArray(orderIds) && orderIds.length > 0
-    ? orderIds.map((v: unknown) => Number(v)).filter((n: number) => Number.isFinite(n) && n > 0)
-    : (orderId ? [Number(orderId)] : [])
+  // isStock บังคับให้เป็น [] เสมอ ตัดสิทธิ์ orderIds/orderId ทิ้งทั้งหมดโดยไม่สนใจ
+  // ว่า client ส่งอะไรมา — กันเคส UI มีบั๊กหรือ payload ถูกปลอมแปลงมาพร้อม isStockSale
+  const orderIdList: number[] = isStock
+    ? []
+    : (Array.isArray(orderIds) && orderIds.length > 0
+        ? orderIds.map((v: unknown) => Number(v)).filter((n: number) => Number.isFinite(n) && n > 0)
+        : (orderId ? [Number(orderId)] : []))
 
   try {
     const capacities = await loadOrderCapacities(orderIdList)
@@ -279,12 +288,14 @@ export async function POST(request: NextRequest) {
         receiveName: receiveName || customerName,
         orderId: r.orderId,
         // Per-row PO from its assigned order when one was linked; otherwise
-        // fall back to the single purchaseOrder string the form submitted.
-        purchaseOrder: r.orderId ? r.purchaseOrder : (purchaseOrder || null),
+        // fall back to the single purchaseOrder string the form submitted —
+        // ยกเว้น isStock ที่บังคับ null เสมอ ไม่ว่า client จะส่ง purchaseOrder มาหรือไม่
+        purchaseOrder: r.orderId ? r.purchaseOrder : (isStock ? null : (purchaseOrder || null)),
         createDate: date,
         isDeposit: isDeposit ?? false,
         altFabricStruct: altFabricStruct || null,
-        altPurchaseOrder: altPurchaseOrder || null,
+        altPurchaseOrder: isStock ? null : (altPurchaseOrder || null),
+        isStockSale: isStock,
       })),
     })
   } catch (err: unknown) {

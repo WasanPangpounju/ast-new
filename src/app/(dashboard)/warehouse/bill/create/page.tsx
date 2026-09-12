@@ -54,6 +54,13 @@ export default function BillCreatePage() {
   const [refId, setRefId] = useState<string>(newSessionId);
   const [savedCount, setSavedCount] = useState(0);
 
+  // เปิดบิลผ้าปกติ (ตัดจากออร์เดอร์) vs ขายผ้าจากคลังโดยตรง (ไม่มีออร์เดอร์อ้างอิง
+  // แต่ยังตัดสต็อกเหมือนเดิม) — ล็อคเป็น 'order' เสมอเมื่อเปิดหน้านี้มาจากปุ่มในหน้า
+  // ออร์เดอร์ (มี orderId/purchaseOrder ใน query param) กันสลับโหมดจนหลุดออร์เดอร์
+  // ที่ตั้งใจมาผูกไว้ตั้งแต่แรก
+  const [mode, setMode] = useState<"order" | "stock">("order");
+  const [modeLocked, setModeLocked] = useState(false);
+
   // Bill header
   const [billType, setBillType] = useState("A");
   const [billNo, setBillNo] = useState("");
@@ -136,6 +143,10 @@ export default function BillCreatePage() {
     const prePO = p.get("purchaseOrder");
     if (prePO) setPurchaseOrderParam(prePO);
     if (preOrderId && prePO) {
+      // มาจากปุ่มในหน้าออร์เดอร์แน่นอน — ล็อคโหมดเป็น "ตัดจากออร์เดอร์" ทันที
+      // ไม่ต้องรอ fetch resolve เพราะดูจาก query param อย่างเดียวก็ชัดเจนแล้ว
+      setMode("order");
+      setModeLocked(true);
       // No remainingYard is passed via query params, so look it up the same
       // way the order search dropdown does before queuing it as linked order 1.
       fetch("/api/warehouse/orders/search?q=" + encodeURIComponent(prePO))
@@ -271,6 +282,37 @@ export default function BillCreatePage() {
     return () => clearTimeout(t);
   }, [altPurchaseOrder]);
 
+  // สลับโหมด "ตัดจากออร์เดอร์" <-> "ขายผ้าจากคลัง" — สลับเข้าโหมดขายจากคลังต้อง
+  // เคลียร์ทุก state ที่ผูกกับออร์เดอร์ทิ้งทันที กัน orderIds/purchaseOrder ตกค้าง
+  // หลุดเข้า payload ตอนบันทึกทั้งที่ผู้ใช้เลือกโหมดไม่มีออร์เดอร์ไปแล้ว
+  function switchMode(next: "order" | "stock") {
+    if (modeLocked) return;
+    if (next === "stock") {
+      setLinkedOrders([]);
+      setOrderSearch("");
+      setOrderResults([]);
+      setOrderDropdown(false);
+      setPurchaseOrderParam("");
+      setAltPurchaseOrder("");
+      setAltPurchaseOrderResults([]);
+      setAltPurchaseOrderDropdown(false);
+    }
+    setMode(next);
+  }
+
+  // ในโหมดขายจากคลัง ผู้ใช้ยังพิมพ์/แก้ไข fabricStruct/fabricPattern/fabricW เองได้
+  // ปกติ (มีผ้าที่ขายจริงแต่ไม่เคยถูกคีย์เข้าสต็อก) — ฟังก์ชันนี้เช็คแค่ว่าค่าที่กรอก
+  // ตรงกับรายการสต็อกที่เลือกจาก dropdown หรือไม่ ใช้ตัดสินว่าต้องเตือนก่อนบันทึกไหม
+  function stockFieldsMismatchSelectedStock(): boolean {
+    if (mode !== "stock") return false;
+    if (!selectedStock) return true;
+    return (
+      fabricStruct !== selectedStock.fabricStruct ||
+      fabricPattern !== (selectedStock.fabricPattern ?? "") ||
+      fabricW !== (selectedStock.fabricW ?? "")
+    );
+  }
+
   const setYard = (idx: number, val: string) => {
     setYards((prev) => {
       const next = [...prev];
@@ -295,15 +337,18 @@ export default function BillCreatePage() {
   function handleAiResult(data: AiReadResult) {
     const filled = new Set<string>();
     const lowConf = new Set<string>();
-    if (data.fabricStruct != null) {
+    // โหมดขายจากคลัง: fabricStruct/fabricPattern/fabricW ต้องมาจากที่ผู้ใช้เลือก/พิมพ์
+    // เองเท่านั้น (เทียบกับ selectedStock ตอนบันทึก) ห้าม AI เขียนทับ field กลุ่มนี้
+    // — field อื่น (ผู้สั่ง/วันที่/เลขบิล/ตารางหลา) ยังอ่านจากรูปได้ตามปกติ
+    if (mode !== "stock" && data.fabricStruct != null) {
       setFabricStruct(data.fabricStruct);
       filled.add("fabricStruct");
     }
-    if (data.fabricPattern != null) {
+    if (mode !== "stock" && data.fabricPattern != null) {
       setFabricPattern(data.fabricPattern);
       filled.add("fabricPattern");
     }
-    if (data.fabricW != null) {
+    if (mode !== "stock" && data.fabricW != null) {
       setFabricW(data.fabricW);
       filled.add("fabricW");
     }
@@ -329,6 +374,14 @@ export default function BillCreatePage() {
     }
     if (data.confidence) {
       Object.entries(data.confidence).forEach(([key, val]) => {
+        // ข้ามไฮไลท์ของ field ที่ไม่ได้ถูกเขียนจริง (ถูก skip ไปข้างบนเพราะ mode
+        // เป็นคลัง) ไม่งั้นช่องจะขึ้นกรอบส้มหลอกว่า "AI เขียนทับแล้วให้ตรวจสอบ"
+        // ทั้งที่ค่าจริงยังเป็นของที่ผู้ใช้เลือก/พิมพ์เองอยู่
+        if (
+          mode === "stock" &&
+          ["fabricStruct", "fabricPattern", "fabricW"].includes(key)
+        )
+          return;
         if (val === "low" || val === "medium") {
           const mapped: Record<string, string> = {
             customer: "orderer",
@@ -374,6 +427,10 @@ export default function BillCreatePage() {
     setAiLowConfidence(new Set());
     setSavedCount(0);
     setRefId(newSessionId());
+    // ตั้งใจไม่ reset `mode` — ปล่อย sticky ข้ามบิล เพื่อให้เจ้าหน้าที่ขายผ้าจากคลัง
+    // ต่อเนื่องหลายบิลไม่ต้องกด toggle ใหม่ทุกครั้ง แต่ modeLocked ต้อง reset เสมอ
+    // เพราะบิลถัดไปที่เปิดจากฟอร์มนี้ตรง ๆ (ไม่ผ่าน query param ใหม่) ไม่ควรถูกล็อคค้าง
+    setModeLocked(false);
   }
 
   // เคลียร์เฉพาะตารางหลา/พับ ใช้ต่อจากบันทึกสำเร็จของ "บันทึกรายการถัดไป" เท่านั้น
@@ -388,6 +445,18 @@ export default function BillCreatePage() {
       alert(
         "กรุณากรอกข้อมูลให้ครบ: ประเภทบิล, ผู้สั่ง, และหลาผ้าอย่างน้อย 1 ช่อง",
       );
+      return;
+    }
+    // โหมดขายจากคลัง: fabricStruct/fabricPattern/fabricW ยังพิมพ์/แก้เองได้ปกติ
+    // แต่ถ้าไม่ตรงกับรายการสต็อกที่เลือกจาก dropdown (หรือไม่ได้เลือกเลย) ให้เตือน
+    // ก่อนบันทึกกันคีย์ผิดเงียบ ๆ — ไม่ hard block เพราะมีเคสผ้าที่ขายได้จริงแต่
+    // ไม่เคยถูกคีย์เข้าสต็อกมาก่อน
+    if (
+      stockFieldsMismatchSelectedStock() &&
+      !window.confirm(
+        "โครงสร้างผ้า/ลาย/หน้ากว้างที่กรอกไม่ตรงกับรายการในสต็อก ยืนยันว่าเป็นผ้าที่มีจริงแต่ไม่ได้คีย์เข้าระบบ?",
+      )
+    ) {
       return;
     }
     setSaving(true);
@@ -407,14 +476,19 @@ export default function BillCreatePage() {
           yards,
           isDeposit,
           altFabricStruct,
-          altPurchaseOrder,
-          purchaseOrder: purchaseOrderParam || undefined,
+          // โหมดขายจากคลัง: ไม่มีออร์เดอร์อ้างอิง — กัน purchaseOrder/orderIds ที่
+          // อาจตกค้างจากตอนสลับโหมดหลุดเข้า payload อีกชั้น (ชั้นแรกคือ switchMode
+          // ที่เคลียร์ state พวกนี้ทิ้งไปแล้วตอนสลับเข้าโหมด stock)
+          altPurchaseOrder: mode === "order" ? altPurchaseOrder : "",
+          purchaseOrder:
+            mode === "order" ? purchaseOrderParam || undefined : undefined,
           // Ordered list of linked orders — the API fills order 1 first and
           // auto-assigns any overflow rolls to order 2, 3, ... in this order.
           orderIds:
-            linkedOrders.length > 0
+            mode === "order" && linkedOrders.length > 0
               ? linkedOrders.map((o) => o.id)
               : undefined,
+          isStockSale: mode === "stock",
           // ถ้าเคยกด "บันทึกรายการถัดไป" มาก่อน ให้ผูกม้วนชุดสุดท้ายนี้เข้า
           // บิลเดิม (refId เดิม) แล้วค่อยปิดบิลผ่าน resetForm()
           refId,
@@ -440,6 +514,14 @@ export default function BillCreatePage() {
       );
       return;
     }
+    if (
+      stockFieldsMismatchSelectedStock() &&
+      !window.confirm(
+        "โครงสร้างผ้า/ลาย/หน้ากว้างที่กรอกไม่ตรงกับรายการในสต็อก ยืนยันว่าเป็นผ้าที่มีจริงแต่ไม่ได้คีย์เข้าระบบ?",
+      )
+    ) {
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/warehouse/bill", {
@@ -457,12 +539,14 @@ export default function BillCreatePage() {
           yards,
           isDeposit,
           altFabricStruct,
-          altPurchaseOrder,
-          purchaseOrder: purchaseOrderParam || undefined,
+          altPurchaseOrder: mode === "order" ? altPurchaseOrder : "",
+          purchaseOrder:
+            mode === "order" ? purchaseOrderParam || undefined : undefined,
           orderIds:
-            linkedOrders.length > 0
+            mode === "order" && linkedOrders.length > 0
               ? linkedOrders.map((o) => o.id)
               : undefined,
+          isStockSale: mode === "stock",
           refId,
         }),
       });
@@ -602,6 +686,48 @@ export default function BillCreatePage() {
             />
           </div>
 
+          {/* Mode toggle: ตัดจากออร์เดอร์ vs ขายผ้าจากคลัง (ไม่มีออร์เดอร์อ้างอิง) */}
+          <div className="md:col-span-3">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              โหมดการขาย
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={modeLocked}
+                onClick={() => switchMode("order")}
+                aria-pressed={mode === "order"}
+                className={
+                  "px-4 py-1.5 text-sm border disabled:cursor-not-allowed disabled:opacity-60 " +
+                  (mode === "order"
+                    ? "bg-green-600 border-green-600 text-white"
+                    : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50")
+                }
+              >
+                ตัดจากออร์เดอร์
+              </button>
+              <button
+                type="button"
+                disabled={modeLocked}
+                onClick={() => switchMode("stock")}
+                aria-pressed={mode === "stock"}
+                className={
+                  "px-4 py-1.5 text-sm border disabled:cursor-not-allowed disabled:opacity-60 " +
+                  (mode === "stock"
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "bg-white border-gray-300 text-gray-600 hover:bg-gray-50")
+                }
+              >
+                ขายผ้าจากคลัง
+              </button>
+            </div>
+            {modeLocked && (
+              <p className="mt-1 text-xs text-gray-400">
+                ล็อคโหมดนี้ไว้เพราะเปิดหน้านี้มาจากออร์เดอร์โดยตรง
+              </p>
+            )}
+          </div>
+
           {/* Stock search - full width */}
           <div className="md:col-span-3 relative">
             <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -716,7 +842,8 @@ export default function BillCreatePage() {
             )}
           </div>
 
-          {/* Order search - full width */}
+          {/* Order search - full width (ไม่แสดงในโหมดขายผ้าจากคลัง) */}
+          {mode === "order" && (
           <div className="md:col-span-3 relative">
             <label className="block text-xs font-medium text-gray-700 mb-1">
               ตัดจากออร์เดอร์ (เลือก SO)
@@ -889,6 +1016,7 @@ export default function BillCreatePage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Fabric fields - auto-filled, editable */}
           <div>
@@ -1045,6 +1173,8 @@ export default function BillCreatePage() {
               className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          {/* แทนผู้สั่งซื้อ — ไม่แสดงในโหมดขายผ้าจากคลัง เพราะไม่มีผู้สั่งซื้อจริงให้แทน */}
+          {mode === "order" && (
           <div className="relative">
             <label className="block text-xs font-medium text-gray-700 mb-1">
               แทนผู้สั่งซื้อ (ถ้ามี)
@@ -1082,6 +1212,7 @@ export default function BillCreatePage() {
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* Summary bar */}
