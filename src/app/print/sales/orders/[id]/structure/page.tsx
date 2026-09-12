@@ -623,16 +623,12 @@ export default function StructurePrintPage({
 
           {/* Notes */}
           {(note && note !== "no data") ||
-          order.vat === "SOX" ||
           (order.po && order.po !== "no data") ||
           orderBase > 0 ? (
             <div className="mt-2 text-base">
               <span className="font-bold">หมายเหตุ :</span>
               <div className="ml-1 inline">
                 {note && note !== "no data" && <span> {note}</span>}
-                {order.vat === "SOX" && (
-                  <span className="font-bold"> ราคานี้รวม VAT แล้ว</span>
-                )}
                 {order.po && order.po !== "no data" && <span> {order.po}</span>}
               </div>
               {orderBase > 0 && (
