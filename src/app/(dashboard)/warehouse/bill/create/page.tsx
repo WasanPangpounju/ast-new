@@ -1615,7 +1615,12 @@ export default function BillCreatePage() {
                         className="border border-gray-200 p-0"
                       >
                         <div className="flex items-center">
-                          <span className="text-gray-400 text-xs w-7 text-right pr-1 select-none flex-shrink-0">
+                          <span
+                            className={
+                              "text-xs w-7 text-right pr-1 select-none flex-shrink-0" +
+                              (filled ? " text-gray-900 font-bold" : " text-gray-400")
+                            }
+                          >
                             {slotNo}
                           </span>
                           <input
