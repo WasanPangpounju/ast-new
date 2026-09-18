@@ -846,6 +846,27 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// Shared draft of the bill/create form — never written to fabricouts, never
+/// reserves vatNo/refId. `data` is the entire form state as a JSON blob (not
+/// split into columns) on purpose: bill/create/page.tsx has picked up new
+/// fields repeatedly (isStockSale, altPurchaseOrder, ...) and a blob means
+/// this table never needs a migration when that happens again. Any user with
+/// warehouse.bill-create can see/edit/delete any draft — there is no owner
+/// column restricting access, only `version` for optimistic locking so two
+/// people editing the same draft at once don't silently overwrite each other
+/// (see PATCH .../drafts/[id]: a mismatched version is rejected with 409).
+model BillDraft {
+  id              Int      @id @default(autoincrement())
+  data            Json
+  version         Int      @default(1)
+  createdByUserId Int?     @map("created_by_user_id")
+  updatedByUserId Int?     @map("updated_by_user_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("bill_drafts")
+}
+
 /// Idempotency guard for "one button click" actions that write data (e.g. bill
 /// create, add-fold). requestId is a client-generated token minted fresh per
 /// save attempt and reused only on retry of that SAME still-pending attempt —
