@@ -1,7 +1,11 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import AiPhotoModal from "@/components/AiPhotoModal";
 import { AiReadResult } from "@/hooks/useAiPhotoRead";
+import BillDraftsModal, {
+  BillDraftFormData,
+  BillDraftSummary,
+} from "@/components/BillDraftsModal";
 
 const GROUPS = 8;
 const ROWS = 20;
@@ -133,6 +137,24 @@ export default function BillCreatePage() {
     new Set(),
   );
 
+  // Draft (ร่างที่บันทึกไว้) — shared across every user with warehouse.bill-create,
+  // see prisma/schema.prisma BillDraft. draftId/draftVersion are only set once a
+  // draft has actually been created/loaded; null means "this session has no
+  // draft yet" and the save-draft button creates a brand new one.
+  const [draftId, setDraftId] = useState<number | null>(null);
+  const [draftVersion, setDraftVersion] = useState<number | null>(null);
+  const [draftSaving, setDraftSaving] = useState(false);
+  const [drafts, setDrafts] = useState<BillDraftSummary[]>([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
+  const [draftsModalOpen, setDraftsModalOpen] = useState(false);
+  // Set only when a PATCH to update the loaded draft comes back 409 (someone
+  // else saved a newer version first) — holds the local edits so the user can
+  // choose to reload the latest version (discarding them) or keep them as a
+  // brand new, separate draft instead of silently losing either side.
+  const [draftConflict, setDraftConflict] = useState<BillDraftFormData | null>(
+    null,
+  );
+
   // Invalidates any pending retry token (see pendingRequestId above) whenever
   // a field that feeds the save payload changes — by any means (manual typing,
   // AI-scan autofill, stock/order selection, ...). A retry should only ever
@@ -218,6 +240,22 @@ export default function BillCreatePage() {
         .catch(() => {});
     }
   }, []);
+
+  // Loads the shared draft list — called on mount (so the "ร่างที่บันทึกไว้ (N)"
+  // button shows a count immediately) and again after any create/update/delete
+  // so the modal and count never show stale data.
+  const fetchDrafts = useCallback(() => {
+    setDraftsLoading(true);
+    fetch("/api/warehouse/bill/drafts")
+      .then((r) => r.json())
+      .then((d) => setDrafts(d.data ?? []))
+      .catch(() => {})
+      .finally(() => setDraftsLoading(false));
+  }, []);
+
+  useEffect(() => {
+    fetchDrafts();
+  }, [fetchDrafts]);
 
   // Auto-fill billNo when type changes
   useEffect(() => {
@@ -457,6 +495,10 @@ export default function BillCreatePage() {
     // ต่อเนื่องหลายบิลไม่ต้องกด toggle ใหม่ทุกครั้ง แต่ modeLocked ต้อง reset เสมอ
     // เพราะบิลถัดไปที่เปิดจากฟอร์มนี้ตรง ๆ (ไม่ผ่าน query param ใหม่) ไม่ควรถูกล็อคค้าง
     setModeLocked(false);
+    // เคลียร์การผูกร่าง — บิลที่เพิ่งปิด (หรือฟอร์มที่เพิ่งล้าง) ไม่ใช่ร่างเดิมอีกต่อไป
+    // ตัวร่างเองยังอยู่ในรายการจนกว่าจะถูกลบเอง (ไม่ auto-delete ตอนบันทึกเสร็จสิ้น)
+    setDraftId(null);
+    setDraftVersion(null);
   }
 
   // เคลียร์เฉพาะตารางหลา/พับ ใช้ต่อจากบันทึกสำเร็จของ "บันทึกรายการถัดไป" เท่านั้น
@@ -529,7 +571,20 @@ export default function BillCreatePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "บันทึกไม่สำเร็จ");
+      // บิลถูกบันทึกจริงแล้ว ณ จุดนี้ — ร่างที่ใช้กรอกฟอร์มนี้ (ถ้ามี) หมดประโยชน์แล้ว
+      // ลบทิ้งทันที ก่อนความล้มเหลว/POST ซ้ำจะไม่มีทางมาถึงจุดนี้อีก (อยู่หลัง !res.ok
+      // check แล้ว) จึงลบเฉพาะตอนบันทึกบิลสำเร็จจริงเท่านั้น ไม่ลบถ้า POST พัง (เช่น 409
+      // บิลซ้ำ) — เก็บ id ไว้ก่อน resetForm() เพราะ resetForm() เคลียร์ draftId ทิ้งแล้ว
+      const draftIdToDelete = draftId;
       resetForm();
+      if (draftIdToDelete != null) {
+        // Fire-and-forget: บิลบันทึกสำเร็จแล้วคือความจริงที่สำคัญที่สุด ณ จุดนี้ — ถ้าลบร่าง
+        // ไม่สำเร็จ (เช่น เน็ตหลุดพอดี) ก็แค่เหลือร่างค้างในรายการให้ลบเองทีหลัง ไม่ใช่ความ
+        // ผิดพลาดที่ต้อง block หรือ alert ผู้ใช้กลางฟอร์มที่เพิ่งปิดไปแล้ว
+        fetch(`/api/warehouse/bill/drafts/${draftIdToDelete}`, { method: "DELETE" })
+          .catch((err) => console.error("[handleSave] delete draft after commit failed:", err))
+          .finally(() => fetchDrafts());
+      }
       alert("บันทึกเรียบร้อย");
     } catch (err: any) {
       // ไม่เคลียร์ pendingRequestId ตรงนี้โดยตั้งใจ — ถ้าผู้ใช้กดบันทึกซ้ำด้วย
@@ -603,6 +658,188 @@ export default function BillCreatePage() {
     }
   }
 
+  function buildDraftData(): BillDraftFormData {
+    return {
+      mode,
+      billType,
+      billNo,
+      billDate,
+      remark,
+      fabricStruct,
+      fabricPattern,
+      fabricW,
+      orderer,
+      receiver,
+      isDeposit,
+      altFabricStruct,
+      altPurchaseOrder,
+      purchaseOrderParam,
+      linkedOrders,
+      selectedStock,
+      stockSearch,
+      yards,
+    };
+  }
+
+  // Restores every field a draft carries. requestId/refId/savedCount are
+  // deliberately NOT part of a draft's data — see handleLoadDraft, which
+  // always mints a fresh session after calling this.
+  function applyDraftData(data: Partial<BillDraftFormData>) {
+    setMode(data.mode === "stock" ? "stock" : "order");
+    setModeLocked(false);
+    setBillType(data.billType || "A");
+    setBillNo(data.billNo ?? "");
+    setBillDate(data.billDate || new Date().toISOString().slice(0, 10));
+    setRemark(
+      data.remark ?? "ได้รับผ้าตามรายการข้างบนนี้ไว้ถูกต้องและเรียบร้อยแล้ว",
+    );
+    setFabricStruct(data.fabricStruct ?? "");
+    setFabricPattern(data.fabricPattern ?? "");
+    setFabricW(data.fabricW ?? "");
+    setOrderer(data.orderer ?? "");
+    setReceiver(data.receiver ?? "");
+    setIsDeposit(Boolean(data.isDeposit));
+    setAltFabricStruct(data.altFabricStruct ?? "");
+    setAltPurchaseOrder(data.altPurchaseOrder ?? "");
+    setPurchaseOrderParam(data.purchaseOrderParam ?? "");
+    setLinkedOrders(Array.isArray(data.linkedOrders) ? data.linkedOrders : []);
+    setSelectedStock((data.selectedStock as StockResult | null) ?? null);
+    setStockSearch(data.stockSearch ?? "");
+    const nextYards = Array(TOTAL_SLOTS).fill("");
+    if (Array.isArray(data.yards)) {
+      data.yards.forEach((v, i) => {
+        if (i < TOTAL_SLOTS) nextYards[i] = v ?? "";
+      });
+    }
+    setYards(nextYards);
+    setAiFilledFields(new Set());
+    setAiLowConfidence(new Set());
+    setSavedCount(0);
+    // ร่างไม่เคยผูก refId/requestId ของเดิมไว้ — ทุกครั้งที่โหลดร่างถือเป็นเซสชัน
+    // บันทึกใหม่เสมอ กันชนกับ refId ที่อาจถูกใช้ไปแล้วโดยผู้ใช้อีกคนที่เปิดร่าง
+    // เดียวกันคนละแท็บ
+    setRefId(newSessionId());
+    setPendingRequestId(null);
+  }
+
+  function handleLoadDraft(draft: BillDraftSummary) {
+    applyDraftData(draft.data);
+    setDraftId(draft.id);
+    setDraftVersion(draft.version);
+    setDraftsModalOpen(false);
+  }
+
+  async function handleSaveDraft() {
+    const data = buildDraftData();
+    setDraftSaving(true);
+    try {
+      if (draftId != null) {
+        const res = await fetch(`/api/warehouse/bill/drafts/${draftId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data, version: draftVersion }),
+        });
+        if (res.status === 409) {
+          // เก็บงานที่แก้ไว้ไว้ในสถานะ conflict ให้ผู้ใช้ตัดสินใจเอง — ยังไม่เขียนทับ
+          // และยังไม่ทิ้งอะไร (ดู draftConflict modal ด้านล่าง)
+          setDraftConflict(data);
+          return;
+        }
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? "อัปเดตร่างไม่สำเร็จ");
+        setDraftVersion(body.data.version);
+      } else {
+        const res = await fetch("/api/warehouse/bill/drafts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error ?? "บันทึกร่างไม่สำเร็จ");
+        setDraftId(body.data.id);
+        setDraftVersion(body.data.version);
+      }
+      fetchDrafts();
+    } catch (err: unknown) {
+      alert(
+        "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)),
+      );
+    } finally {
+      setDraftSaving(false);
+    }
+  }
+
+  async function handleDeleteDraft(id: number) {
+    if (!window.confirm("ยืนยันลบร่างนี้? การลบไม่สามารถย้อนกลับได้")) return;
+    try {
+      const res = await fetch(`/api/warehouse/bill/drafts/${id}`, {
+        method: "DELETE",
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "ลบร่างไม่สำเร็จ");
+      if (draftId === id) {
+        setDraftId(null);
+        setDraftVersion(null);
+      }
+      fetchDrafts();
+    } catch (err: unknown) {
+      alert(
+        "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)),
+      );
+    }
+  }
+
+  // Conflict resolution: "โหลดร่างล่าสุด" — discard the local edits held in
+  // draftConflict and load whatever the other user just saved instead.
+  async function handleConflictReload() {
+    if (draftId == null) {
+      setDraftConflict(null);
+      return;
+    }
+    try {
+      const res = await fetch(`/api/warehouse/bill/drafts/${draftId}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "โหลดร่างไม่สำเร็จ");
+      applyDraftData(body.data.data);
+      setDraftId(body.data.id);
+      setDraftVersion(body.data.version);
+    } catch (err: unknown) {
+      alert(
+        "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)),
+      );
+    } finally {
+      setDraftConflict(null);
+      fetchDrafts();
+    }
+  }
+
+  // Conflict resolution: "บันทึกเป็นร่างใหม่แยก" — keep the local edits by
+  // spinning them off into a brand new draft, detached from the one that
+  // someone else just updated.
+  async function handleConflictSaveAsNew() {
+    if (!draftConflict) return;
+    setDraftSaving(true);
+    try {
+      const res = await fetch("/api/warehouse/bill/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: draftConflict }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "บันทึกร่างใหม่ไม่สำเร็จ");
+      setDraftId(body.data.id);
+      setDraftVersion(body.data.version);
+    } catch (err: unknown) {
+      alert(
+        "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)),
+      );
+    } finally {
+      setDraftSaving(false);
+      setDraftConflict(null);
+      fetchDrafts();
+    }
+  }
+
   return (
     <div className="p-4 w-full">
       <div className="mb-4 flex items-start justify-between">
@@ -643,6 +880,25 @@ export default function BillCreatePage() {
           )}
           <button
             type="button"
+            onClick={() => {
+              setDraftsModalOpen(true);
+              fetchDrafts();
+            }}
+            style={{
+              padding: "6px 14px",
+              fontSize: "13px",
+              fontWeight: 500,
+              borderRadius: "6px",
+              border: "1px solid #d97706",
+              background: "#fffbeb",
+              color: "#92400e",
+              cursor: "pointer",
+            }}
+          >
+            ร่างที่บันทึกไว้ ({drafts.length})
+          </button>
+          <button
+            type="button"
             onClick={() => setAiModalOpen(true)}
             style={{
               padding: "6px 14px",
@@ -678,6 +934,59 @@ export default function BillCreatePage() {
         docType="bill"
         onResult={handleAiResult}
       />
+
+      <BillDraftsModal
+        open={draftsModalOpen}
+        drafts={drafts}
+        loading={draftsLoading}
+        currentDraftId={draftId}
+        onOpenDraft={handleLoadDraft}
+        onDeleteDraft={handleDeleteDraft}
+        onClose={() => setDraftsModalOpen(false)}
+      />
+
+      {draftConflict && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="p-5 border-b border-gray-200">
+              <h2 className="font-semibold text-gray-900 text-sm">
+                ร่างนี้ถูกแก้ไขโดยคนอื่นไปแล้ว
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                กรุณาโหลดร่างใหม่ ก่อนบันทึกทับ — หรือเก็บสิ่งที่แก้ไว้เป็นร่างใหม่แยกต่างหาก
+              </p>
+            </div>
+            <div className="p-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={handleConflictReload}
+                disabled={draftSaving}
+                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700 disabled:opacity-60"
+              >
+                โหลดร่างล่าสุด (ทิ้งการแก้ไขของฉัน)
+              </button>
+              <button
+                type="button"
+                onClick={handleConflictSaveAsNew}
+                disabled={draftSaving}
+                className="px-4 py-2 text-sm bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium disabled:opacity-60"
+              >
+                {draftSaving
+                  ? "กำลังบันทึก..."
+                  : "บันทึกสิ่งที่แก้ไว้เป็นร่างใหม่แยก"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraftConflict(null)}
+                disabled={draftSaving}
+                className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-60"
+              >
+                ยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header form */}
       <div className="bg-white border border-gray-200 shadow-sm p-4 mb-4 w-full">
@@ -1364,11 +1673,14 @@ export default function BillCreatePage() {
 
       {/* Action buttons */}
       <div className="flex items-center justify-end gap-3">
-        {savedCount > 0 && (
-          <span className="mr-auto text-xs text-gray-500">
-            บันทึกแล้ว {savedCount} รายการ
-          </span>
-        )}
+        <div className="mr-auto flex items-center gap-2 text-xs text-gray-500">
+          {savedCount > 0 && <span>บันทึกแล้ว {savedCount} รายการ</span>}
+          {draftId != null && (
+            <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
+              กำลังแก้ไขร่าง #{draftId}
+            </span>
+          )}
+        </div>
         <button
           type="button"
           onClick={resetForm}
@@ -1377,15 +1689,27 @@ export default function BillCreatePage() {
           ล้างฟอร์ม
         </button>
         <button
+          type="button"
+          onClick={handleSaveDraft}
+          disabled={saving || draftSaving}
+          className="px-4 py-2 text-sm border border-amber-400 bg-white text-amber-700 hover:bg-amber-50 font-medium disabled:opacity-50"
+        >
+          {draftSaving
+            ? "กำลังบันทึก..."
+            : draftId != null
+              ? "อัปเดตร่าง"
+              : "บันทึกร่าง"}
+        </button>
+        <button
           onClick={handleSaveNext}
-          disabled={saving}
+          disabled={saving || draftSaving}
           className="px-6 py-2 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 font-medium disabled:opacity-50"
         >
           {saving ? "กำลังบันทึก..." : "บันทึกรายการถัดไป"}
         </button>
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || draftSaving}
           className="px-6 py-2 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium disabled:opacity-50"
         >
           {saving ? "กำลังบันทึก..." : "บันทึกเสร็จสิ้น"}

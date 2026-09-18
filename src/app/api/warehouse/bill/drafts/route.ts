@@ -30,7 +30,24 @@ export async function GET(_request: NextRequest) {
     const drafts = await prisma.billDraft.findMany({
       orderBy: { updatedAt: 'desc' },
     })
-    return Response.json({ success: true, data: drafts })
+
+    // No Prisma relation from BillDraft to User (see schema.prisma comment —
+    // the model stays deliberately minimal), so the updater's display name is
+    // resolved here with a separate batched lookup instead of an include.
+    const userIds = Array.from(
+      new Set(drafts.map(d => d.updatedByUserId).filter((id): id is number => id != null)),
+    )
+    const users = userIds.length > 0
+      ? await prisma.user.findMany({ where: { id: { in: userIds } }, select: { id: true, name: true } })
+      : []
+    const nameById = new Map(users.map(u => [u.id, u.name]))
+
+    const data = drafts.map(d => ({
+      ...d,
+      updatedByName: d.updatedByUserId != null ? (nameById.get(d.updatedByUserId) ?? null) : null,
+    }))
+
+    return Response.json({ success: true, data })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[bill/drafts GET] error:', msg)
