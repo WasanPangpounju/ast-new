@@ -1607,6 +1607,7 @@ export default function BillCreatePage() {
                   {Array.from({ length: GROUPS }, (_, g) => {
                     const idx = g * ROWS + r;
                     const slotNo = idx + 1;
+                    const filled = yardNums[idx] > 0;
                     return (
                       <td
                         key={g}
@@ -1633,7 +1634,10 @@ export default function BillCreatePage() {
                                 if (next) next.focus();
                               }
                             }}
-                            className="w-full text-right text-xs border-0 outline-none py-1 px-1 focus:bg-yellow-50"
+                            className={
+                              "w-full text-right text-xs border-0 outline-none py-1 px-1 focus:bg-yellow-50" +
+                              (filled ? " text-blue-800 font-semibold" : "")
+                            }
                           />
                         </div>
                       </td>
