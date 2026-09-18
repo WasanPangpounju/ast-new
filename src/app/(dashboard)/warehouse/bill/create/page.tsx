@@ -54,6 +54,15 @@ export default function BillCreatePage() {
   const [refId, setRefId] = useState<string>(newSessionId);
   const [savedCount, setSavedCount] = useState(0);
 
+  // Per-click idempotency token for handleSave/handleSaveNext (see
+  // src/lib/idempotency.ts) — distinct from refId above, which spans a whole
+  // bill session on purpose. Minted once when a save attempt starts, reused
+  // as-is if that exact attempt is retried after a failed/lost response, and
+  // cleared on success or whenever the payload it was minted for changes (see
+  // the invalidation effect below) so a retry never reuses a token for a
+  // payload that's no longer what's about to be sent.
+  const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
+
   // เปิดบิลผ้าปกติ (ตัดจากออร์เดอร์) vs ขายผ้าจากคลังโดยตรง (ไม่มีออร์เดอร์อ้างอิง
   // แต่ยังตัดสต็อกเหมือนเดิม) — ล็อคเป็น 'order' เสมอเมื่อเปิดหน้านี้มาจากปุ่มในหน้า
   // ออร์เดอร์ (มี orderId/purchaseOrder ใน query param) กันสลับโหมดจนหลุดออร์เดอร์
@@ -123,6 +132,22 @@ export default function BillCreatePage() {
   const [aiLowConfidence, setAiLowConfidence] = useState<Set<string>>(
     new Set(),
   );
+
+  // Invalidates any pending retry token (see pendingRequestId above) whenever
+  // a field that feeds the save payload changes — by any means (manual typing,
+  // AI-scan autofill, stock/order selection, ...). A retry should only ever
+  // reuse pendingRequestId for the exact payload it failed to save; once that
+  // payload is edited, it's a different save attempt and needs a fresh token.
+  // Functional update avoids needing pendingRequestId itself in the deps —
+  // clearing an already-null token is a no-op React bails out of.
+  useEffect(() => {
+    setPendingRequestId((id) => (id ? null : id));
+  }, [
+    billType, billNo, billDate, orderer, receiver,
+    fabricStruct, fabricPattern, fabricW,
+    altFabricStruct, altPurchaseOrder, isDeposit,
+    mode, linkedOrders, yards,
+  ]);
 
   // Pre-fill from order query params
   useEffect(() => {
@@ -427,6 +452,7 @@ export default function BillCreatePage() {
     setAiLowConfidence(new Set());
     setSavedCount(0);
     setRefId(newSessionId());
+    setPendingRequestId(null);
     // ตั้งใจไม่ reset `mode` — ปล่อย sticky ข้ามบิล เพื่อให้เจ้าหน้าที่ขายผ้าจากคลัง
     // ต่อเนื่องหลายบิลไม่ต้องกด toggle ใหม่ทุกครั้ง แต่ modeLocked ต้อง reset เสมอ
     // เพราะบิลถัดไปที่เปิดจากฟอร์มนี้ตรง ๆ (ไม่ผ่าน query param ใหม่) ไม่ควรถูกล็อคค้าง
@@ -438,6 +464,7 @@ export default function BillCreatePage() {
   // เพราะม้วนถัดไปในบิลเดียวกัน (refId เดิม) เป็นบิลเดิม ต่างกันแค่จำนวนหลาที่คีย์รอบใหม่
   function resetYardsOnly() {
     setYards(Array(TOTAL_SLOTS).fill(""));
+    setPendingRequestId(null);
   }
 
   async function handleSave() {
@@ -459,6 +486,11 @@ export default function BillCreatePage() {
     ) {
       return;
     }
+    // Reuse the same requestId if this is a retry of an attempt that's still
+    // pending (i.e. hasn't succeeded yet) — see pendingRequestId above. A
+    // fresh one is only minted for a genuinely new attempt.
+    const requestId = pendingRequestId ?? newSessionId();
+    if (!pendingRequestId) setPendingRequestId(requestId);
     setSaving(true);
     try {
       const res = await fetch("/api/warehouse/bill", {
@@ -492,6 +524,7 @@ export default function BillCreatePage() {
           // ถ้าเคยกด "บันทึกรายการถัดไป" มาก่อน ให้ผูกม้วนชุดสุดท้ายนี้เข้า
           // บิลเดิม (refId เดิม) แล้วค่อยปิดบิลผ่าน resetForm()
           refId,
+          requestId,
         }),
       });
       const data = await res.json();
@@ -499,6 +532,9 @@ export default function BillCreatePage() {
       resetForm();
       alert("บันทึกเรียบร้อย");
     } catch (err: any) {
+      // ไม่เคลียร์ pendingRequestId ตรงนี้โดยตั้งใจ — ถ้าผู้ใช้กดบันทึกซ้ำด้วย
+      // payload เดิมเป๊ะ (ไม่แก้อะไรก่อน retry) ต้องส่ง requestId เดิมไปด้วย
+      // เพื่อให้ backend รู้ว่าเป็นการ retry ไม่ใช่รายการใหม่ (กันแถวซ้ำ)
       alert("เกิดข้อผิดพลาด: " + err.message);
     } finally {
       setSaving(false);
@@ -522,6 +558,8 @@ export default function BillCreatePage() {
     ) {
       return;
     }
+    const requestId = pendingRequestId ?? newSessionId();
+    if (!pendingRequestId) setPendingRequestId(requestId);
     setSaving(true);
     try {
       const res = await fetch("/api/warehouse/bill", {
@@ -548,6 +586,7 @@ export default function BillCreatePage() {
               : undefined,
           isStockSale: mode === "stock",
           refId,
+          requestId,
         }),
       });
       const data = await res.json();
@@ -555,6 +594,7 @@ export default function BillCreatePage() {
       setSavedCount((c) => c + 1);
       resetYardsOnly();
     } catch (err: unknown) {
+      // ไม่เคลียร์ pendingRequestId — เหตุผลเดียวกับ handleSave ด้านบน
       alert(
         "เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)),
       );

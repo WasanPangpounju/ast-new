@@ -3,6 +3,14 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
 
+// Per-click idempotency token for "เพิ่มพับ" — same pattern as newSessionId()
+// in bill/create/page.tsx.
+function newRequestId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+}
+
 // One order linked to a bill. A bill normally has at most one, but can span
 // several when it was used to cover overflow past the first order's yard.
 interface LinkedOrderRef {
@@ -101,6 +109,13 @@ export default function BillListPage() {
   const [editingFold, setEditingFold] = useState<{ id: number; yard: string } | null>(null);
   const [foldSaving, setFoldSaving] = useState(false);
   const [confirmDeleteFold, setConfirmDeleteFold] = useState<number | null>(null);
+
+  // เพิ่มพับย้อนหลัง — newFoldYard คือช่องกรอกหลาท้ายตาราง, addFoldRequestId คือ
+  // idempotency token ต่อการกด "เพิ่มพับ" หนึ่งครั้ง (เหมือน pendingRequestId ใน
+  // bill/create/page.tsx — reuse ตัวเดิมถ้า fetch ล้มเหลวแล้วกดซ้ำโดยไม่แก้เลข)
+  const [newFoldYard, setNewFoldYard] = useState("");
+  const [addFoldSaving, setAddFoldSaving] = useState(false);
+  const [addFoldRequestId, setAddFoldRequestId] = useState<string | null>(null);
 
   const [stockSearch, setStockSearch] = useState("");
   const [stockResults, setStockResults] = useState<StockResult[]>([]);
@@ -295,6 +310,7 @@ export default function BillListPage() {
     setConfirmDelete(false);
     setEditingFold(null);
     setConfirmDeleteFold(null);
+    setNewFoldYard(""); setAddFoldRequestId(null);
     setStockSearch(""); setStockResults([]);
     setOrderSearch(""); setOrderResults([]);
     setEditingDate(null);
@@ -307,6 +323,7 @@ export default function BillListPage() {
     setConfirmDelete(false);
     setEditingFold(null);
     setConfirmDeleteFold(null);
+    setNewFoldYard(""); setAddFoldRequestId(null);
     setStockResults([]);
     setOrderResults([]);
     setEditingDate(null);
@@ -319,6 +336,7 @@ export default function BillListPage() {
     setConfirmDelete(false);
     setEditingFold(null);
     setConfirmDeleteFold(null);
+    setNewFoldYard(""); setAddFoldRequestId(null);
     setEditingDate(null);
     setEditingVatNo(null); setVatNoError(null);
     setHistoryOpenKey(null);
@@ -477,12 +495,56 @@ export default function BillListPage() {
 
   const handleDeleteFold = async (id: number) => {
     if (!manageBill) return;
+    // เก็บยอดของแถวที่จะลบไว้ก่อน — ใช้ปรับ foldCount/totalYard ใน header ของ
+    // modal เอง เพราะ manageBill เป็น snapshot แยกจาก bills list (reload() แค่
+    // รีเฟรชตาราง list ด้านหลัง ไม่ย้อนอัปเดต manageBill ที่ modal เปิดค้างอยู่)
+    const deleted = folds.find(f => f.id === id);
     setFoldSaving(true);
     await fetch(`/api/warehouse/bill/folds?id=${id}`, { method: 'DELETE' });
     setFoldSaving(false);
     setConfirmDeleteFold(null);
     fetchFolds(manageBill.vatType, manageBill.vatNo);
+    if (deleted) {
+      setManageBill(b => b ? { ...b, foldCount: b.foldCount - 1, totalYard: b.totalYard - deleted.sumYard } : b);
+    }
     reload();
+  };
+
+  // เพิ่มพับย้อนหลังเข้าบิลที่มีอยู่แล้ว — ระวัง: บิลนี้อาจเคยพิมพ์/ส่งลูกค้าไปแล้ว
+  // (ดูป้ายเตือนใน UI) เพิ่มพับใหม่จะทำให้เอกสารที่พิมพ์ไปแล้วไม่ตรงกับระบบอีกต่อไป
+  const handleAddFold = async () => {
+    if (!manageBill || addFoldSaving) return;
+    const yard = parseFloat(newFoldYard);
+    if (!(yard > 0)) {
+      alert("กรุณากรอกจำนวนหลาให้ถูกต้อง");
+      return;
+    }
+    // Reuse the same requestId on a retry of a still-pending attempt (fetch
+    // failed/lost response) — same pattern as bill/create/page.tsx's
+    // pendingRequestId. Cleared on success or when newFoldYard changes below.
+    const requestId = addFoldRequestId ?? newRequestId();
+    if (!addFoldRequestId) setAddFoldRequestId(requestId);
+    setAddFoldSaving(true);
+    try {
+      const res = await fetch('/api/warehouse/bill/folds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vatType: manageBill.vatType, vatNo: manageBill.vatNo, sumYard: yard, requestId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "เพิ่มพับไม่สำเร็จ");
+      setNewFoldYard("");
+      setAddFoldRequestId(null);
+      setManageBill(b => b ? { ...b, foldCount: b.foldCount + 1, totalYard: b.totalYard + yard } : b);
+      fetchFolds(manageBill.vatType, manageBill.vatNo);
+      reload();
+    } catch (err: unknown) {
+      // ไม่เคลียร์ addFoldRequestId — ให้กดซ้ำโดยไม่แก้เลขหลาแล้ว retry ด้วย
+      // requestId เดิมได้ (กันแถวซ้ำ เหมือน handleSave ใน bill/create/page.tsx)
+      alert("เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setAddFoldSaving(false);
+    }
   };
 
   const handleSave = async () => {
@@ -1048,6 +1110,17 @@ export default function BillListPage() {
             {/* Tab: แก้ไขพับ */}
             {activeTab === 'folds' && (
               <div className="flex-1 overflow-y-auto">
+                {/* เพิ่มพับย้อนหลังกระทบเอกสารที่อาจพิมพ์ส่งลูกค้าไปแล้ว — ไม่มีการล็อกบิล
+                    ที่ "ปิด" แล้วในระบบนี้ (ไม่มี field สถานะ printed/closed) ป้ายเตือนนี้
+                    จึงเป็นแนวป้องกันเดียวที่มี ณ ตอนนี้ */}
+                <div className="px-3 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-800 flex items-center justify-between gap-2 flex-wrap">
+                  <span>⚠️ เพิ่มพับย้อนหลัง — บิลที่พิมพ์ส่งลูกค้าไปแล้วจะไม่ตรงกับระบบ ต้องพิมพ์ใหม่</span>
+                  <button type="button" onClick={() => openPrint(manageBill.vatType, manageBill.vatNo)}
+                    className="flex-shrink-0 px-2 py-1 text-xs bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300">
+                    ไปหน้าพิมพ์
+                  </button>
+                </div>
+
                 {foldsLoading ? (
                   <div className="flex justify-center py-8 text-gray-400 text-xs">กำลังโหลด...</div>
                 ) : folds.length === 0 ? (
@@ -1110,6 +1183,31 @@ export default function BillListPage() {
                       </tr>
                     </tfoot>
                   </table>
+                )}
+
+                {/* ฟอร์มเพิ่มพับ — แสดงเสมอไม่ว่าจะมีพับอยู่แล้วกี่แถว (ยกเว้นระหว่างโหลด) */}
+                {!foldsLoading && (
+                  <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-200 bg-gray-50 flex-wrap">
+                    <span className="text-xs text-gray-500 flex-shrink-0">เพิ่มพับใหม่:</span>
+                    <input
+                      type="number" min="0" step="0.5"
+                      value={newFoldYard}
+                      onChange={e => {
+                        setNewFoldYard(e.target.value);
+                        // แก้เลขหลังจากกด "เพิ่มพับ" ไม่สำเร็จ = ตั้งใจส่งค่าใหม่ ไม่ใช่ retry
+                        // ของเดิม — ต้อง invalidate token กันไม่ให้ backend เข้าใจผิดว่าซ้ำ
+                        if (addFoldRequestId) setAddFoldRequestId(null);
+                      }}
+                      onKeyDown={e => { if (e.key === 'Enter') handleAddFold(); }}
+                      placeholder="จำนวนหลา"
+                      title="จำนวนหลา"
+                      className="w-28 border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button type="button" onClick={handleAddFold} disabled={addFoldSaving}
+                      className="px-3 py-1 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                      {addFoldSaving ? "กำลังเพิ่ม..." : "เพิ่มพับ"}
+                    </button>
+                  </div>
                 )}
               </div>
             )}

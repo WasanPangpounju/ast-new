@@ -1,5 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { claimRequestId, DuplicateRequestError } from '@/lib/idempotency'
+import type { Prisma } from '@/generated/prisma/client/client'
 import type { NextRequest } from 'next/server'
 import { randomUUID } from 'crypto'
 
@@ -147,10 +149,10 @@ export async function GET(request: NextRequest) {
 // first, then order 2 for overflow, ...) into their current DB capacity —
 // same remainingYard formula as /api/warehouse/orders/search — so the split
 // below is computed from fresh data rather than trusting client-side numbers.
-async function loadOrderCapacities(orderIdList: number[]) {
+async function loadOrderCapacities(tx: Prisma.TransactionClient, orderIdList: number[]) {
   if (orderIdList.length === 0) return []
 
-  const orders = await prisma.astPurchaseOrder.findMany({
+  const orders = await tx.astPurchaseOrder.findMany({
     where: { id: { in: orderIdList } },
     select: { id: true, purchaseOrder: true, orderSumYard: true },
   })
@@ -158,7 +160,7 @@ async function loadOrderCapacities(orderIdList: number[]) {
 
   const poNumbers = orders.map(o => o.purchaseOrder).filter((p): p is string => !!p)
   const stats = poNumbers.length > 0
-    ? await prisma.fabricOut.groupBy({
+    ? await tx.fabricOut.groupBy({
         by: ['purchaseOrder'],
         where: { purchaseOrder: { in: poNumbers }, deletedAt: null },
         _sum: { sumYard: true },
@@ -220,6 +222,17 @@ function assignOrders<T extends { yard: number }>(
   return out
 }
 
+// Thrown inside the transaction when this vatType+vatNo already belongs to a
+// different bill session (different refId) — kept as a distinct error type
+// so the outer catch can map it back to the same 409 this endpoint has always
+// returned for that case, unchanged.
+class BillExistsError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'BillExistsError'
+  }
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth()
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
@@ -227,7 +240,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { vatType, vatNo, customerName, receiveName, orderId, orderIds, purchaseOrder,
           fabricStruct, fabricPattern, fabricW, createDate, yards,
-          isDeposit, altFabricStruct, altPurchaseOrder, isStockSale, refId: refIdInput } = body
+          isDeposit, altFabricStruct, altPurchaseOrder, isStockSale, refId: refIdInput,
+          requestId } = body
 
   // ขายผ้าจากคลังโดยตรง (ไม่มีออร์เดอร์อ้างอิง) — ignore orderIds/orderId/purchaseOrder
   // ที่หลุดมาจาก client เสมอไม่ว่า UI จะส่งอะไรมาก็ตาม (defensive: UI เคลียร์ state
@@ -240,19 +254,19 @@ export async function POST(request: NextRequest) {
   if (!Array.isArray(yards) || !yards.some((y: string) => parseFloat(y) > 0)) {
     return Response.json({ error: 'At least one yard value is required' }, { status: 400 })
   }
+  // requestId is a per-click idempotency token (see src/lib/idempotency.ts) —
+  // distinct from refId below, which spans a whole bill session on purpose.
+  // Required, not optional-with-fallback: silently skipping the guard when a
+  // stale client omits it would just re-open the duplicate-insert hole this
+  // exists to close.
+  if (typeof requestId !== 'string' || !requestId) {
+    return Response.json({ error: 'requestId required — กรุณารีเฟรชหน้าเว็บแล้วลองใหม่' }, { status: 400 })
+  }
 
   // caller may pass an existing refId to append more rolls to a bill it
   // already started (e.g. "บันทึกรายการถัดไป" continuing the same delivery);
   // only block as a real duplicate when a different session opened this vatNo.
   const refId = typeof refIdInput === 'string' && refIdInput ? refIdInput : randomUUID()
-
-  const existing = await prisma.fabricOut.findFirst({
-    where: { vatType, vatNo: Number(vatNo), deletedAt: null },
-    select: { id: true, refId: true },
-  })
-  if (existing && existing.refId !== refId) {
-    return Response.json({ error: `บิล ${vatType}-${vatNo} มีอยู่แล้ว` }, { status: 409 })
-  }
 
   const rows = (yards as string[])
     .map((y, i) => ({ yard: parseFloat(y), slot: i + 1 }))
@@ -271,34 +285,58 @@ export async function POST(request: NextRequest) {
         : (orderId ? [Number(orderId)] : []))
 
   try {
-    const capacities = await loadOrderCapacities(orderIdList)
-    const assigned = assignOrders(rows, capacities)
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.fabricOut.findFirst({
+        where: { vatType, vatNo: Number(vatNo), deletedAt: null },
+        select: { id: true, refId: true },
+      })
+      if (existing && existing.refId !== refId) {
+        throw new BillExistsError(`บิล ${vatType}-${vatNo} มีอยู่แล้ว`)
+      }
 
-    await prisma.fabricOut.createMany({
-      data: assigned.map(r => ({
-        refId,
-        vatType,
-        vatNo: Number(vatNo),
-        fold: 1,
-        sumYard: r.yard,
-        fabricStruct: fabricStruct || '',
-        fabricPattern: fabricPattern || '',
-        fabricW: fabricW || '',
-        customerName,
-        receiveName: receiveName || customerName,
-        orderId: r.orderId,
-        // Per-row PO from its assigned order when one was linked; otherwise
-        // fall back to the single purchaseOrder string the form submitted —
-        // ยกเว้น isStock ที่บังคับ null เสมอ ไม่ว่า client จะส่ง purchaseOrder มาหรือไม่
-        purchaseOrder: r.orderId ? r.purchaseOrder : (isStock ? null : (purchaseOrder || null)),
-        createDate: date,
-        isDeposit: isDeposit ?? false,
-        altFabricStruct: altFabricStruct || null,
-        altPurchaseOrder: isStock ? null : (altPurchaseOrder || null),
-        isStockSale: isStock,
-      })),
+      // Claimed inside this same transaction as the insert below — a retried
+      // requestId rolls back the whole transaction atomically, so it can
+      // never leave a partial/duplicate insert behind.
+      await claimRequestId(tx, requestId, 'bill.create')
+
+      const capacities = await loadOrderCapacities(tx, orderIdList)
+      const assigned = assignOrders(rows, capacities)
+
+      await tx.fabricOut.createMany({
+        data: assigned.map(r => ({
+          refId,
+          vatType,
+          vatNo: Number(vatNo),
+          fold: 1,
+          sumYard: r.yard,
+          fabricStruct: fabricStruct || '',
+          fabricPattern: fabricPattern || '',
+          fabricW: fabricW || '',
+          customerName,
+          receiveName: receiveName || customerName,
+          orderId: r.orderId,
+          // Per-row PO from its assigned order when one was linked; otherwise
+          // fall back to the single purchaseOrder string the form submitted —
+          // ยกเว้น isStock ที่บังคับ null เสมอ ไม่ว่า client จะส่ง purchaseOrder มาหรือไม่
+          purchaseOrder: r.orderId ? r.purchaseOrder : (isStock ? null : (purchaseOrder || null)),
+          createDate: date,
+          isDeposit: isDeposit ?? false,
+          altFabricStruct: altFabricStruct || null,
+          altPurchaseOrder: isStock ? null : (altPurchaseOrder || null),
+          isStockSale: isStock,
+        })),
+      })
     })
   } catch (err: unknown) {
+    if (err instanceof DuplicateRequestError) {
+      // Same requestId already succeeded once (this is a retry of an attempt
+      // that committed but whose response the client never saw) — report it
+      // as success, not an error, so the client's retry path treats it as done.
+      return Response.json({ success: true, alreadyProcessed: true, vatNo: Number(vatNo) })
+    }
+    if (err instanceof BillExistsError) {
+      return Response.json({ error: err.message }, { status: 409 })
+    }
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[bill] Prisma error:', msg)
     return Response.json({ error: msg }, { status: 500 })

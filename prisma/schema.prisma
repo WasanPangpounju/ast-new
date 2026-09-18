@@ -846,6 +846,24 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+/// Idempotency guard for "one button click" actions that write data (e.g. bill
+/// create, add-fold). requestId is a client-generated token minted fresh per
+/// save attempt and reused only on retry of that SAME still-pending attempt —
+/// distinct from fabricouts.refId, which intentionally spans a whole bill
+/// session across multiple saves. A row here is claimed inside the same
+/// transaction as the actual write, so a retry with the same requestId hits
+/// the unique constraint and rolls back as a no-op instead of duplicating rows.
+model RequestIdempotency {
+  id        Int      @id @default(autoincrement())
+  requestId String   @unique
+  /// Which endpoint claimed this key — scopes the key so a collision (already
+  /// astronomically unlikely with a UUID) can't cross endpoints.
+  endpoint  String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("request_idempotency")
+}
+
 // ─── LEGACY (DO NOT USE FOR NEW FEATURES) ────────────
 
 /// @deprecated — superseded by AstPurchaseOrder (ast_purchaseorders)
