@@ -40,7 +40,29 @@ interface EntryResponse {
   totalPages: number;
 }
 
-type Tab = "detail" | "edit";
+type Tab = "detail" | "edit" | "history";
+
+interface AuditRow {
+  id: number;
+  fieldName: string;
+  oldValue: string | null;
+  newValue: string | null;
+  changedBy: string;
+  changedAt: string;
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  importDate: "วันที่นำเข้า", supplierName: "ชื่อบริษัท", importStatus: "เลขที่ใบส่งสินค้า",
+  yarnType: "ชนิดด้าย", lot: "Lot", spool: "Spool", weightKgNet: "น้ำหนักสุทธิ kg",
+  weightKgSum: "น้ำหนักรวม kg", weightKgPackage: "น้ำหนักหีบห่อ kg", pallet: "พาเลท",
+  box: "กล่อง", sack: "กระสอบ", emp: "พนักงาน", note: "หมายเหตุ", deleted: "ลบรายการ",
+};
+
+function fmtDateTime(iso: string) {
+  const d = new Date(iso);
+  const p = (n: number) => n.toString().padStart(2, "0");
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear() + 543} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 interface Filters {
   lot: string;
@@ -168,6 +190,29 @@ export default function MaterialHistoryList() {
     staleTime: 0,
   });
 
+  // ── edit history (enabled only on the history tab) ──────────────────────────
+  const { data: history, isFetching: historyLoading, isError: historyError } = useQuery<{ data: AuditRow[] }>({
+    queryKey: ["material-history", selected?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/warehouse/material/${selected!.id}/history`);
+      if (!res.ok) throw new Error("โหลดประวัติไม่สำเร็จ");
+      return res.json();
+    },
+    enabled: !!selected && activeTab === "history",
+    staleTime: 0,
+  });
+
+  // one save = several rows sharing the same changedAt (written in one transaction)
+  const historyGroups = (() => {
+    const groups: { at: string; by: string; rows: AuditRow[] }[] = [];
+    for (const r of history?.data ?? []) {
+      const g = groups[groups.length - 1];
+      if (g && g.at === r.changedAt && g.by === r.changedBy) g.rows.push(r);
+      else groups.push({ at: r.changedAt, by: r.changedBy, rows: [r] });
+    }
+    return groups;
+  })();
+
   const rows  = data?.pages.flatMap((pg) => pg.data) ?? [];
   const total = data?.pages[data.pages.length - 1]?.total ?? 0;
 
@@ -235,6 +280,7 @@ export default function MaterialHistoryList() {
       setActionMsg({ ok: true, text: "บันทึกสำเร็จ" });
       qc.invalidateQueries({ queryKey: ["material-entry"] });
       qc.invalidateQueries({ queryKey: ["material-detail", selected.id] });
+      qc.invalidateQueries({ queryKey: ["material-history", selected.id] });
     } catch (err: unknown) {
       setActionMsg({ ok: false, text: err instanceof Error ? err.message : "เกิดข้อผิดพลาด" });
     } finally {
@@ -430,6 +476,7 @@ export default function MaterialHistoryList() {
               {([
                 { key: "detail", label: "ดูรายละเอียด" },
                 { key: "edit",   label: "แก้ไข" },
+                { key: "history", label: "ประวัติการแก้ไข" },
               ] as { key: Tab; label: string }[]).map(({ key, label }) => (
                 <button key={key} type="button" onClick={() => switchTab(key)}
                   className={`flex-1 py-2 text-xs font-medium transition-colors ${
@@ -569,6 +616,45 @@ export default function MaterialHistoryList() {
                   </button>
                 </div>
               </>
+            )}
+
+            {/* ── Tab: ประวัติการแก้ไข ─────────────────────────────── */}
+            {activeTab === "history" && (
+              <div className="overflow-y-auto flex-1 px-5 py-4">
+                {historyLoading ? (
+                  <div className="flex justify-center py-10 text-gray-400 text-xs">กำลังโหลด...</div>
+                ) : historyError ? (
+                  <p className="text-xs text-red-500 text-center py-10">โหลดประวัติไม่สำเร็จ</p>
+                ) : historyGroups.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-10">ยังไม่มีประวัติการแก้ไข</p>
+                ) : (
+                  <div className="space-y-4">
+                    {historyGroups.map((g) => (
+                      <div key={`${g.at}-${g.by}`} className="border border-gray-200">
+                        <div className="bg-gray-50 px-3 py-1.5 text-xs text-gray-500 flex justify-between gap-2">
+                          <span>{fmtDateTime(g.at)}</span>
+                          <span className="font-medium text-gray-700 truncate">{g.by}</span>
+                        </div>
+                        <ul className="px-3 py-2 space-y-1">
+                          {g.rows.map((r) => (
+                            <li key={r.id} className="text-xs text-gray-700">
+                              <span className="font-medium">{FIELD_LABELS[r.fieldName] ?? r.fieldName}</span>
+                              {r.fieldName === "deleted" ? null : (
+                                <>
+                                  {": "}
+                                  <span className="text-red-500 line-through">{r.oldValue ?? "-"}</span>
+                                  {" → "}
+                                  <span className="text-green-700">{r.newValue ?? "-"}</span>
+                                </>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
 
           </div>

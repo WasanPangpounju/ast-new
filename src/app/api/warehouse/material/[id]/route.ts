@@ -1,4 +1,7 @@
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { requirePermission, PermissionError } from '@/lib/permissions'
+import { MATERIAL_AUDIT_TABLE, materialRecordKey, auditValue } from '@/lib/materialAudit'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 import { PackageReturnError } from '@/lib/package-return-obligations'
@@ -66,6 +69,14 @@ const patchSchema = z.object({
 })
 
 export async function PATCH(req: NextRequest, { params }: Params) {
+  const session = await auth()
+  try {
+    await requirePermission(session, 'material.history')
+  } catch (err) {
+    if (err instanceof PermissionError) return Response.json({ error: err.message }, { status: err.status })
+    throw err
+  }
+
   const id = await resolveId(params)
   if (!id) return Response.json({ error: 'Invalid id' }, { status: 400 })
 
@@ -86,13 +97,36 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
 
     const { importDate, ...rest } = parsed.data
-    const updated = await prisma.material.update({
-      where: { id },
-      data: {
-        ...rest,
-        ...(importDate !== undefined && { importDate: importDate === null ? null : new Date(importDate) }),
-      },
-    })
+    const data = {
+      ...rest,
+      ...(importDate !== undefined && { importDate: importDate === null ? null : new Date(importDate) }),
+    }
+
+    // Field-level diff: only fields whose value actually changed get an audit row
+    const changedBy = session?.user?.email ?? session?.user?.name ?? 'unknown'
+    const changes = (Object.keys(data) as (keyof typeof data)[])
+      .map(field => ({
+        field,
+        oldValue: auditValue(field, existing[field as keyof typeof existing]),
+        newValue: auditValue(field, data[field]),
+      }))
+      .filter(c => c.oldValue !== c.newValue)
+
+    const [updated] = await prisma.$transaction([
+      prisma.material.update({ where: { id }, data }),
+      ...(changes.length > 0
+        ? [prisma.auditLog.createMany({
+            data: changes.map(c => ({
+              tableName: MATERIAL_AUDIT_TABLE,
+              recordKey: materialRecordKey(id),
+              fieldName: c.field,
+              oldValue: c.oldValue,
+              newValue: c.newValue,
+              changedBy,
+            })),
+          })]
+        : []),
+    ])
     return Response.json({ success: true, data: updated })
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -104,6 +138,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 // ─── DELETE /api/warehouse/material/[id] ─────────────────────────────────────
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
+  const session = await auth()
+  try {
+    await requirePermission(session, 'material.history')
+  } catch (err) {
+    if (err instanceof PermissionError) return Response.json({ error: err.message }, { status: err.status })
+    throw err
+  }
+
   const id = await resolveId(params)
   if (!id) return Response.json({ error: 'Invalid id' }, { status: 400 })
 
@@ -129,10 +171,19 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       )
     }
 
-    await prisma.material.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    })
+    await prisma.$transaction([
+      prisma.material.update({ where: { id }, data: { deletedAt: new Date() } }),
+      prisma.auditLog.create({
+        data: {
+          tableName: MATERIAL_AUDIT_TABLE,
+          recordKey: materialRecordKey(id),
+          fieldName: 'deleted',
+          oldValue: 'false',
+          newValue: 'true',
+          changedBy: session?.user?.email ?? session?.user?.name ?? 'unknown',
+        },
+      }),
+    ])
     return Response.json({ success: true })
   } catch (err: unknown) {
     if (err instanceof PackageReturnError) {
