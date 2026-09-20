@@ -61,6 +61,8 @@ const patchSchema = z.object({
   sack:            z.number().int().min(0).optional(),
   emp:             z.string().optional(),
   note:            z.string().optional(),
+  // same YYYY-MM-DD format as entry POST; null clears the date
+  importDate:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 })
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -83,9 +85,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
 
+    const { importDate, ...rest } = parsed.data
     const updated = await prisma.material.update({
       where: { id },
-      data: parsed.data,
+      data: {
+        ...rest,
+        ...(importDate !== undefined && { importDate: importDate === null ? null : new Date(importDate) }),
+      },
     })
     return Response.json({ success: true, data: updated })
   } catch (err: unknown) {

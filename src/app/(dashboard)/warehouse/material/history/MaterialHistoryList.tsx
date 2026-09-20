@@ -89,6 +89,7 @@ function toEditState(m: Material) {
     sack:            String(m.sack ?? ""),
     emp:             m.emp ?? "",
     note:            m.note ?? "",
+    importDate:      m.importDate ? m.importDate.slice(0, 10) : "",
   };
 }
 
@@ -222,6 +223,7 @@ export default function MaterialHistoryList() {
         sack:            parseInt(editState.sack) || undefined,
         emp:             editState.emp.trim() || undefined,
         note:            editState.note.trim() || undefined,
+        importDate:      editState.importDate || null,
       };
       const res = await fetch(`/api/warehouse/material/${selected.id}`, {
         method: "PATCH",
@@ -523,6 +525,7 @@ export default function MaterialHistoryList() {
               <>
                 <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
                   {([
+                    { key: "importDate",      label: "วันที่นำเข้า",           type: "date" },
                     { key: "supplierName",    label: "ชื่อบริษัท *",           type: "text" },
                     { key: "importStatus",    label: "เลขที่ใบส่งสินค้า",      type: "text" },
                     { key: "yarnType",        label: "ชนิดด้าย *",             type: "text" },
