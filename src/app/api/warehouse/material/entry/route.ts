@@ -116,7 +116,12 @@ export async function GET(request: NextRequest) {
         where,
         skip: (page - 1) * limit,
         take: limit,
-        orderBy: { importDate: { sort: 'desc', nulls: 'last' } },
+        // createdAt/id break same-day ties so offset pages stay stable (infinite scroll)
+        orderBy: [
+          { importDate: { sort: 'desc', nulls: 'last' } },
+          { createdAt: 'desc' },
+          { id: 'desc' },
+        ],
       }),
       prisma.material.count({ where }),
     ])
