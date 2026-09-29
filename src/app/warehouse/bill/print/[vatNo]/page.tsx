@@ -373,7 +373,7 @@ export default function BillPrintPage({
                   <h1 className="text-[20px] font-bold print-h1">
                     ใบส่งสินค้า / Delivery Note
                   </h1>
-                  <span className="text-[15px] font-bold print-sm">
+                  <span className="text-[20px] font-bold print-sm">
                     เลขที่ {vatType} - {vatNo}
                   </span>
                 </div>
@@ -386,7 +386,7 @@ export default function BillPrintPage({
                       {ordererName}
                     </span>
                   </div>
-                  <div className="shrink-0 ml-8 text-right">
+                  <div className="shrink-0 ml-8 text-right text-[18px] leading-tight">
                     <span className="font-bold">ผู้รับ Received by</span>
                     <span className="font-bold ml-1 whitespace-nowrap">
                       {trimCompanyName(receiverName)}
@@ -412,7 +412,7 @@ export default function BillPrintPage({
                 <div className=" flex flex-col h-full flex-1">
                   {" "}
                   {/* Table — flex-1 เต็มพื้นที่ */}
-                  <div className="overflow-hidden shrink-0">
+                  <div className="-mx-[8mm] overflow-hidden shrink-0">
                     <table className="bill-table w-full border-collapse text-sm">
                       <thead>
                         <tr>
