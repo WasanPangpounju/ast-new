@@ -2,6 +2,7 @@
 import React, { useState, useEffect, use } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { toPrintableFabricPattern } from "@/lib/fabricPatternPrint";
 
 const ROW_H = 36;
 
@@ -87,10 +88,18 @@ export default function BillPrintPage({
     );
   };
 
-  const fabricCode = first.altFabricStruct
-    ? first.altFabricStruct
-    : `${first.fabricStruct ?? ""} ${first.fabricPattern ?? ""} ${first.fabricW ? `${first.fabricW}''` : ""}`.trim() ||
-      "-";
+  // หน้าจอแสดงลายผ้าเต็ม, ตอนพิมพ์/PDF แสดงเฉพาะลายใน whitelist (ไม่ตรง → ตัดทิ้งทั้งส่วน)
+  const buildFabricCode = (pattern: string | null) =>
+    first.altFabricStruct
+      ? first.altFabricStruct
+      : [first.fabricStruct, pattern, first.fabricW ? `${first.fabricW}''` : ""]
+          .map((s) => (s ?? "").trim())
+          .filter(Boolean)
+          .join(" ") || "-";
+  const fabricCodeScreen = buildFabricCode(first.fabricPattern);
+  const fabricCodePrint = buildFabricCode(
+    toPrintableFabricPattern(first.fabricPattern),
+  );
 
   const ordererName = first.altPurchaseOrder
     ? first.altPurchaseOrder
@@ -136,6 +145,8 @@ export default function BillPrintPage({
             .a4-page td {
               padding: 0px 0px 10px 0px !important;
             }
+            .fc-screen { display: none !important; }
+            .fc-print { display: inline !important; }
           `;
           doc.head.appendChild(style);
 
@@ -189,6 +200,8 @@ export default function BillPrintPage({
         .bill-th-yard { width: 8%; }
         /* yard numbers in normal weight: beats .a4-page * { font-weight: 700 !important } in @media print */
         .a4-page td.bill-yard { font-weight: 400 !important; }
+        /* รหัสผ้า: หน้าจอแสดงค่าเต็ม, print/PDF สลับเป็นค่าที่กรองลายผ้าแล้ว */
+        .fc-print { display: none; }
 
         /* a4-page screen — padding อยู่ใน CSS */
         .a4-page {
@@ -244,6 +257,8 @@ export default function BillPrintPage({
             print-color-adjust: exact;
           }
           .no-print { display: none !important; }
+          .fc-screen { display: none !important; }
+          .fc-print { display: inline !important; }
 
           #print-body {
             display: block !important;
@@ -399,7 +414,8 @@ export default function BillPrintPage({
                   <div className="flex-1 min-w-0">
                     <span className="font-bold">รหัสผ้า Code :</span>
                     <span className="font-bold ml-1 whitespace-nowrap">
-                      {fabricCode}
+                      <span className="fc-screen">{fabricCodeScreen}</span>
+                      <span className="fc-print">{fabricCodePrint}</span>
                     </span>
                   </div>
                   <div className="shrink-0 text-right ml-4">
