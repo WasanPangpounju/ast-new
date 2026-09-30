@@ -187,6 +187,8 @@ export default function BillPrintPage({
         .bill-table { table-layout: fixed; }
         .bill-th-idx  { width: 4.5%; }
         .bill-th-yard { width: 8%; }
+        /* yard numbers in normal weight: beats .a4-page * { font-weight: 700 !important } in @media print */
+        .a4-page td.bill-yard { font-weight: 400 !important; }
 
         /* a4-page screen — padding อยู่ใน CSS */
         .a4-page {
@@ -443,7 +445,7 @@ export default function BillPrintPage({
                                   <td className="border border-[#999] px-1 text-center text-sm text-gray-500 w-4 print-sm">
                                     {roll ? slotNo : ""}
                                   </td>
-                                  <td className="border border-[#999] px-1 text-center text-lg font-bold print-base">
+                                  <td className="bill-yard border border-[#999] px-1 text-center text-lg font-normal print-base">
                                     {roll?.sumYard
                                       ? Number(roll.sumYard).toLocaleString()
                                       : ""}
