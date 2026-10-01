@@ -3,6 +3,7 @@ import React, { useState, useEffect, use } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { toPrintableFabricPattern } from "@/lib/fabricPatternPrint";
+import { formatFabricWidth } from "@/lib/fabricWidthPrint";
 
 const ROW_H = 36;
 
@@ -92,7 +93,7 @@ export default function BillPrintPage({
   const buildFabricCode = (pattern: string | null) =>
     first.altFabricStruct
       ? first.altFabricStruct
-      : [first.fabricStruct, pattern, first.fabricW ? `${first.fabricW}''` : ""]
+      : [first.fabricStruct, pattern, formatFabricWidth(first.fabricW)]
           .map((s) => (s ?? "").trim())
           .filter(Boolean)
           .join(" ") || "-";

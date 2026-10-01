@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
+import { formatFabricWidth } from "@/lib/fabricWidthPrint";
 
 // ---- Types ----
 interface ExportOutRow {
@@ -102,7 +103,7 @@ function trimCompanyName(name: string | null | undefined) {
 
 // รวม โครงสร้างผ้า + หน้ากว้าง + ลายผ้า เป็นข้อความเดียวสำหรับ column "โครงสร้างผ้า" เช่น
 // fabricStruct="TC45 * TC45 / 136 * 80", fabricW="63", fabricPattern="1/1"
-// -> `TC45 * TC45 / 136 * 80 63" 1/1`
+// -> `TC45 * TC45 / 136 * 80 63'' 1/1`
 function formatFabricStructCol(r: {
   fabricStruct?: string | null;
   fabricW?: string | null;
@@ -110,7 +111,8 @@ function formatFabricStructCol(r: {
 }) {
   const parts: string[] = [];
   if (r.fabricStruct) parts.push(r.fabricStruct);
-  if (r.fabricW) parts.push(`${r.fabricW}"`);
+  const width = formatFabricWidth(r.fabricW);
+  if (width) parts.push(width);
   if (r.fabricPattern) parts.push(r.fabricPattern);
   return parts.join(" ");
 }
