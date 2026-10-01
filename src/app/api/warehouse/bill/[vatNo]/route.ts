@@ -14,7 +14,10 @@ export async function GET(
 
   const rolls = await prisma.fabricOut.findMany({
     where: { vatNo: Number(vatNo), vatType, deletedAt: null },
-    orderBy: { fold: 'asc' },
+    // id = entry order. Not fold: new-system rows are all fold=1, so ties come
+    // back in heap order, which shifts whenever a roll is UPDATEd (e.g. แก้วันที่บิล).
+    // stock-deposit's edit modal also reads this and re-inserts in this order.
+    orderBy: { id: 'asc' },
     select: {
       id: true,
       fold: true,

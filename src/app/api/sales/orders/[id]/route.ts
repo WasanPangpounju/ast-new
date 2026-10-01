@@ -24,7 +24,8 @@ export async function GET(
 
   const fabricOuts = await prisma.fabricOut.findMany({
     where: { purchaseOrder: order.purchaseOrder, deletedAt: null },
-    orderBy: { createDate: 'asc' },
+    // id tie-break: every roll of a bill shares one createDate
+    orderBy: [{ createDate: 'asc' }, { id: 'asc' }],
     select: {
       id: true, fold: true, sumYard: true, vatType: true, vatNo: true,
       fabricStruct: true, fabricPattern: true, fabricW: true,
