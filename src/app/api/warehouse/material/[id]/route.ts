@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { requirePermission, PermissionError } from '@/lib/permissions'
 import { MATERIAL_AUDIT_TABLE, materialRecordKey, auditValue } from '@/lib/materialAudit'
+import { bangkokMidnight } from '@/lib/bangkokDate'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 import { PackageReturnError } from '@/lib/package-return-obligations'
@@ -99,7 +100,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const { importDate, ...rest } = parsed.data
     const data = {
       ...rest,
-      ...(importDate !== undefined && { importDate: importDate === null ? null : new Date(importDate) }),
+      // Bangkok midnight, same as synced rows — an unchanged date round-trips to the identical instant
+      ...(importDate !== undefined && { importDate: importDate === null ? null : bangkokMidnight(importDate) }),
     }
 
     // Field-level diff: only fields whose value actually changed get an audit row

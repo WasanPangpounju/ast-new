@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 import type { Prisma } from '@/generated/prisma/client/client'
 import { resolveSupplierId, buildImportObligationsData } from '@/lib/package-return-obligations'
+import { bangkokMidnight } from '@/lib/bangkokDate'
 
 const itemSchema = z.object({
   lot: z.string().min(1),
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
         const material = await tx.material.create({
           data: {
             ...item,
-            importDate: item.importDate ? new Date(item.importDate) : undefined,
+            importDate: item.importDate ? bangkokMidnight(item.importDate) : undefined,
           },
         })
         materials.push(material)
@@ -100,8 +101,10 @@ export async function GET(request: NextRequest) {
 
   if (dateFrom || dateTo) {
     const importDateFilter: Prisma.DateTimeFilter = {}
-    if (dateFrom) importDateFilter.gte = new Date(dateFrom)
-    if (dateTo) importDateFilter.lte = new Date(dateTo)
+    // whole Bangkok days: rows are stored at Bangkok midnight (synced) or UTC midnight (older
+    // form entries), both of which fall inside [dateFrom 00:00 +07, dateTo+1 00:00 +07)
+    if (dateFrom) importDateFilter.gte = bangkokMidnight(dateFrom)
+    if (dateTo) importDateFilter.lt = new Date(bangkokMidnight(dateTo).getTime() + 24 * 60 * 60 * 1000)
     where.importDate = importDateFilter
   }
 
