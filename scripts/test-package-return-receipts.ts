@@ -53,11 +53,17 @@ async function main() {
     data: {
       lot: TAG, spool: 20, yarnType: 'TEST', supplierName: supplier.name,
       weightKgNet: 1, weightKgSum: 1, weightKgPackage: 0,
-      pallet: 3, palletType: 'wood', box: 9, sack: 2, paperBar: 6, spoolType: 'spool_paper',
+      pallet: 3, palletType: 'wood', box: 9, sack: 2, sackType: 'plastic', paperBar: 6, spoolType: 'spool_paper',
+    },
+  })
+  const materialJute = await prisma.material.create({
+    data: {
+      lot: `${TAG}-jute`, spool: 0, yarnType: 'TEST', supplierName: supplier.name,
+      weightKgNet: 1, weightKgSum: 1, weightKgPackage: 0, sack: 5, sackType: 'p',
     },
   })
   const t0 = Date.now()
-  const mk = (category: 'SPOOL' | 'PALLET' | 'BOX', variant: string | null, qtyDue: number, ageMs: number) =>
+  const mk = (category: 'SPOOL' | 'PALLET' | 'BOX' | 'SACK', variant: string | null, qtyDue: number, ageMs: number) =>
     prisma.packageReturnObligation.create({
       data: {
         sourceType: 'MATERIAL_IMPORT', materialId: material.id, supplierId: supplier.id,
@@ -69,6 +75,9 @@ async function main() {
   const oPalletWood = await mk('PALLET', 'wood', 3, 3000)
   const oBoxOld = await mk('BOX', null, 4, 2000)
   const oBoxNew = await mk('BOX', null, 3, 1000)
+  const oSackPlastic = await mk('SACK', 'plastic', 3, 900)
+  const oSackJute = await mk('SACK', 'p', 2, 800)
+  const oSackNull = await mk('SACK', null, 4, 700)
 
   try {
     const { cookie, userId } = await authenticate([MENU_KEY])
@@ -95,8 +104,8 @@ async function main() {
 
     // ── summary before ──
     let s = await summary()
-    check('นำเข้า from materials', s.imported.spoolPaper === 20 && s.imported.palletWood === 3 && s.imported.box === 9 && s.imported.sack === 2 && s.imported.paperBar === 6, s.imported)
-    check('ต้องส่งคืน grouped by column', s.due.spoolPaper === 5 && s.due.spoolUnspecified === 8 && s.due.palletWood === 3 && s.due.box === 7, s.due)
+    check('นำเข้า from materials', s.imported.spoolPaper === 20 && s.imported.palletWood === 3 && s.imported.box === 9 && s.imported.sackPlastic === 2 && s.imported.sackJute === 5 && s.imported.sackUnspecified === 0 && s.imported.paperBar === 6, s.imported)
+    check('ต้องส่งคืน grouped by column', s.due.spoolPaper === 5 && s.due.spoolUnspecified === 8 && s.due.palletWood === 3 && s.due.box === 7 && s.due.sackPlastic === 3 && s.due.sackJute === 2 && s.due.sackUnspecified === 4, s.due)
     check('คงค้าง = due before any return', s.outstanding.box === 7 && s.returned.box === 0, s.outstanding)
 
     // ── validation ──
@@ -115,10 +124,16 @@ async function main() {
     check('spool over typed+unspecified → 409 naming หลอดไม่ระบุชนิด', r.status === 409 && /หลอดไม่ระบุชนิด/.test(j.error), j)
     r = await post({ returnDate: '2026-10-05', palletSteel: 1 })
     check('pallet steel with no steel obligation spills to unspecified (none) → 409', r.status === 409)
+    r = await post({ returnDate: '2026-10-05', sackJute: 7 })
+    j = await r.json()
+    check('sack ปอ over typed+unspecified (2+4) → 409 naming กระสอบปอ + กระสอบไม่ระบุชนิด', r.status === 409 && /กระสอบปอ/.test(j.error) && /กระสอบไม่ระบุชนิด/.test(j.error), j)
+    r = await post({ returnDate: '2026-10-05', sackPlastic: 6, sackJute: 4 })
+    j = await r.json()
+    check('combined sack overflow 3+2 > unspecified 4 → 409', r.status === 409, j)
     check('rejected receipts wrote nothing', (await prisma.packageReturnReceipt.count({ where: { supplierId: supplier.id } })) === 0)
 
     // ── valid receipt: typed + overflow to unspecified + FIFO across two box obligations ──
-    r = await post({ returnDate: '2026-10-05', spoolPaper: 7, box: 5, palletWood: 1, note: 'ทดสอบ' })
+    r = await post({ returnDate: '2026-10-05', spoolPaper: 7, box: 5, palletWood: 1, sackJute: 3, note: 'ทดสอบ' })
     j = await r.json()
     check('valid receipt → 201', r.status === 201, j)
     const receiptId = j.data?.id as number
@@ -131,14 +146,18 @@ async function main() {
     check('FIFO: older box obligation filled first (4/4)', (await ob(oBoxOld.id)).qtyReturned === 4 && (await ob(oBoxOld.id)).status === 'RETURNED')
     check('FIFO: newer box obligation got remainder (1/3)', (await ob(oBoxNew.id)).qtyReturned === 1 && (await ob(oBoxNew.id)).status === 'PARTIALLY_RETURNED')
     check('pallet wood 1/3', (await ob(oPalletWood.id)).qtyReturned === 1)
+    check('sack ปอ fully returned (2/2)', (await ob(oSackJute.id)).status === 'RETURNED')
+    check('sack ปอ overflow 1 went to sack unspecified', (await ob(oSackNull.id)).qtyReturned === 1)
+    check('sack ปอ never cut from sack พลาสติก', (await ob(oSackPlastic.id)).qtyReturned === 0)
+    check('receipt stores sackJute=3, sackPlastic=0', j.data?.sackJute === 3 && j.data?.sackPlastic === 0, j.data)
     const entries = await prisma.packageReturnEntry.findMany({ where: { receiptId } })
-    check('entries linked to receipt, dated returnDate', entries.length === 5 && entries.every(e => e.returnedAt.toISOString() === '2026-10-04T17:00:00.000Z'), entries.length)
+    check('entries linked to receipt, dated returnDate', entries.length === 7 && entries.every(e => e.returnedAt.toISOString() === '2026-10-04T17:00:00.000Z'), entries.length)
 
     s = await summary()
-    check('summary updated after save', s.returned.spoolPaper === 5 && s.returned.spoolUnspecified === 2 && s.returned.box === 5 && s.outstanding.box === 2 && s.outstanding.spoolUnspecified === 6 && s.outstanding.palletWood === 2, { returned: s.returned, outstanding: s.outstanding })
+    check('summary updated after save', s.returned.spoolPaper === 5 && s.returned.spoolUnspecified === 2 && s.returned.box === 5 && s.outstanding.box === 2 && s.outstanding.spoolUnspecified === 6 && s.outstanding.palletWood === 2 && s.returned.sackJute === 2 && s.returned.sackUnspecified === 1 && s.returned.sackPlastic === 0 && s.outstanding.sackUnspecified === 3, { returned: s.returned, outstanding: s.outstanding })
 
     const list = (await (await api(`/receipts?supplierId=${supplier.id}`)).json()).data
-    check('receipt history lists it with unspecifiedSpool=2', list.length === 1 && list[0].id === receiptId && list[0].unspecifiedSpool === 2 && list[0].spoolPaper === 7, list)
+    check('receipt history lists it with unspecifiedSpool=2, unspecifiedSack=1', list.length === 1 && list[0].id === receiptId && list[0].unspecifiedSpool === 2 && list[0].unspecifiedSack === 1 && list[0].spoolPaper === 7, list)
 
     // ── single-entry cancel is blocked for receipt entries ──
     r = await api(`/entries/${entries[0].id}`, { method: 'DELETE' })
@@ -168,12 +187,12 @@ async function main() {
     check('receipt can allocate onto same-name supplier obligations', r.status === 201, await r.json())
     check('twin obligation returned', (await ob(oTwinBox.id)).status === 'RETURNED')
   } finally {
-    const obligationIds = [oSpoolPaper, oSpoolNull, oPalletWood, oBoxOld, oBoxNew].map(o => o.id)
+    const obligationIds = [oSpoolPaper, oSpoolNull, oPalletWood, oBoxOld, oBoxNew, oSackPlastic, oSackJute, oSackNull].map(o => o.id)
     if (twinObligationId) obligationIds.push(twinObligationId)
     await prisma.packageReturnEntry.deleteMany({ where: { obligationId: { in: obligationIds } } })
     await prisma.packageReturnReceipt.deleteMany({ where: { supplierId: { in: [supplier.id, ...(twinId ? [twinId] : [])] } } })
     await prisma.packageReturnObligation.deleteMany({ where: { id: { in: obligationIds } } })
-    await prisma.material.delete({ where: { id: material.id } })
+    await prisma.material.deleteMany({ where: { id: { in: [material.id, materialJute.id] } } })
     await prisma.supplier.deleteMany({ where: { id: { in: [supplier.id, ...(twinId ? [twinId] : [])] } } })
     await prisma.userPermission.deleteMany({ where: { userId: { in: userIds } } })
     await prisma.user.deleteMany({ where: { id: { in: userIds } } })

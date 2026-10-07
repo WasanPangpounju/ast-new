@@ -835,7 +835,7 @@ model PackageReturnEntry {
 
 /// ใบคืนบรรจุภัณฑ์ 1 ครั้งต่อบริษัท (แบบฟอร์มระบบเดิม = htrpackages) — จำนวนแยก 9 ชนิดตามฟอร์ม
 /// server กระจายยอดลง PackageReturnObligation ของบริษัทนั้น (เก่าสุดก่อน) เป็น PackageReturnEntry
-/// ชนิดที่ระบุหมดแล้ว ส่วนเกินของหลอด/พาเลทไปตัดรายการ "ไม่ระบุชนิด" (variant อื่น/null)
+/// ชนิดที่ระบุหมดแล้ว ส่วนเกินของหลอด/พาเลท/กระสอบไปตัดรายการ "ไม่ระบุชนิด" (variant อื่น/null)
 model PackageReturnReceipt {
   id Int @id @default(autoincrement())
 
@@ -849,7 +849,8 @@ model PackageReturnReceipt {
   palletWood    Int @default(0)
   palletSteel   Int @default(0)
   box           Int @default(0)
-  sack          Int @default(0)
+  sackPlastic   Int @default(0) // กระสอบพลาสติก (variant plastic)
+  sackJute      Int @default(0) // กระสอบปอ (variant p)
   paperBar      Int @default(0) // กระดาษกั้น
   spoolPaper    Int @default(0) // หลอดกรวย กระดาษ
   spoolPlastic  Int @default(0) // หลอดกรวย พลาสติก

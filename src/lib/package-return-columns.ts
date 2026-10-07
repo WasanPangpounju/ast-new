@@ -9,7 +9,10 @@ export const SUMMARY_COLUMNS = [
   { key: 'spoolCPaper', group: 'หลอด', label: 'กระบอก กระดาษ' },
   { key: 'spoolCPlastic', group: 'หลอด', label: 'กระบอก พลาสติก' },
   { key: 'spoolUnspecified', group: 'หลอด', label: 'ไม่ระบุชนิด' },
-  { key: 'sack', group: 'กระสอบ', label: 'พลาสติก' },
+  { key: 'sackPlastic', group: 'กระสอบ', label: 'พลาสติก' },
+  { key: 'sackJute', group: 'กระสอบ', label: 'ปอ' },
+  // shown only when non-zero — new imports always carry a sack type; only legacy rows lack one
+  { key: 'sackUnspecified', group: 'กระสอบ', label: 'ไม่ระบุชนิด', hideWhenZero: true },
   { key: 'box', group: 'กล่อง', label: '' },
   { key: 'palletWood', group: 'พาเลท', label: 'ไม้' },
   { key: 'palletSteel', group: 'พาเลท', label: 'เหล็ก' },
@@ -20,7 +23,7 @@ export const SUMMARY_COLUMNS = [
 export type ColumnKey = (typeof SUMMARY_COLUMNS)[number]['key']
 export type ColumnTotals = Record<ColumnKey, number>
 
-type UnspecifiedKey = 'spoolUnspecified' | 'palletUnspecified'
+type UnspecifiedKey = 'spoolUnspecified' | 'palletUnspecified' | 'sackUnspecified'
 
 /** 9 form fields, in the legacy form's order. Field keys double as PackageReturnReceipt columns
  *  and as the summary column they return against. `fallback` = the "ไม่ระบุชนิด" column that
@@ -29,7 +32,8 @@ export const RETURN_FIELDS = [
   { key: 'palletWood', label: 'พาเลทไม้', fallback: 'palletUnspecified' },
   { key: 'palletSteel', label: 'พาเลทเหล็ก', fallback: 'palletUnspecified' },
   { key: 'box', label: 'กล่อง', fallback: null },
-  { key: 'sack', label: 'กระสอบ', fallback: null },
+  { key: 'sackPlastic', label: 'กระสอบพลาสติก', fallback: 'sackUnspecified' },
+  { key: 'sackJute', label: 'กระสอบปอ', fallback: 'sackUnspecified' },
   { key: 'paperBar', label: 'กระดาษกั้น', fallback: null },
   { key: 'spoolPaper', label: 'กรวยกระดาษ', fallback: 'spoolUnspecified' },
   { key: 'spoolPlastic', label: 'กรวยพลาสติก', fallback: 'spoolUnspecified' },
@@ -43,6 +47,7 @@ export type FieldQty = Record<FieldKey, number>
 const UNSPECIFIED_LABEL: Record<UnspecifiedKey, string> = {
   spoolUnspecified: 'หลอดไม่ระบุชนิด',
   palletUnspecified: 'พาเลทไม่ระบุชนิด',
+  sackUnspecified: 'กระสอบไม่ระบุชนิด',
 }
 
 export function emptyTotals(): ColumnTotals {
@@ -50,8 +55,7 @@ export function emptyTotals(): ColumnTotals {
 }
 
 /** Which summary column an obligation / material row counts toward. Unknown or missing
- *  subtypes of SPOOL/PALLET land in "ไม่ระบุชนิด"; SACK has a single column for every subtype
- *  (legacy labels it พลาสติก but sums all sacks, and the form has one กระสอบ field). */
+ *  subtypes of SPOOL/PALLET/SACK land in that group's "ไม่ระบุชนิด" column. */
 export function columnOf(category: string, variant: string | null | undefined): ColumnKey {
   switch (category) {
     case 'SPOOL':
@@ -65,7 +69,9 @@ export function columnOf(category: string, variant: string | null | undefined): 
       if (variant === 'steel') return 'palletSteel'
       return 'palletUnspecified'
     case 'SACK':
-      return 'sack'
+      if (variant === 'plastic') return 'sackPlastic'
+      if (variant === 'p') return 'sackJute' // 'p' = ปอ (jute), the value the import/outside forms store
+      return 'sackUnspecified'
     case 'BOX':
       return 'box'
     default:

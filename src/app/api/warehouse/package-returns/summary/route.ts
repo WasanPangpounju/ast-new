@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     const [materialGroups, obligations] = await Promise.all([
       prisma.material.groupBy({
-        by: ['spoolType', 'palletType'],
+        by: ['spoolType', 'palletType', 'sackType'],
         where: { supplierName: supplier.name, deletedAt: null },
         _sum: { spool: true, pallet: true, box: true, sack: true, paperBar: true },
       }),
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
       imported[columnOf('SPOOL', g.spoolType)] += g._sum.spool ?? 0
       imported[columnOf('PALLET', g.palletType)] += g._sum.pallet ?? 0
       imported.box += g._sum.box ?? 0
-      imported.sack += g._sum.sack ?? 0
+      imported[columnOf('SACK', g.sackType)] += g._sum.sack ?? 0
       imported.paperBar += g._sum.paperBar ?? 0
     }
 

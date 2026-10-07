@@ -35,6 +35,7 @@ type Receipt = Record<FieldKey, number> & {
   note: string | null;
   unspecifiedSpool: number;
   unspecifiedPallet: number;
+  unspecifiedSack: number;
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -319,12 +320,24 @@ export default function SupplierReturnPanel() {
 
 // ─── Summary Table ──────────────────────────────────────────────────────────────
 
-const GROUPS = SUMMARY_COLUMNS.reduce<{ group: string; span: number }[]>((acc, c) => {
-  const last = acc[acc.length - 1];
-  if (last && last.group === c.group) last.span++;
-  else acc.push({ group: c.group, span: 1 });
-  return acc;
-}, []);
+type SummaryColumn = (typeof SUMMARY_COLUMNS)[number];
+
+// "hideWhenZero" columns (กระสอบไม่ระบุชนิด) appear only if any row has a value for them.
+function visibleColumns(summary?: Summary): SummaryColumn[] {
+  return SUMMARY_COLUMNS.filter((c) =>
+    !("hideWhenZero" in c) ||
+    (!!summary && SUMMARY_ROWS.some((r) => summary[r.key][c.key] !== 0))
+  );
+}
+
+function groupsOf(columns: SummaryColumn[]) {
+  return columns.reduce<{ group: string; span: number }[]>((acc, c) => {
+    const last = acc[acc.length - 1];
+    if (last && last.group === c.group) last.span++;
+    else acc.push({ group: c.group, span: 1 });
+    return acc;
+  }, []);
+}
 
 const SUMMARY_ROWS: { key: keyof Omit<Summary, "supplier">; label: string; cls: string }[] = [
   { key: "imported", label: "นำเข้า", cls: "text-gray-700" },
@@ -337,34 +350,35 @@ function SummaryTable({ supplierSelected, summary, loading, error }: {
   supplierSelected: boolean; summary?: Summary; loading: boolean; error: string | null;
 }) {
   const th = "px-2 py-2 font-medium text-gray-600 border border-gray-200 text-center";
+  const columns = visibleColumns(summary);
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200">
       <table className="w-full text-xs border-collapse">
         <thead className="bg-gray-50">
           <tr>
             <th rowSpan={2} className={`${th} text-left min-w-[120px]`}>บริษัท</th>
-            {GROUPS.map((g) => (
+            {groupsOf(columns).map((g) => (
               <th key={g.group} colSpan={g.span} className={th}>{g.group}</th>
             ))}
           </tr>
           <tr>
-            {SUMMARY_COLUMNS.map((c) => (
+            {columns.map((c) => (
               <th key={c.key} className={`${th} whitespace-nowrap`}>{c.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {!supplierSelected ? (
-            <tr><td colSpan={SUMMARY_COLUMNS.length + 1} className="text-center py-8 text-gray-400">เลือกบริษัทเพื่อดูยอด</td></tr>
+            <tr><td colSpan={columns.length + 1} className="text-center py-8 text-gray-400">เลือกบริษัทเพื่อดูยอด</td></tr>
           ) : loading ? (
-            <tr><td colSpan={SUMMARY_COLUMNS.length + 1} className="text-center py-8 text-gray-400">กำลังโหลด...</td></tr>
+            <tr><td colSpan={columns.length + 1} className="text-center py-8 text-gray-400">กำลังโหลด...</td></tr>
           ) : error ? (
-            <tr><td colSpan={SUMMARY_COLUMNS.length + 1} className="text-center py-8 text-red-400">{error}</td></tr>
+            <tr><td colSpan={columns.length + 1} className="text-center py-8 text-red-400">{error}</td></tr>
           ) : summary ? (
             SUMMARY_ROWS.map((r) => (
               <tr key={r.key} className={r.cls}>
                 <td className="px-2 py-2 border border-gray-200 whitespace-nowrap">{r.label}</td>
-                {SUMMARY_COLUMNS.map((c) => {
+                {columns.map((c) => {
                   const v = summary[r.key][c.key];
                   return (
                     <td key={c.key} className={`px-2 py-2 border border-gray-200 text-right ${r.key === "outstanding" && v > 0 ? "text-red-600" : ""}`}>
@@ -518,6 +532,7 @@ function ReceiptHistory({ supplierId, receipts, loading, error }: {
                 const unspecified = [
                   r.unspecifiedSpool > 0 ? `หลอด ${r.unspecifiedSpool}` : "",
                   r.unspecifiedPallet > 0 ? `พาเลท ${r.unspecifiedPallet}` : "",
+                  r.unspecifiedSack > 0 ? `กระสอบ ${r.unspecifiedSack}` : "",
                 ].filter(Boolean).join(", ");
                 return (
                   <tr key={r.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>

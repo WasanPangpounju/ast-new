@@ -23,7 +23,8 @@ const bodySchema = z.object({
   palletWood: qtyField,
   palletSteel: qtyField,
   box: qtyField,
-  sack: qtyField,
+  sackPlastic: qtyField,
+  sackJute: qtyField,
   paperBar: qtyField,
   spoolPaper: qtyField,
   spoolPlastic: qtyField,
@@ -69,12 +70,14 @@ export async function GET(request: NextRequest) {
     const data = receipts.map(({ entries, ...r }) => {
       let unspecifiedSpool = 0
       let unspecifiedPallet = 0
+      let unspecifiedSack = 0
       for (const e of entries) {
         const col = columnOf(e.obligation.category, e.obligation.variant)
         if (col === 'spoolUnspecified') unspecifiedSpool += e.qty
         if (col === 'palletUnspecified') unspecifiedPallet += e.qty
+        if (col === 'sackUnspecified') unspecifiedSack += e.qty
       }
-      return { ...r, unspecifiedSpool, unspecifiedPallet }
+      return { ...r, unspecifiedSpool, unspecifiedPallet, unspecifiedSack }
     })
 
     return Response.json({ success: true, data })
@@ -91,7 +94,7 @@ export async function GET(request: NextRequest) {
 // ─── POST /api/warehouse/package-returns/receipts ────────────────────────────
 // Records one ใบคืน and allocates it, oldest obligation first, onto the supplier's open
 // MATERIAL_IMPORT obligations: each field first against its own subtype column, the overflow
-// of หลอด/พาเลท against "ไม่ระบุชนิด". Any over-return rejects the whole receipt (409).
+// of หลอด/พาเลท/กระสอบ against "ไม่ระบุชนิด". Any over-return rejects the whole receipt (409).
 
 export async function POST(request: NextRequest) {
   let emp: string | null
