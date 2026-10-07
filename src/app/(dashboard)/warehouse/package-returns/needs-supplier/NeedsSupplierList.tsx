@@ -28,7 +28,7 @@ const CATEGORY_LABEL: Record<Obligation["category"], string> = {
   BOX: "กล่อง",
   SACK: "กระสอบ",
   SPOOL: "หลอด",
-  PAPER_BAR: "แกนกระดาษ",
+  PAPER_BAR: "กระดาษกั้น",
 };
 
 const SOURCE_LABEL: Record<Obligation["sourceType"], string> = {

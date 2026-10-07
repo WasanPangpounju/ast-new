@@ -84,6 +84,7 @@ model Supplier {
   packages                 Package[]
   fabricReturns            FabricReturn[]
   packageReturnObligations PackageReturnObligation[]
+  packageReturnReceipts    PackageReturnReceipt[]
 
   @@map("suppliers")
 }
@@ -814,6 +815,10 @@ model PackageReturnEntry {
   obligationId Int
   obligation   PackageReturnObligation @relation(fields: [obligationId], references: [id])
 
+  /// ใบคืนที่ entry นี้ถูกกระจายมาจาก — null = บันทึกคืนรายแถวแบบเดิม (ก่อนมีใบคืน / แท็บเบิกภายนอก)
+  receiptId    Int?
+  receipt      PackageReturnReceipt? @relation(fields: [receiptId], references: [id])
+
   qty        Int // จำนวนที่คืนจริงครั้งนี้ (> 0 เสมอ — validate ที่ API)
   returnedAt DateTime @default(now())
   emp        String? // ผู้บันทึกการคืน
@@ -824,7 +829,41 @@ model PackageReturnEntry {
   deletedAt DateTime? // soft delete: ยกเลิกรายการคืน = set deletedAt + reverse ผลที่ obligation
 
   @@index([obligationId])
+  @@index([receiptId])
   @@map("package_return_entries")
+}
+
+/// ใบคืนบรรจุภัณฑ์ 1 ครั้งต่อบริษัท (แบบฟอร์มระบบเดิม = htrpackages) — จำนวนแยก 9 ชนิดตามฟอร์ม
+/// server กระจายยอดลง PackageReturnObligation ของบริษัทนั้น (เก่าสุดก่อน) เป็น PackageReturnEntry
+/// ชนิดที่ระบุหมดแล้ว ส่วนเกินของหลอด/พาเลทไปตัดรายการ "ไม่ระบุชนิด" (variant อื่น/null)
+model PackageReturnReceipt {
+  id Int @id @default(autoincrement())
+
+  supplierId Int
+  supplier   Supplier @relation(fields: [supplierId], references: [id])
+
+  returnDate DateTime // เที่ยงคืนเวลาไทย (+07:00) ของวันที่คืน — ดู lib/bangkokDate.ts
+  emp        String? // ผู้บันทึก (จาก session)
+  note       String?
+
+  palletWood    Int @default(0)
+  palletSteel   Int @default(0)
+  box           Int @default(0)
+  sack          Int @default(0)
+  paperBar      Int @default(0) // กระดาษกั้น
+  spoolPaper    Int @default(0) // หลอดกรวย กระดาษ
+  spoolPlastic  Int @default(0) // หลอดกรวย พลาสติก
+  spoolCPaper   Int @default(0) // หลอดทรงกระบอก กระดาษ
+  spoolCPlastic Int @default(0) // หลอดทรงกระบอก พลาสติก
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete: ยกเลิกใบคืน = soft delete entries ทั้งใบ + reverse ผลที่ obligation
+
+  entries PackageReturnEntry[]
+
+  @@index([supplierId, returnDate])
+  @@map("package_return_receipts")
 }
 
 // ─── AUDIT ───────────────────────────────────────────

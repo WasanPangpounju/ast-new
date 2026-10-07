@@ -3,6 +3,7 @@ import { Fragment, useEffect, useState } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { useLoadMoreSentinel } from "@/hooks/useLoadMoreSentinel";
 import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
+import SupplierReturnPanel from "./SupplierReturnPanel";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,7 @@ const CATEGORY_LABEL: Record<Category, string> = {
   BOX: "กล่อง",
   SACK: "กระสอบ",
   SPOOL: "หลอด",
-  PAPER_BAR: "แกนกระดาษ",
+  PAPER_BAR: "กระดาษกั้น",
 };
 
 const STATUS_LABEL: Record<Status, string> = {
@@ -94,7 +95,11 @@ export default function PackageReturnsRecord({ emp }: { emp: string }) {
     <div className="p-4 max-w-full">
       <div className="mb-4">
         <h1 className="text-3xl font-semibold text-gray-900">บันทึกคืนบรรจุภัณฑ์</h1>
-        <p className="text-sm text-gray-500">รายการค้างคืนที่ทราบคู่ค้าแล้ว — บันทึกจำนวนที่คืนจริงในแต่ละครั้ง</p>
+        <p className="text-sm text-gray-500">
+          {tab === "MATERIAL_IMPORT"
+            ? "เลือกบริษัทเพื่อดูยอดคงค้าง แล้วบันทึกจำนวนที่คืนแยกตามชนิด"
+            : "รายการค้างคืนที่ทราบคู่ค้าแล้ว — บันทึกจำนวนที่คืนจริงในแต่ละครั้ง"}
+        </p>
       </div>
 
       <div className="flex border-b border-gray-200 mb-4">
@@ -114,7 +119,11 @@ export default function PackageReturnsRecord({ emp }: { emp: string }) {
         ))}
       </div>
 
-      <ObligationTable key={tab} sourceType={tab} emp={emp} />
+      {tab === "MATERIAL_IMPORT" ? (
+        <SupplierReturnPanel />
+      ) : (
+        <ObligationTable key={tab} sourceType={tab} emp={emp} />
+      )}
     </div>
   );
 }

@@ -37,6 +37,26 @@ export async function resolveSupplierId(
     : { supplierId: null, needsSupplierAssignment: true }
 }
 
+/** All live Supplier ids with the same name as `supplierId`. The suppliers table has exact
+ *  duplicate names (e.g. ids 54/55), and resolveSupplierId above may attach obligations to
+ *  either one, so the per-company return page treats a name as one company. */
+export async function supplierIdsSharingName(
+  tx: TxClient,
+  supplierId: number
+): Promise<{ name: string; ids: number[] } | null> {
+  const supplier = await tx.supplier.findFirst({
+    where: { id: supplierId, deletedAt: null },
+    select: { name: true },
+  })
+  if (!supplier) return null
+
+  const same = await tx.supplier.findMany({
+    where: { name: supplier.name, deletedAt: null },
+    select: { id: true },
+  })
+  return { name: supplier.name, ids: same.map(s => s.id) }
+}
+
 interface PackagingSource {
   id: number
   pallet: number | null

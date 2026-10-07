@@ -35,6 +35,10 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
     const result = await prisma.$transaction(async tx => {
       const initialEntry = await tx.packageReturnEntry.findUnique({ where: { id: entryId } })
       if (!initialEntry) throw new PackageReturnError('ไม่พบรายการคืน', 404)
+      // Part of a ใบคืน — cancelling one entry alone would leave the receipt's quantities wrong.
+      if (initialEntry.receiptId !== null) {
+        throw new PackageReturnError(`รายการนี้อยู่ในใบคืน #${initialEntry.receiptId} — ให้ยกเลิกทั้งใบคืนแทน`, 409)
+      }
 
       // Lock the obligation row first — any concurrent cancel of the same entry necessarily
       // targets the same obligationId, so this lock serializes them.
