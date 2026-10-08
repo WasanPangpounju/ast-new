@@ -48,3 +48,6 @@ next-env.d.ts
 # customer-data exports (investigation/report scratch space — never commit)
 /backups/
 /scripts/exports/
+
+# migrate-legacy-packages.ts default report output
+legacy-package-report-*/

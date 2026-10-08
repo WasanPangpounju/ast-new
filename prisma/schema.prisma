@@ -593,37 +593,72 @@ model Package {
   sack          Int?
   box           Int?
   pallet        Int?
-  packageStatus String?
+  packageStatus String? // ระบบเดิมเก็บ importStatus ของใบรับเข้า (เลขบิล/lot ref)
+  /// MySQL packages.supplier_id — ระบบเดิมเก็บวันที่บันทึก m/d/Y ไว้ในคอลัมน์นี้ ไม่ใช่ id บริษัท
+  legacyDate    String?
+  /// materials.id ของใบรับเข้าที่แถวนี้เกิดพร้อมกัน — ระบบเดิมไม่มี ref จึงจับคู่ตอนย้ายข้อมูล
+  /// (ชื่อบริษัท+เวลา) ไม่ผูก FK เพราะระบบเดิมมีใบรับเข้าที่ถูกลบไปแล้วแต่แถวนี้ยังอยู่
+  materialId    Int?
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   supplier Supplier? @relation(fields: [supplierId], references: [id])
 
   @@index([supplierId])
+  @@index([materialId])
   @@map("packages")
 }
 
-/// Historical package records before the Package system was introduced
+/// ใบคืนบรรจุภัณฑ์ของระบบเดิม (ย้ายมาจาก MySQL htrpackages) — ช่องไม่มีชนิด (spool/sack/pallet)
+/// กับช่องแยกชนิดเก็บแยกกันตามระบบเดิม; receiptId = ใบคืนในระบบใหม่ที่สร้างจากแถวนี้
 model HtrPackage {
-  id           Int      @id @default(autoincrement())
-  supplierName String?
-  emp          String?
-  spool        Int?
-  sack         Int?
-  box          Int?
-  pallet       Int?
-  createDate   DateTime @default(now())
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id            Int      @id @default(autoincrement())
+  supplierName  String?
+  emp           String?
+  spool         Int?
+  sack          Int?
+  box           Int?
+  pallet        Int?
+  partition     Int?
+  spoolPaper    Int      @default(0)
+  spoolPlastic  Int      @default(0)
+  spoolCPaper   Int      @default(0)
+  spoolCPlastic Int      @default(0)
+  palletWood    Int      @default(0)
+  palletSteel   Int      @default(0)
+  createDate    DateTime @default(now())
+  receiptId     Int?     @unique
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  receipt PackageReturnReceipt? @relation(fields: [receiptId], references: [id])
 
   @@map("htrpackages")
 }
 
+/// บรรจุภัณฑ์รายใบรับเข้าของระบบเดิม (ย้ายมาจาก MySQL packageasts) — ใบรับเข้า 1 ใบมี 2 แถว:
+/// packageImport = ที่มากับของ, packageReturn = ที่ต้องส่งคืน; แหล่งชนิดย่อยของใบรับเข้าเก่า
 model PackageAst {
-  id        Int      @id @default(autoincrement())
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id            Int      @id @default(autoincrement())
+  emp           String?
+  /// materials.id ตามระบบเดิม — ไม่ผูก FK: 11 ใบรับเข้าถูกลบจาก materials ไปแล้วแต่แถวนี้ยังอยู่
+  refId         Int      @map("ref_id")
+  supplierName  String?
+  spool         Int?
+  spoolType     String?
+  sack          Int?
+  sackType      String?
+  box           Int?
+  boxType       String?
+  pallet        Int?
+  palletType    String?
+  partition     Int?
+  partitionType String?
+  packageStatus String? // "packageImport" | "packageReturn"
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
+  @@index([refId, packageStatus])
   @@map("packageasts")
 }
 
@@ -797,12 +832,16 @@ model PackageReturnObligation {
   status      PackageReturnStatus @default(PENDING)
 
   note      String?
+  /// ยอดยกมาจากระบบเดิม: "packageasts:<id>" (มีชนิดย่อย) หรือ "packages:<id>" (ก่อนมี packageasts)
+  /// — null = สร้างในระบบใหม่; ใช้ระบุแถวตอน rollback สคริปต์ migrate-legacy-packages
+  legacyRef String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // soft delete
 
   entries PackageReturnEntry[]
 
+  @@unique([legacyRef, category])
   @@index([supplierId, status])
   @@index([materialId])
   @@index([materialOutsideId])
@@ -861,7 +900,8 @@ model PackageReturnReceipt {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime? // soft delete: ยกเลิกใบคืน = soft delete entries ทั้งใบ + reverse ผลที่ obligation
 
-  entries PackageReturnEntry[]
+  entries    PackageReturnEntry[]
+  htrPackage HtrPackage?
 
   @@index([supplierId, returnDate])
   @@map("package_return_receipts")
