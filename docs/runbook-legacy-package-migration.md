@@ -1,7 +1,7 @@
 # Runbook: ย้ายยอดบรรจุภัณฑ์ระบบเดิมขึ้น prod
 
 สคริปต์: `scripts/migrate-legacy-packages.ts` (ย้าย) และ `scripts/verify-legacy-packages.ts` (ตรวจ, อ่านอย่างเดียว)
-Branch: `feature/package-return-receipts`
+Branch: `feature/package-return-receipts` + `fix/material-entry-date-off-by-one` ขึ้นพร้อมกันผ่าน `main` (ทาง A ที่เลือก 2026-10-08)
 
 **ตารางที่ถูกเขียน:** `packages`, `packageasts`, `htrpackages`, `package_return_obligations`, `package_return_receipts`, `package_return_entries`
 **อ่านอย่างเดียว:** `materials`, `suppliers`
@@ -56,10 +56,16 @@ b3b5284ffb17d2550af865b2723aaa98b4fc1213392263c77858ef79b4758657  /root/pkgmig/i
 ### P3. ไปที่โฟลเดอร์ repo และตรวจ `.env`
 
 ```sh
-cd <โฟลเดอร์ repo บน server>
+cd /home/deploy/ast-new
 ```
 
-(ที่เดียวใน runbook ที่ต้องแก้ข้อความก่อนวาง ทุกคำสั่งต่อจากนี้รันจากโฟลเดอร์นี้ ถ้าเปิด ssh ใหม่ให้ `cd` มาที่นี่ก่อน)
+(ทุกคำสั่งต่อจากนี้รันจากโฟลเดอร์นี้ ถ้าเปิด ssh ใหม่ให้ `cd` มาที่นี่ก่อน)
+
+```sh
+git log -1 --format='%h %s'
+```
+
+ต้องเห็น: `5c2bda4 fix: place inch mark right after the fabric width number on print` (รุ่นที่ prod รันอยู่ ตรวจแล้ว 2026-10-08) ถ้าไม่ใช่ให้หยุด เพราะการตรวจทั้งหมดในขั้น 0 อิงจากรุ่นนี้
 
 ```sh
 ls docker-compose.prod.yml .env
@@ -86,12 +92,99 @@ docker network ls --format '{{.Name}}' | grep '_ast_net$'
 ลำดับที่ขอมาคือ backup > deploy โค้ด > migration > dry-run > apply > verify > ตรวจหน้าจอ ผมแยก "deploy โค้ด" เป็น 2 จังหวะ: build image ก่อน → รัน migration → ค่อยสลับ app เป็นตัวใหม่
 **เหตุผล:** โค้ดใหม่ query คอลัมน์และตารางที่ migration เพิ่ม ถ้าสลับ app ก่อน หน้าคืนบรรจุภัณฑ์จะ error จนกว่า migration จะเสร็จ ส่วนโค้ดเดิมทำงานกับ schema ใหม่ได้ เพราะ migration ทั้งสองตัวเป็นแบบเพิ่มอย่างเดียว
 
-### 0. รวม branch (เครื่องคุณ)
+### 0. รวม branch เข้า main และ push (เครื่องคุณ)
 
-- merge `fix/material-entry-date-off-by-one` (1 commit: 1f2196c) และ `feature/package-return-receipts` เข้า `main` แล้ว push แล้ว deploy พร้อมกันในรอบเดียว
-- สองตัวนี้ไม่ขึ้นต่อกัน: fix branch ไม่มี migration และไม่ได้แก้ไฟล์ที่งานนี้ใช้ ไฟล์ที่ซ้ำกันมีไฟล์เดียวคือ `src/lib/bangkokDate.ts` ซึ่งเนื้อหาเหมือนกันทุกตัวอักษร (ตรวจด้วย `git merge-tree` แล้ว ไม่มี conflict)
-- ถ้าจะแยก deploy: ลำดับไหนก็ได้ แต่ deploy รอบเดียวจะมีช่วงหยุดระบบแค่ครั้งเดียว
-- ข้อควรระวังของ fix branch เอง: การตรวจ prod หาแถว importDate ที่เพี้ยนไปแล้ว ยังค้างอยู่ (ไม่เกี่ยวกับงานนี้)
+**ทาง A: ขึ้นทุกอย่างพร้อมกันผ่าน `main`** ผลตรวจ 2026-10-08 ที่ใช้ตัดสิน:
+
+- prod รัน `5c2bda4` = `main` = `origin/main` (ยืนยันด้วย `git log -1` บน server) และฐานข้อมูล prod มี migration ครบทั้ง 30 ตัวของ main (จาก backup 2026-10-07) ดังนั้นสิ่งที่ขึ้นรอบนี้คือ commit ด้านล่างเท่านั้น ไม่มีงานอื่นของ main ติดไปด้วย
+- `feature/package-return-receipts` แตกจาก `5c2bda4` พอดี → merge เข้า main แบบ fast-forward
+- `fix/material-entry-date-off-by-one` แตกจาก `f7716ea` (เก่ากว่า) → merge commit 1 ตัว ไม่มี conflict ไฟล์ที่ซ้ำกันมีแค่ `src/lib/bangkokDate.ts` ซึ่งเหมือนกันทุกตัวอักษร
+- ลอง merge ทั้งสองบน branch ชั่วคราวแล้ว: vitest 9/9 ผ่าน, `tsc` error 20 ตัวเท่ากับ main เดิม (ของเดิมทั้งหมด ไม่มีใหม่), `next build` ผ่าน
+- migration ที่ prod ยังไม่มี: **2 ตัว** ของงานบรรจุภัณฑ์ทั้งคู่ (ขั้น 3) fix branch และ main ไม่มี migration ใหม่
+- **ไม่มีงาน UI Phase 2** ในชุดนี้ ถ้าคำสั่งตรวจด้านล่างเห็น commit อื่นนอกจากรายการ ให้หยุด
+
+commit ที่จะขึ้น (10 ตัว = งานบรรจุภัณฑ์ 7 + runbook 1 + fix 1 + merge commit 1):
+
+```
+3ec37fb feat: legacy-style supplier package return with summary table and return receipts
+31a9f09 feat: split sack returns into plastic, jute and unspecified
+fd716e3 feat: show legacy import subtypes and paper bar from packageasts in package return summary
+ba8782e feat: migrate legacy packaging tables with carried-forward balances and receipts
+e953815 docs: prod runbook for the legacy package migration
+27ed9d8 feat: carried-forward obligations follow the import's current company
+dd5281a docs: runbook reads the prod DB password from .env, URL-encoded, never on the command line
+(runbook) docs: runbook for deploy option A (everything via main)
+1f2196c fix: pin material importDate to Bangkok calendar date to stop off-by-one shift
+(merge)   Merge branch 'fix/material-entry-date-off-by-one'
+```
+
+รันจากโฟลเดอร์ repo บนเครื่องคุณ (`~/project/ast-new`):
+
+```sh
+git fetch origin
+```
+
+```sh
+git rev-parse --short origin/main
+```
+
+ต้องเห็น: `5c2bda4` ถ้าไม่ใช่ แปลว่ามีคน push เข้า main หลังตรวจ ให้หยุดและตรวจใหม่
+
+```sh
+git switch main
+```
+
+```sh
+git merge --ff-only origin/main
+```
+
+ต้องเห็น: `Already up to date.`
+
+```sh
+git merge --ff-only docs/runbook-option-a
+```
+
+ต้องเห็น: `Fast-forward` (branch นี้คือ `feature/package-return-receipts` + commit runbook นี้)
+
+```sh
+git merge --no-ff fix/material-entry-date-off-by-one -m "Merge branch 'fix/material-entry-date-off-by-one'"
+```
+
+ต้องเห็น: `Merge made by the 'ort' strategy.` ไม่มี `CONFLICT`
+
+```sh
+git rev-list --count 5c2bda4..HEAD
+```
+
+ต้องเห็น: `10`
+
+```sh
+git log --oneline 5c2bda4..HEAD
+```
+
+ต้องเห็น: 10 บรรทัดตรงกับรายการด้านบน ไม่มี commit ของงานอื่น (เช่น UI Phase 2)
+
+```sh
+git diff --name-only 5c2bda4 HEAD -- prisma/migrations
+```
+
+ต้องเห็น: ไฟล์ของ 2 โฟลเดอร์นี้เท่านั้น `20261007090000_add_package_return_receipts` และ `20261007120000_legacy_package_columns`
+
+```sh
+npx vitest run
+```
+
+ต้องเห็น: `Tests  9 passed (9)`
+
+```sh
+git push origin main
+```
+
+ต้องเห็น: `5c2bda4..<hash>  main -> main`
+
+ถ้าพบปัญหาก่อน push: `git reset --hard origin/main` (บน main ในเครื่องคุณ ยังไม่มีอะไรขึ้น server)
+
+ข้อควรระวังของ fix branch เอง: การตรวจ prod หาแถว importDate ที่เพี้ยนไปแล้ว ยังค้างอยู่ เป็นงานแยก ไม่ขวางรอบนี้
 
 ### 1. Backup (server)
 
@@ -138,8 +231,30 @@ docker image ls ast-new-app:pre-pkgmig
 ### 2. Build image และเตรียมการต่อฐานข้อมูล (ยังไม่สลับ app)
 
 ```sh
-git pull --ff-only
+stat -c '%U' .git
 ```
+
+ต้องเห็น: ชื่อเจ้าของ repo (`root` หรือ `deploy`) ใช้เลือกคำสั่งถัดไป
+
+```sh
+git pull --ff-only origin main
+```
+
+(ใช้เมื่อเจ้าของคือ `root` ถ้าเป็น `deploy` ให้ใช้คำสั่งนี้แทน: `sudo -u deploy git pull --ff-only origin main` เพื่อไม่ให้ไฟล์ใน repo กลายเป็นของ root)
+
+ต้องเห็น: `Updating 5c2bda4..<hash>` และ `Fast-forward`
+
+```sh
+git rev-list --count 5c2bda4..HEAD
+```
+
+ต้องเห็น: `10` (ตรงกับขั้น 0)
+
+```sh
+git log --oneline 5c2bda4..HEAD
+```
+
+ต้องเห็น: 10 บรรทัดเดียวกับขั้น 0 ไม่มี commit ของงานอื่น ถ้าไม่ตรงให้หยุด (ยังไม่ได้ build อะไร app ตัวเดิมยังรันอยู่) และย้อน repo ด้วย `git reset --hard 5c2bda4`
 
 ```sh
 git merge-base --is-ancestor 1f2196c HEAD && test -f scripts/legacy-packages/tool.sh && echo READY
@@ -404,6 +519,8 @@ echo $?
 | จงสถิตย์ | ต้องส่งคืน กระดาษกั้น 0 · พาเลทเหล็ก 0 (ย้ายไปแพรกษาตามใบรับเข้า 1218) |
 
 สำหรับ "จีน": ตัวเลขบนจอรวมใบรับเข้าหลังวันตัดยอดด้วย ส่วนเฉพาะยอดระบบเดิมจะตรงกับหน้าจอระบบเดิมเป็นรายกลุ่ม
+
+**ตรวจ fix วันที่นำเข้า (`1f2196c`, ไม่เขียนข้อมูล):** เปิด "ประวัติการนำเข้าวัตถุดิบ" เลือกรายการใดก็ได้ กดแก้ไข แล้ว**ปิดโดยไม่บันทึก** — วันที่ในฟอร์มต้องตรงกับวันที่ในตาราง (ก่อน fix ฟอร์มแสดงเร็วไป 1 วัน)
 
 ผ่านแล้วจึงแจ้งผู้ใช้ว่าบันทึกใบคืนได้
 
