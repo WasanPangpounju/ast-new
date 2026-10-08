@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import AutocompleteInput from "@/components/AutocompleteInput";
 import ThaiDatePicker from "@/components/ThaiDatePicker";
 import ConfirmSubmitModal, { ConfirmRow } from "@/components/ConfirmSubmitModal";
+import { bangkokYmd } from "@/lib/bangkokDate";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -171,7 +172,7 @@ const FIELD_IDS: Partial<Record<string, string>> = {
 interface Props { emp: string }
 
 export default function MaterialCreateForm({ emp }: Props) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = bangkokYmd(new Date()); // not toISOString(): that is yesterday before 07:00 Bangkok
   const router = useRouter();
   const formRef = useRef<HTMLDivElement>(null);
   const [form, setForm] = useState<FormState>(() => makeEmpty(today, emp));

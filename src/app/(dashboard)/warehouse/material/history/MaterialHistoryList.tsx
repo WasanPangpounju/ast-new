@@ -6,6 +6,7 @@ import AutocompleteInput from "@/components/AutocompleteInput";
 import { useFieldSuggestions } from "@/hooks/useFieldSuggestions";
 import { useLoadMoreSentinel } from "@/hooks/useLoadMoreSentinel";
 import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
+import { bangkokYmd } from "@/lib/bangkokDate";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -80,10 +81,9 @@ const emptyFilters: Filters = { lot: "", yarnType: "", supplierName: "", emp: ""
 function fmtDate(iso: string | null | undefined) {
   if (!iso) return "-";
   try {
-    const d = new Date(iso);
-    return `${d.getDate().toString().padStart(2, "0")}/${(d.getMonth() + 1)
-      .toString()
-      .padStart(2, "0")}/${d.getFullYear() + 543}`;
+    // Bangkok calendar date — same source as the edit input (toEditState), so they never disagree
+    const [y, m, d] = bangkokYmd(iso).split("-");
+    return `${d}/${m}/${Number(y) + 543}`;
   } catch { return "-"; }
 }
 
@@ -111,7 +111,8 @@ function toEditState(m: Material) {
     sack:            String(m.sack ?? ""),
     emp:             m.emp ?? "",
     note:            m.note ?? "",
-    importDate:      m.importDate ? m.importDate.slice(0, 10) : "",
+    // not importDate.slice(0,10): synced rows are Bangkok midnight = D-1T17:00Z, slicing gave D-1
+    importDate:      m.importDate ? bangkokYmd(m.importDate) : "",
   };
 }
 
