@@ -2,14 +2,26 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { requirePermission, PermissionError } from '@/lib/permissions'
 import { supplierIdsSharingName } from '@/lib/package-return-obligations'
-import { columnOf, emptyTotals, SUMMARY_COLUMNS, type ColumnTotals } from '@/lib/package-return-columns'
+import { columnOf, emptyTotals, importedTotals, SUMMARY_COLUMNS, type ColumnTotals, type ImportSource } from '@/lib/package-return-columns'
 import type { NextRequest } from 'next/server'
 
 // ─── GET /api/warehouse/package-returns/summary?supplierId= ──────────────────
 // Per-supplier summary table of the legacy page: นำเข้า / ต้องส่งคืน / คืนแล้ว / คงค้าง.
 // นำเข้า = all packaging on that supplier's materials (returnable or not), matched by name
-// since Material.supplierName is free text. The other three rows come from the supplier's
+// since Material.supplierName is free text; materials from the legacy system carry no subtype,
+// so theirs comes from the legacy packageasts import row (see importedTotals) — read-only.
+// The other three rows come from the supplier's
 // MATERIAL_IMPORT obligations, so they include returns recorded before ใบคืน existed.
+
+interface LegacyCols {
+  lSpool: number | null
+  lSpoolType: string | null
+  lPallet: number | null
+  lPalletType: string | null
+  lSack: number | null
+  lSackType: string | null
+  lPartition: number | null
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,26 +35,33 @@ export async function GET(request: NextRequest) {
     if (!company) return Response.json({ error: 'ไม่พบบริษัท' }, { status: 404 })
     const supplier = { id: supplierId, name: company.name }
 
-    const [materialGroups, obligations] = await Promise.all([
-      prisma.material.groupBy({
-        by: ['spoolType', 'palletType', 'sackType'],
-        where: { supplierName: supplier.name, deletedAt: null },
-        _sum: { spool: true, pallet: true, box: true, sack: true, paperBar: true },
-      }),
+    const [materialRows, obligations] = await Promise.all([
+      prisma.$queryRaw<(Omit<ImportSource, 'legacy'> & LegacyCols & { legacyId: number | null })[]>`
+        SELECT m.spool, m.pallet, m.box, m.sack, m."paperBar", m."spoolType", m."palletType", m."sackType",
+               pa.id AS "legacyId", pa.spool AS "lSpool", pa."spoolType" AS "lSpoolType", pa.pallet AS "lPallet",
+               pa."palletType" AS "lPalletType", pa.sack AS "lSack", pa."sackType" AS "lSackType", pa.partition AS "lPartition"
+          FROM materials m
+          LEFT JOIN (
+            SELECT DISTINCT ON (ref_id) * FROM packageasts WHERE "packageStatus" = 'packageImport' ORDER BY ref_id, id
+          ) pa ON pa.ref_id = m.id
+         WHERE m."supplierName" = ${supplier.name} AND m."deletedAt" IS NULL
+      `,
       prisma.packageReturnObligation.findMany({
         where: { supplierId: { in: company.ids }, sourceType: 'MATERIAL_IMPORT', needsSupplierAssignment: false, deletedAt: null },
         select: { category: true, variant: true, qtyDue: true, qtyReturned: true },
       }),
     ])
 
-    const imported = emptyTotals()
-    for (const g of materialGroups) {
-      imported[columnOf('SPOOL', g.spoolType)] += g._sum.spool ?? 0
-      imported[columnOf('PALLET', g.palletType)] += g._sum.pallet ?? 0
-      imported.box += g._sum.box ?? 0
-      imported[columnOf('SACK', g.sackType)] += g._sum.sack ?? 0
-      imported.paperBar += g._sum.paperBar ?? 0
-    }
+    const imported = importedTotals(
+      materialRows.map((m) => ({
+        spool: m.spool, pallet: m.pallet, box: m.box, sack: m.sack, paperBar: m.paperBar,
+        spoolType: m.spoolType, palletType: m.palletType, sackType: m.sackType,
+        legacy: m.legacyId == null ? null : {
+          spool: m.lSpool, spoolType: m.lSpoolType, pallet: m.lPallet, palletType: m.lPalletType,
+          sack: m.lSack, sackType: m.lSackType, partition: m.lPartition,
+        },
+      }))
+    )
 
     const due = emptyTotals()
     const returned = emptyTotals()

@@ -79,6 +79,55 @@ export function columnOf(category: string, variant: string | null | undefined): 
   }
 }
 
+/** The legacy packageasts "packageImport" row of a material (only materials from the legacy system have one). */
+export interface LegacyImportRow {
+  spool: number | null
+  spoolType: string | null
+  pallet: number | null
+  palletType: string | null
+  sack: number | null
+  sackType: string | null
+  partition: number | null
+}
+
+export interface ImportSource {
+  spool: number | null
+  pallet: number | null
+  box: number | null
+  sack: number | null
+  paperBar: number | null
+  spoolType: string | null
+  palletType: string | null
+  sackType: string | null
+  legacy: LegacyImportRow | null
+}
+
+/** "นำเข้า" row of the summary. A material's own subtype wins; a legacy material (no subtype of
+ *  its own) takes subtype + quantity from its packageasts import row, capped at the material's
+ *  quantity, and the remainder goes to "ไม่ระบุชนิด". Paper bar falls back to packageasts.partition.
+ *  Read-only: materials are never updated with these values. */
+export function importedTotals(rows: ImportSource[]): ColumnTotals {
+  const t = emptyTotals()
+  for (const r of rows) {
+    const split = (category: string, qty: number | null, own: string | null, legacyQty: number | null | undefined, legacyType: string | null | undefined) => {
+      const q = qty ?? 0
+      if (own != null || !r.legacy) {
+        t[columnOf(category, own)] += q
+        return
+      }
+      const typed = Math.min(q, Math.max(0, legacyQty ?? 0))
+      t[columnOf(category, legacyType)] += typed
+      t[columnOf(category, null)] += q - typed
+    }
+    split('SPOOL', r.spool, r.spoolType, r.legacy?.spool, r.legacy?.spoolType)
+    split('PALLET', r.pallet, r.palletType, r.legacy?.pallet, r.legacy?.palletType)
+    split('SACK', r.sack, r.sackType, r.legacy?.sack, r.legacy?.sackType)
+    t.box += r.box ?? 0
+    t.paperBar += r.paperBar ?? r.legacy?.partition ?? 0
+  }
+  return t
+}
+
 export interface AllocationLine {
   field: FieldKey
   label: string

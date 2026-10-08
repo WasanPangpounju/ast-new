@@ -48,6 +48,9 @@ async function main() {
   const userIds: number[] = []
   let twinId: number | null = null
   let twinObligationId: number | null = null
+  let legacySupplierId: number | null = null
+  const legacyMaterialIds: number[] = []
+  const legacyPackageAstIds: number[] = []
   const supplier = await prisma.supplier.create({ data: { name: `${TAG} บริษัททดสอบ` } })
   const material = await prisma.material.create({
     data: {
@@ -186,7 +189,39 @@ async function main() {
     r = await post({ returnDate: '2026-10-06', box: 9 })
     check('receipt can allocate onto same-name supplier obligations', r.status === 201, await r.json())
     check('twin obligation returned', (await ob(oTwinBox.id)).status === 'RETURNED')
+
+    // ── นำเข้า for legacy materials: subtype from packageasts import row, read-only ──
+    const legacySupplier = await prisma.supplier.create({ data: { name: `${TAG} บริษัทระบบเดิม` } })
+    legacySupplierId = legacySupplier.id
+    const lm = (spool: number, extra: object = {}) => prisma.material.create({
+      data: { lot: `${TAG}-legacy`, spool, yarnType: 'TEST', supplierName: legacySupplier.name, weightKgNet: 1, weightKgSum: 1, weightKgPackage: 0, ...extra },
+    })
+    const mTyped = await lm(1000, { pallet: 10, sack: 40, box: 3 })        // packageasts gives 600 กระบอกพลาสติก
+    const mNoRow = await lm(200)                                            // no packageasts → ไม่ระบุชนิด
+    const mOwn = await lm(10, { spoolType: 'spool_paper', paperBar: 7 })    // own subtype/paperBar win
+    const mDeleted = await lm(999, { deletedAt: new Date() })               // deleted → not counted
+    legacyMaterialIds.push(mTyped.id, mNoRow.id, mOwn.id, mDeleted.id)
+    const pa = (refId: number, packageStatus: string, d: object) =>
+      prisma.packageAst.create({ data: { refId, packageStatus, supplierName: legacySupplier.name, ...d } })
+    legacyPackageAstIds.push(
+      (await pa(mTyped.id, 'packageImport', { spool: 600, spoolType: 'spoolC_plastic', pallet: 10, palletType: 'steel', sack: 40, sackType: 'p', partition: 55 })).id,
+      (await pa(mTyped.id, 'packageReturn', { spool: 600, spoolType: 'spool_paper', pallet: 10, palletType: 'wood', partition: 1 })).id,
+      (await pa(mOwn.id, 'packageImport', { spool: 10, spoolType: 'spool_plastic', partition: 99 })).id,
+      (await pa(mDeleted.id, 'packageImport', { spool: 999, spoolType: 'spool_paper', partition: 5 })).id,
+    )
+    const before = await prisma.material.findMany({ where: { id: { in: legacyMaterialIds } }, orderBy: { id: 'asc' } })
+    const ls = (await (await api(`/summary?supplierId=${legacySupplier.id}`)).json()).data
+    const li = ls.imported
+    check('legacy นำเข้า: typed from packageasts import row, remainder ไม่ระบุชนิด', li.spoolCPlastic === 600 && li.spoolUnspecified === 600 && li.spoolPaper === 10 && li.spoolPlastic === 0, li)
+    check('legacy นำเข้า: pallet/sack subtype from packageasts', li.palletSteel === 10 && li.palletWood === 0 && li.sackJute === 40 && li.sackUnspecified === 0 && li.box === 3, li)
+    check('legacy นำเข้า: กระดาษกั้น from packageasts.partition, material paperBar wins', li.paperBar === 62, li.paperBar)
+    check('legacy นำเข้า: deleted material and packageReturn row ignored', li.spoolPaper === 10 && li.palletWood === 0, li)
+    const after = await prisma.material.findMany({ where: { id: { in: legacyMaterialIds } }, orderBy: { id: 'asc' } })
+    check('summary did not write to materials', JSON.stringify(before) === JSON.stringify(after))
   } finally {
+    await prisma.packageAst.deleteMany({ where: { id: { in: legacyPackageAstIds } } })
+    await prisma.material.deleteMany({ where: { id: { in: legacyMaterialIds } } })
+    if (legacySupplierId) await prisma.supplier.deleteMany({ where: { id: legacySupplierId } })
     const obligationIds = [oSpoolPaper, oSpoolNull, oPalletWood, oBoxOld, oBoxNew, oSackPlastic, oSackJute, oSackNull].map(o => o.id)
     if (twinObligationId) obligationIds.push(twinObligationId)
     await prisma.packageReturnEntry.deleteMany({ where: { obligationId: { in: obligationIds } } })
