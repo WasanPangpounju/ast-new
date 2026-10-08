@@ -170,6 +170,7 @@ async function migrate(db: pg.Client) {
   const legacyMaterials = await loadLegacyMaterials(db)
   const matRows = (await db.query(`SELECT id, "supplierName", "importStatus", "createdAt" FROM materials WHERE "createdAt" < $1`, [CUTOVER])).rows
   const materialIds = new Set<number>(matRows.map((m) => m.id))
+  const materialSupplier = new Map<number, string>(matRows.map((m) => [m.id, m.supplierName]))
 
   // ── pair packages ↔ packageasts packageReturn (same request in legacy MaterialController::store) ──
   const returns = data.packageasts.filter((p) => p.package_status === 'packageReturn')
@@ -222,9 +223,9 @@ async function migrate(db: pg.Client) {
   // ── 2. carried-forward obligations ──
   const obligations: Obl[] = []
   const unmatchedNames = new Map<string, { obligations: number; htr: number }>()
-  const pushObl = (row: Row, legacyRef: string, category: Category, qty: number, variant: string | null, materialId: number | null) => {
+  const pushObl = (row: Row, legacyRef: string, category: Category, qty: number, variant: string | null, materialId: number | null, ownerName?: string) => {
     if (qty <= 0) return
-    const name = row.supplier_name!
+    const name = ownerName ?? row.supplier_name!
     const supplierId = supplierOf(name)
     if (supplierId == null) {
       const u = unmatchedNames.get(name) ?? { obligations: 0, htr: 0 }
@@ -244,11 +245,14 @@ async function migrate(db: pg.Client) {
     if (!materialIds.has(ref)) continue
     const mid = ref
     const ref_ = `packageasts:${r.id}`
-    pushObl(r, ref_, 'SPOOL', int(r.spool, 'spool'), r.spool_type, mid)
-    pushObl(r, ref_, 'SACK', int(r.sack, 'sack'), r.sack_type, mid)
-    pushObl(r, ref_, 'BOX', int(r.box, 'box'), null, mid)
-    pushObl(r, ref_, 'PALLET', int(r.pallet, 'pallet'), r.pallet_type, mid)
-    pushObl(r, ref_, 'PAPER_BAR', int(r.partition, 'partition'), null, mid)
+    // the obligation follows the material's current company, like its นำเข้า row does
+    // (user decision 2026-10-08: material supplierName edited after import → ยอดต้องส่งคืน moves too)
+    const owner = materialSupplier.get(ref)!
+    pushObl(r, ref_, 'SPOOL', int(r.spool, 'spool'), r.spool_type, mid, owner)
+    pushObl(r, ref_, 'SACK', int(r.sack, 'sack'), r.sack_type, mid, owner)
+    pushObl(r, ref_, 'BOX', int(r.box, 'box'), null, mid, owner)
+    pushObl(r, ref_, 'PALLET', int(r.pallet, 'pallet'), r.pallet_type, mid, owner)
+    pushObl(r, ref_, 'PAPER_BAR', int(r.partition, 'partition'), null, mid, owner)
   }
   for (const p of unpairedPackages) {
     const ref_ = `packages:${p.id}`
@@ -432,10 +436,15 @@ async function migrate(db: pg.Client) {
         effect,
       }
     }),
-    // obligation follows packageasts.supplier_name (as the legacy page did), not the material's current company
+    // obligation follows the material's current company (user decision 2026-10-08), not packageasts.supplier_name
     supplierMismatch: returns.flatMap((r) => {
       const m = matRows.find((x) => x.id === int(r.ref_id, 'ref_id'))
-      return m && m.supplierName !== r.supplier_name ? [{ packageastId: r.id, ref_id: r.ref_id, packageastSupplier: r.supplier_name, materialSupplier: m.supplierName, spool: r.spool, sack: r.sack, box: r.box, pallet: r.pallet, partition: r.partition }] : []
+      if (!m || m.supplierName === r.supplier_name) return []
+      const company = (n: string) => { const id = supplierOf(n); return id == null ? null : supplierById.get(id)!.name }
+      const from = company(r.supplier_name!), to = company(m.supplierName)
+      const empty = (['spool', 'sack', 'box', 'pallet', 'partition'] as const).every((k) => int(r[k], k) === 0)
+      return [{ packageastId: r.id, ref_id: r.ref_id, packageastSupplier: r.supplier_name, materialSupplier: m.supplierName, fromCompany: from, toCompany: to,
+        moved: from !== to && !empty, empty, spool: r.spool, sack: r.sack, box: r.box, pallet: r.pallet, partition: r.partition }]
     }),
     unmatchedSupplierNames: [...unmatchedNames.entries()].map(([name, u]) => ({ name, ...u })),
     overReturns, untypedSpill,
@@ -486,6 +495,10 @@ export async function verify(
   // (deleted in legacy) or now belongs to another company (supplierName edited after import).
   // The new import row follows the material, so its กระดาษกั้น differs by exactly these.
   const matSupplier = new Map(materials.map((m) => [m.id, m.supplierName]))
+  const companyOf = (name: string) => {
+    const id = resolveSupplier(name, suppliers, supplierMap)
+    return id == null ? `?${name}` : suppliers.find((s) => s.id === id)!.name
+  }
   const imports = data.packageasts.filter((p) => p.package_status === 'packageImport')
   const paperBarShift = (company: string, legacyNames: string[]) => {
     let orphan = 0, movedOut = 0, movedIn = 0
@@ -495,11 +508,21 @@ export async function verify(
       const ms = matSupplier.get(int(p.ref_id, 'ref_id'))
       const mine = legacyNames.includes(p.supplier_name!)
       if (mine && ms === undefined) orphan += q
-      else if (mine && ms !== company) movedOut += q
-      else if (!mine && ms === company) movedIn += q
+      else if (ms === undefined) continue
+      else if (mine && companyOf(ms) !== company) movedOut += q
+      else if (!mine && companyOf(ms) === company) movedIn += q
     }
     return { orphan, movedOut, movedIn }
   }
+  // packageReturn rows whose material now belongs to another company: the obligation moved with it
+  const movedReturns = data.packageasts
+    .filter((p) => p.package_status === 'packageReturn' && matSupplier.has(int(p.ref_id, 'ref_id')))
+    .map((p) => ({ p, from: companyOf(p.supplier_name!), to: companyOf(matSupplier.get(int(p.ref_id, 'ref_id'))!) }))
+    .filter((m) => m.from !== m.to)
+  const BUCKET_FIELDS = [['หลอด', 'spool'], ['กระสอบ', 'sack'], ['box', 'box'], ['พาเลท', 'pallet'], ['paperBar', 'partition']] as const
+  const movedDue = (company: string, bucket: string, dir: 'in' | 'out') => movedReturns
+    .filter((m) => (dir === 'out' ? m.from : m.to) === company)
+    .reduce((t, m) => t + int(m.p[BUCKET_FIELDS.find(([b]) => b === bucket)![1]], 'qty'), 0)
 
   // packageReturn rows of materials deleted in legacy: not carried forward (user decision 2026-10-08)
   const orphanReturns = data.packageasts
@@ -530,7 +553,11 @@ export async function verify(
         a.push(['ใบรับเข้าที่ถูกลบในระบบเดิม', -shift.orphan], ['ใบรับเข้าที่ภายหลังเปลี่ยนเป็นบริษัทอื่น', -shift.movedOut],
           ['ใบรับเข้าที่ภายหลังเปลี่ยนมาเป็นบริษัทนี้', shift.movedIn])
       }
-      if (row === 'due' || row === 'outstanding') a.push(['ใบรับเข้าที่ถูกลบในระบบเดิม (ไม่นำยอดมา)', -orphanIn(bucket)])
+      if (row === 'due' || row === 'outstanding') {
+        a.push(['ใบรับเข้าที่ถูกลบในระบบเดิม (ไม่นำยอดมา)', -orphanIn(bucket)],
+          ['ใบรับเข้าที่ภายหลังเปลี่ยนเป็นบริษัทอื่น (ยอดย้ายตาม)', -movedDue(company, bucket, 'out')],
+          ['ใบรับเข้าที่ภายหลังเปลี่ยนมาเป็นบริษัทนี้ (ยอดย้ายตาม)', movedDue(company, bucket, 'in')])
+      }
       if (row === 'returned') a.push(['คืนเกินยอดคงค้าง (จำกัดที่ 0)', -overIn(bucket)])
       if (row === 'outstanding') a.push(['คืนเกินยอดคงค้าง (จำกัดที่ 0)', overIn(bucket)])
       return a.filter(([, n]) => n !== 0)
@@ -659,10 +686,24 @@ function renderMarkdown(r: Report): string {
   }
   out.push('')
 
-  out.push('## packageasts whose material now belongs to another company', '', 'Obligation stays with the packageasts company (as the legacy page counted it).', '')
-  out.push('| packageasts id | ref_id | packageasts company | material company now | spool/sack/box/pallet/partition |', '|---|---|---|---|---|')
-  for (const m of r.supplierMismatch) out.push(`| ${m.packageastId} | ${m.ref_id} | ${m.packageastSupplier} | ${m.materialSupplier} | ${m.spool}/${m.sack}/${m.box}/${m.pallet}/${m.partition ?? 0} |`)
+  out.push('## ใบรับเข้าที่ภายหลังเปลี่ยนบริษัท (ยอดต้องส่งคืนย้ายตามบริษัทปัจจุบันของใบรับเข้า)', '')
+  out.push('| packageasts id | ref | ชื่อตอนรับเข้า | ชื่อปัจจุบันของใบรับเข้า | ย้ายบริษัท | หลอด/กระสอบ/กล่อง/พาเลท/กระดาษกั้น |', '|---|---|---|---|---|---|')
+  for (const m of r.supplierMismatch) out.push(`| ${m.packageastId} | ${m.ref_id} | ${m.packageastSupplier} | ${m.materialSupplier} | ${m.moved ? `${m.fromCompany} → ${m.toCompany}` : m.empty ? 'ไม่มียอดต้องส่งคืน (จำนวน 0)' : 'ไม่ย้าย (บริษัทเดียวกันหลังจับคู่)'} | ${m.spool}/${m.sack}/${m.box}/${m.pallet}/${m.partition ?? 0} |`)
   out.push('')
+  const net = new Map<string, number[]>()
+  for (const m of r.supplierMismatch.filter((x: any) => x.moved)) {
+    const q = [m.spool, m.sack, m.box, m.pallet, m.partition ?? 0].map(Number)
+    for (const [c, sign] of [[m.fromCompany, -1], [m.toCompany, 1]] as const) {
+      const t = net.get(c) ?? [0, 0, 0, 0, 0]
+      net.set(c, t.map((x, i) => x + sign * q[i]))
+    }
+  }
+  if (net.size) {
+    out.push('ผลต่อยอดต้องส่งคืน (และคงค้างก่อนหักคืน) เทียบกับหน้าจอระบบเดิม:', '', '| company | หลอด | กระสอบ | กล่อง | พาเลท | กระดาษกั้น |', '|---|---|---|---|---|---|')
+    const f = (n: number) => (n > 0 ? `+${n}` : String(n))
+    for (const [c, t] of net) out.push(`| ${c} | ${t.map(f).join(' | ')} |`)
+    out.push('')
+  }
 
   out.push('## Per-company comparison', '', '| verdict | company | legacy names |', '|---|---|---|')
   for (const c of v.companies) out.push(`| ${c.verdict} | ${c.company} | ${c.legacyNames.join(' + ')} |`)

@@ -11,7 +11,7 @@ Branch: `feature/package-return-receipts`
 | ไฟล์ | ใช้ทำอะไร |
 |---|---|
 | `ast-packages-20261007.sql` | mysqldump 3 ตารางของระบบเดิม (ห้ามใส่ใน repo) |
-| `supplier-map.json` | ชื่อบริษัทระบบเดิม → `suppliers.id` สำหรับ 4 ชื่อที่ไม่ตรง (ยังรอยืนยัน) |
+| `legacy-supplier-map-20261008.json` | ชื่อบริษัทระบบเดิม → `suppliers.id` สำหรับ 4 ชื่อที่ไม่ตรง (ยืนยันแล้ว 2026-10-08: PST.→4, ไทยรุ่ง→32, พิพัฒนกิจ→33, ทรัพย์คณานันต์ (SL)→46) |
 
 วางทั้งสองไฟล์ไว้ในโฟลเดอร์เดียวนอก repo เช่น `/root/pkgmig/in/` และสร้าง `/root/pkgmig/out/` ไว้รับรายงาน
 
@@ -122,14 +122,14 @@ docker compose -f docker-compose.prod.yml logs --tail=50 app
 
 ```sh
 tool npx tsx scripts/migrate-legacy-packages.ts --dump=/in/ast-packages-20261007.sql \
-  --supplier-map=/in/supplier-map.json --report=/out/dryrun
+  --supplier-map=/in/legacy-supplier-map-20261008.json --report=/out/dryrun
 ```
 
 ต้องได้:
 
 - `dump rows: {"packages":4390,"packageasts":8058,"htrpackages":82}`
 - `unmatched names 0`, `sample "จีน": OK` และไม่มีบริษัทไหนเป็น `FAIL`
-- ตัวเลขควรตรงกับ dry-run บน local: ยอดยกมา 8,101 รายการ, ใบคืน 82 ใบ, คืนเกินยอด 1 รายการ (Fenatex) — ตัวเลขอาจขยับได้ ถ้า supplier-map ต่างจาก map ทดสอบ หรือถ้า prod ถูกแก้ไขหลังวันที่ 2026-10-07
+- ตัวเลขควรตรงกับ dry-run บน local (2026-10-08, map จริง): ยอดยกมา 8,101 รายการ, ใบคืน 82 ใบ, รายการตัดยอด 1,708, คืนเกินยอด 1 รายการ (Fenatex), PASS (อธิบายได้) 6 บริษัท: กังวาลเท็กซ์ไทล์, เควินซาน, จงสถิตย์, แพรกษา, LP. (ตีเกลียว), Fenatex — ตัวเลขอาจขยับได้ถ้า prod ถูกแก้ไขหลังวันที่ 2026-10-07
 - dry-run เขียนจริงในทรานแซกชันแล้ว ROLLBACK ผลข้างเคียงอย่างเดียวคือเลข id ของ obligations และใบคืนจะข้ามไปบางช่วง
 
 ถอยกลับ: ไม่ต้อง
@@ -138,7 +138,7 @@ tool npx tsx scripts/migrate-legacy-packages.ts --dump=/in/ast-packages-20261007
 
 ```sh
 tool npx tsx scripts/migrate-legacy-packages.ts --dump=/in/ast-packages-20261007.sql \
-  --supplier-map=/in/supplier-map.json --report=/out/apply --apply
+  --supplier-map=/in/legacy-supplier-map-20261008.json --report=/out/apply --apply
 ```
 
 - สคริปต์จะไม่ commit ถ้ายังมีชื่อบริษัทที่จับคู่ไม่ได้ หรือมีบริษัทที่ FAIL
@@ -157,7 +157,7 @@ tool npx tsx scripts/migrate-legacy-packages.ts --rollback --apply
 ### 7. Verify
 
 ```sh
-tool npx tsx scripts/verify-legacy-packages.ts --dump=/in/ast-packages-20261007.sql --supplier-map=/in/supplier-map.json
+tool npx tsx scripts/verify-legacy-packages.ts --dump=/in/ast-packages-20261007.sql --supplier-map=/in/legacy-supplier-map-20261008.json
 ```
 
 ต้องได้ `copy vs dump: identical` และ `ALL PASS` (exit code 0) ส่วนต่างที่อธิบายได้จะแสดงพร้อมเหตุผล
@@ -171,7 +171,8 @@ tool npx tsx scripts/verify-legacy-packages.ts --dump=/in/ast-packages-20261007.
 | จีน | นำเข้า ณ วันที่ 2026-10-07: กรวยกระดาษ 159,160 · กรวยพลาสติก 10,080 · ไม่ระบุชนิด 26,716 · กระสอบพลาสติก 13,797 · กระสอบไม่ระบุชนิด 1,084 · กล่อง 747 · ต้องส่งคืน/คงค้าง 0 ทุกช่อง (ถ้ามีรับเข้าใหม่หลัง 7 ต.ค. ตัวเลขจะเพิ่มตาม) |
 | กังวาลเท็กซ์ไทล์ | ต้องส่งคืน กระบอกพลาสติก 460,909 · ประวัติการคืนมีใบคืนย้อนหลัง |
 | Fenatex | คงค้าง 0 · ใบคืนวันที่ 27/05/2026 มีหมายเหตุ "คืนเกินยอดคงค้าง 12" |
-| แพรกษาเท็กซ์ไทล์ | นำเข้า กระดาษกั้น 21,362 |
+| แพรกษาเท็กซ์ไทล์ | นำเข้า กระดาษกั้น 21,362 · ต้องส่งคืน กระดาษกั้น 21,362 (รวม 55 จากใบรับเข้า 1218) |
+| จงสถิตย์ | ต้องส่งคืน กระดาษกั้น 0 · พาเลทเหล็ก 0 (ย้ายไปแพรกษาตามใบรับเข้า 1218) |
 
 สำหรับ "จีน": ตัวเลขบนจอรวมใบรับเข้าหลังวันตัดยอดด้วย ส่วนเฉพาะยอดระบบเดิมจะตรงกับหน้าจอระบบเดิมเป็นรายกลุ่ม
 
