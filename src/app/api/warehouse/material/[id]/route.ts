@@ -6,6 +6,7 @@ import { bangkokMidnight } from '@/lib/bangkokDate'
 import { z } from 'zod'
 import type { NextRequest } from 'next/server'
 import { PackageReturnError } from '@/lib/package-return-obligations'
+import { deleteImportObligations, syncImportObligations } from '@/lib/material-obligation-sync'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -103,34 +104,45 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       // Bangkok midnight, same as synced rows — an unchanged date round-trips to the identical instant
       ...(importDate !== undefined && { importDate: importDate === null ? null : bangkokMidnight(importDate) }),
     }
-
-    // Field-level diff: only fields whose value actually changed get an audit row
     const changedBy = session?.user?.email ?? session?.user?.name ?? 'unknown'
-    const changes = (Object.keys(data) as (keyof typeof data)[])
-      .map(field => ({
-        field,
-        oldValue: auditValue(field, existing[field as keyof typeof existing]),
-        newValue: auditValue(field, data[field]),
-      }))
-      .filter(c => c.oldValue !== c.newValue)
 
-    const [updated] = await prisma.$transaction([
-      prisma.material.update({ where: { id }, data }),
-      ...(changes.length > 0
-        ? [prisma.auditLog.createMany({
-            data: changes.map(c => ({
-              tableName: MATERIAL_AUDIT_TABLE,
-              recordKey: materialRecordKey(id),
-              fieldName: c.field,
-              oldValue: c.oldValue,
-              newValue: c.newValue,
-              changedBy,
-            })),
-          })]
-        : []),
-    ])
+    const updated = await prisma.$transaction(async (tx) => {
+      // lock the import so two edits (or an edit and a delete) apply one after the other
+      await tx.$queryRaw`SELECT id FROM materials WHERE id = ${id} FOR UPDATE`
+      const before = await tx.material.findUnique({ where: { id } })
+      if (!before || before.deletedAt !== null) throw new PackageReturnError('Not found', 404)
+
+      // Field-level diff: only fields whose value actually changed get an audit row
+      const changes = (Object.keys(data) as (keyof typeof data)[])
+        .map(field => ({
+          field,
+          oldValue: auditValue(field, before[field as keyof typeof before]),
+          newValue: auditValue(field, data[field]),
+        }))
+        .filter(c => c.oldValue !== c.newValue)
+
+      const row = await tx.material.update({ where: { id }, data })
+      if (changes.length > 0) {
+        await tx.auditLog.createMany({
+          data: changes.map(c => ({
+            tableName: MATERIAL_AUDIT_TABLE,
+            recordKey: materialRecordKey(id),
+            fieldName: c.field,
+            oldValue: c.oldValue,
+            newValue: c.newValue,
+            changedBy,
+          })),
+        })
+      }
+      // packaging quantities / company changed → ต้องส่งคืน follows (409 rolls the edit back)
+      await syncImportObligations(tx, before, row, changedBy)
+      return row
+    })
     return Response.json({ success: true, data: updated })
   } catch (err: unknown) {
+    if (err instanceof PackageReturnError) {
+      return Response.json({ error: err.message }, { status: err.status })
+    }
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[material/[id] PATCH] error:', msg)
     return Response.json({ error: msg }, { status: 500 })
@@ -157,35 +169,26 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       return Response.json({ error: 'Not found' }, { status: 404 })
     }
 
-    // Block deletion while any package-return obligation tied to this import is still open —
-    // see the identical guard on material/outside DELETE for the full rationale.
-    const openObligations = await prisma.packageReturnObligation.findMany({
-      where: { materialId: id, deletedAt: null, status: { not: 'RETURNED' } },
-      select: { category: true, variant: true, qtyDue: true, qtyReturned: true, status: true },
-    })
-    if (openObligations.length > 0) {
-      const summary = openObligations
-        .map(o => `${o.category}${o.variant ? `(${o.variant})` : ''} ${o.qtyReturned}/${o.qtyDue} ${o.status}`)
-        .join(', ')
-      throw new PackageReturnError(
-        `ลบไม่ได้ — มีรายการค้างคืนบรรจุภัณฑ์ที่ยังไม่เสร็จสิ้น: ${summary}`,
-        409
-      )
-    }
-
-    await prisma.$transaction([
-      prisma.material.update({ where: { id }, data: { deletedAt: new Date() } }),
-      prisma.auditLog.create({
+    const changedBy = session?.user?.email ?? session?.user?.name ?? 'unknown'
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM materials WHERE id = ${id} FOR UPDATE`
+      const row = await tx.material.findUnique({ where: { id }, select: { deletedAt: true } })
+      if (!row || row.deletedAt !== null) throw new PackageReturnError('Not found', 404)
+      // The import's ต้องส่งคืน goes with it; refused (409) once anything was returned against it —
+      // those ใบคืน must be cancelled first, else the company keeps a due with no นำเข้า behind it.
+      await deleteImportObligations(tx, id, changedBy)
+      await tx.material.update({ where: { id }, data: { deletedAt: new Date() } })
+      await tx.auditLog.create({
         data: {
           tableName: MATERIAL_AUDIT_TABLE,
           recordKey: materialRecordKey(id),
           fieldName: 'deleted',
           oldValue: 'false',
           newValue: 'true',
-          changedBy: session?.user?.email ?? session?.user?.name ?? 'unknown',
+          changedBy,
         },
-      }),
-    ])
+      })
+    })
     return Response.json({ success: true })
   } catch (err: unknown) {
     if (err instanceof PackageReturnError) {
