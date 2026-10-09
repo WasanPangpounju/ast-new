@@ -142,7 +142,12 @@ export default function SalesSuppliersPage() {
 
   async function handleDelete(s: Supplier) {
     if (!confirm(`ลบซัพพลายเออร์ "${s.name}" ?`)) return;
-    await fetch(`/api/sales/suppliers/${s.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/sales/suppliers/${s.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      alert(d.error ?? "ลบไม่สำเร็จ");
+      return;
+    }
     fetchSuppliers();
   }
 

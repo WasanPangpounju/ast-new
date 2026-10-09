@@ -57,6 +57,7 @@ async function main() {
   const dup2 = await prisma.supplier.create({ data: { name: `${TAG} ชื่อซ้ำ` } })
   const other = await prisma.supplier.create({ data: { name: `${TAG} บริษัท อื่น` } })
   const supplierIds = [sup.id, dup1.id, dup2.id, other.id]
+  const extraMaterials: number[] = []
   const m = await prisma.material.create({
     data: { lot: TAG, spool: 10, yarnType: 'TEST', supplierName: nameA, weightKgNet: 1, weightKgSum: 1, weightKgPackage: 0, box: 5, returnBox: true },
   })
@@ -91,6 +92,32 @@ async function main() {
     r = await call(`/api/sales/suppliers/${other.id}`, { method: 'PUT', body: JSON.stringify({ name: other.name, tel: '021234567' }) })
     check('edit without a name change → 200, no rename row', r.status === 200 && (await prisma.auditLog.count({ where: { tableName: 'suppliers', recordKey: String(other.id) } })) === 0, r.json)
 
+    // ── a name another supplier was renamed away from can't be given to anyone else ──
+    r = await call('/api/sales/suppliers', { method: 'POST', body: JSON.stringify({ name: nameA, tax: '0000000000000' }) })
+    if (r.status === 201) supplierIds.push(r.json.supplier.id)
+    check('create a supplier named after another supplier old name → 409', r.status === 409 && /ชื่อเดิมของซัพพลายเออร์รหัส/.test(r.json?.error), r.json)
+    r = await rename(other.id, nameA)
+    check('rename to another supplier old name → 409', r.status === 409 && /ชื่อเดิมของซัพพลายเออร์รหัส/.test(r.json?.error), r.json)
+    r = await rename(sup.id, nameA)
+    check('a supplier may take its own old name back → 200', r.status === 200, r.json)
+    check('…and its imports are still counted', (await summary(sup.id)).imported.box === 2)
+
+    // ── delete refused while anything is still owed back ──
+    r = await call(`/api/sales/suppliers/${sup.id}`, { method: 'DELETE' })
+    check('delete supplier with ต้องส่งคืน outstanding → 409 naming กล่อง 2', r.status === 409 && /คงค้าง/.test(r.json?.error) && /กล่อง 2/.test(r.json?.error), r.json)
+    check('…supplier not deleted', (await prisma.supplier.findUniqueOrThrow({ where: { id: sup.id } })).deletedAt === null)
+    const done = await prisma.supplier.create({ data: { name: `${TAG} คืนครบแล้ว` } })
+    supplierIds.push(done.id)
+    const doneMat = await prisma.material.create({
+      data: { lot: TAG, spool: 1, yarnType: 'TEST', supplierName: done.name, weightKgNet: 1, weightKgSum: 1, weightKgPackage: 0, box: 1, returnBox: true },
+    })
+    extraMaterials.push(doneMat.id)
+    await prisma.packageReturnObligation.create({ data: { sourceType: 'MATERIAL_IMPORT', materialId: doneMat.id, supplierId: done.id, category: 'BOX', qtyDue: 1, qtyReturned: 1, status: 'RETURNED' } })
+    r = await call(`/api/sales/suppliers/${done.id}`, { method: 'DELETE' })
+    check('delete supplier whose packaging is all returned → 200', r.status === 200, r.json)
+    r = await call(`/api/sales/suppliers/${other.id}`, { method: 'DELETE' })
+    check('delete supplier with no obligations → 200', r.status === 200, r.json)
+
     // a real company with carried-forward legacy data
     if (prak) {
       const before = await summary(prak.id)
@@ -104,11 +131,12 @@ async function main() {
   } finally {
     if (prak) await prisma.supplier.update({ where: { id: prak.id }, data: { name: prak.name } })
     await prisma.auditLog.deleteMany({ where: { changedBy: { startsWith: TAG } } })
-    const obls = await prisma.packageReturnObligation.findMany({ where: { materialId: m.id }, select: { id: true } })
+    const matIds = [m.id, ...extraMaterials]
+    const obls = await prisma.packageReturnObligation.findMany({ where: { materialId: { in: matIds } }, select: { id: true } })
     await prisma.auditLog.deleteMany({ where: { tableName: 'package_return_obligations', recordKey: { in: obls.map(o => String(o.id)) } } })
-    await prisma.packageReturnObligation.deleteMany({ where: { materialId: m.id } })
-    await prisma.auditLog.deleteMany({ where: { tableName: 'materials', recordKey: String(m.id) } })
-    await prisma.material.deleteMany({ where: { id: m.id } })
+    await prisma.packageReturnObligation.deleteMany({ where: { materialId: { in: matIds } } })
+    await prisma.auditLog.deleteMany({ where: { tableName: 'materials', recordKey: { in: matIds.map(String) } } })
+    await prisma.material.deleteMany({ where: { id: { in: matIds } } })
     await prisma.supplier.deleteMany({ where: { id: { in: supplierIds } } })
     await prisma.userPermission.deleteMany({ where: { userId } })
     await prisma.user.deleteMany({ where: { id: userId } })

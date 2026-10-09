@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { oldNameTakenMessage, otherSupplierWithOldName } from '@/lib/supplier-names'
 import type { NextRequest } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -46,6 +47,10 @@ export async function POST(request: NextRequest) {
 
   if (!name?.trim()) return Response.json({ error: 'กรุณากรอกชื่อซัพพลายเออร์' }, { status: 400 })
   if (!tax?.trim()) return Response.json({ error: 'กรุณากรอกเลขที่ผู้เสียภาษี' }, { status: 400 })
+
+  // a name another supplier was renamed away from still owns that supplier's old imports
+  const oldOwner = await otherSupplierWithOldName(prisma, name.trim(), null)
+  if (oldOwner) return Response.json({ error: oldNameTakenMessage(name.trim(), oldOwner) }, { status: 409 })
 
   const supplier = await prisma.supplier.create({
     data: {

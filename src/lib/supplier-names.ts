@@ -39,3 +39,18 @@ export async function supplierIdByOldName(tx: TxClient, name: string): Promise<n
   `
   return rows.length === 1 ? rows[0].id : null
 }
+
+/** A live supplier other than `exceptId` that was renamed away from `name`. Giving `name` to a
+ *  new or another supplier would hand it that supplier's old imports, so callers refuse it. */
+export async function otherSupplierWithOldName(tx: TxClient, name: string, exceptId: number | null): Promise<{ id: number; name: string } | null> {
+  const rows = await tx.$queryRaw<{ id: number; name: string }[]>`
+    SELECT DISTINCT s.id, s.name FROM audit_logs a JOIN suppliers s ON s.id::text = a.record_key AND s.deleted_at IS NULL
+     WHERE a.table_name = ${SUPPLIER_AUDIT_TABLE} AND a.field_name = 'name' AND a.old_value = ${name}
+       AND (${exceptId}::int IS NULL OR s.id <> ${exceptId}::int)
+     ORDER BY s.id LIMIT 1
+  `
+  return rows[0] ?? null
+}
+
+export const oldNameTakenMessage = (name: string, owner: { id: number; name: string }) =>
+  `ใช้ชื่อนี้ไม่ได้ — "${name}" เป็นชื่อเดิมของซัพพลายเออร์รหัส ${owner.id} (ปัจจุบันชื่อ "${owner.name}") ใบรับเข้าเก่าที่ใช้ชื่อนี้นับเป็นของรายนั้น`

@@ -1,7 +1,10 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { SUPPLIER_AUDIT_TABLE } from '@/lib/supplier-names'
+import { SUPPLIER_AUDIT_TABLE, oldNameTakenMessage, otherSupplierWithOldName } from '@/lib/supplier-names'
+import { SUMMARY_COLUMNS, columnOf } from '@/lib/package-return-columns'
 import type { NextRequest } from 'next/server'
+
+const LABEL = Object.fromEntries(SUMMARY_COLUMNS.map((c) => [c.key, `${c.group}${c.label ? ' ' + c.label : ''}`])) as Record<string, string>
 
 export async function GET(
   _request: NextRequest,
@@ -58,6 +61,8 @@ export async function PUT(
       if (takingNew) {
         return { status: 409, error: `เปลี่ยนชื่อไม่ได้ — ชื่อ "${newName}" เป็นของซัพพลายเออร์รหัส ${takingNew.id} อยู่แล้ว` }
       }
+      const oldOwner = await otherSupplierWithOldName(tx, newName, supplierId)
+      if (oldOwner) return { status: 409, error: oldNameTakenMessage(newName, oldOwner) }
       await tx.auditLog.create({
         data: { tableName: SUPPLIER_AUDIT_TABLE, recordKey: String(supplierId), fieldName: 'name', oldValue: current.name, newValue: newName, changedBy },
       })
@@ -90,10 +95,28 @@ export async function DELETE(
   if (!session) return Response.json({ error: 'ไม่ได้รับอนุญาต' }, { status: 401 })
 
   const { id } = await params
-  await prisma.supplier.update({
-    where: { id: Number(id) },
-    data: { deletedAt: new Date() },
+  const supplierId = Number(id)
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM suppliers WHERE id = ${supplierId} FOR UPDATE`
+    // A deleted supplier can no longer be picked on the package-return page, so whatever it is
+    // still owed back would be stranded — refuse while anything is outstanding.
+    const open = await tx.packageReturnObligation.findMany({
+      where: { supplierId, deletedAt: null, status: { not: 'RETURNED' } },
+      select: { category: true, variant: true, qtyDue: true, qtyReturned: true },
+    })
+    if (open.length) {
+      const byColumn = new Map<string, number>()
+      for (const o of open) {
+        const label = LABEL[columnOf(o.category, o.variant)]
+        byColumn.set(label, (byColumn.get(label) ?? 0) + o.qtyDue - o.qtyReturned)
+      }
+      const list = [...byColumn].map(([label, qty]) => `${label} ${qty.toLocaleString()}`).join(', ')
+      return { status: 409, error: `ลบไม่ได้ — ซัพพลายเออร์นี้ยังมียอดบรรจุภัณฑ์ต้องส่งคืนคงค้าง: ${list}` }
+    }
+    await tx.supplier.update({ where: { id: supplierId }, data: { deletedAt: new Date() } })
+    return { status: 200 }
   })
+  if (result.status !== 200) return Response.json({ error: result.error }, { status: result.status })
 
   return Response.json({ success: true })
 }
