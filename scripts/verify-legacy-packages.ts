@@ -10,16 +10,18 @@
  *   npx tsx scripts/verify-legacy-packages.ts [--dump=<ast-packages.sql>] [--supplier-map=<map.json>]
  *
  * Pass criteria: กล่อง / กระดาษกั้น equal per column; หลอด / พาเลท / กระสอบ equal by group total;
- * a difference counts as explained only when it equals the over-return clamped to 0 (or, for the
- * proposed import row, legacy rows whose material was deleted / moved to another company).
- * Exit code 1 if any company FAILs.
+ * a difference counts as explained only when the signed adjustments add up to it exactly (over-return
+ * clamped to 0, legacy rows not carried because the import is gone, capped at the import, duplicate
+ * legacy rows, moved with the import to its current company, ใบคืน of merged legacy names).
+ * Also: ต้องส่งคืน / คงค้าง ≤ นำเข้า on every company × column, and the legacy-screen formula samples.
+ * Exit code 1 if anything fails.
  */
 
 import 'dotenv/config'
 import fs from 'node:fs'
 import pg from 'pg'
 import { verify } from './migrate-legacy-packages'
-import { loadDump, loadLegacyMaterials, loadSuppliers, type LegacyData, type Row } from './legacy-packages/lib'
+import { loadDump, loadSuppliers, type LegacyData, type Row } from './legacy-packages/lib'
 import { columnOf, type ColumnKey } from '../src/lib/package-return-columns'
 
 const args = process.argv.slice(2)
@@ -122,7 +124,7 @@ async function main() {
     }
 
     const supplierMap = arg('supplier-map') ? JSON.parse(fs.readFileSync(arg('supplier-map')!, 'utf8')) : {}
-    const result = await verify(db, data, await loadLegacyMaterials(db), await loadSuppliers(db), supplierMap, overReturns)
+    const result = await verify(db, data, await loadSuppliers(db), supplierMap, overReturns)
 
     for (const c of result.companies) {
       console.log(`${c.verdict.padEnd(16)} ${c.company}`)
@@ -132,11 +134,16 @@ async function main() {
     }
     console.log(`unmatched legacy names: ${result.unmatched.map((u) => u.name).join(', ') || 'none'}`)
     console.log(`over-returns clamped: ${JSON.stringify(overReturns)}`)
-    console.log(`sample "จีน": ${result.sample.ok ? 'OK' : 'MISMATCH'}`)
+    for (const s of result.samples) console.log(`sample "${s.name}" (legacy screen ${s.captured}): ${s.ok ? 'OK' : 'MISMATCH ' + s.diffs.join('; ')}`)
+    const overImport = result.dueOverImport.filter((x) => !x.allowed)
+    console.log(`ต้องส่งคืน/คงค้าง > นำเข้า: ${result.dueOverImport.length ? '' : 'none'}`)
+    for (const x of result.dueOverImport) console.log(`    ${x.company} ${x.label}: นำเข้า ${x.imported} ต้องส่งคืน ${x.due} คงค้าง ${x.outstanding} — ${x.allowed ?? 'FAIL'}`)
 
     const fail = result.companies.filter((c) => c.verdict === 'FAIL').length
-    console.log(fail || dumpProblems.length ? `\nFAILED: ${fail} companies, ${dumpProblems.length} copy differences` : '\nALL PASS')
-    if (fail || dumpProblems.length) process.exitCode = 1
+    const badSamples = result.samples.filter((s) => !s.ok).length
+    const failed = fail || dumpProblems.length || overImport.length || badSamples
+    console.log(failed ? `\nFAILED: ${fail} companies, ${overImport.length} cells over นำเข้า, ${badSamples} samples, ${dumpProblems.length} copy differences` : '\nALL PASS')
+    if (failed) process.exitCode = 1
   } finally {
     await db.end()
   }

@@ -102,30 +102,82 @@ export interface ImportSource {
   legacy: LegacyImportRow | null
 }
 
-/** "นำเข้า" row of the summary. A material's own subtype wins; a legacy material (no subtype of
- *  its own) takes subtype + quantity from its packageasts import row, capped at the material's
- *  quantity, and the remainder goes to "ไม่ระบุชนิด". Paper bar falls back to packageasts.partition.
- *  Read-only: materials are never updated with these values. */
+/** "นำเข้า" of ONE material, by column. A material's own subtype wins; a legacy material (no
+ *  subtype of its own) takes subtype + quantity from its packageasts import row, capped at the
+ *  material's quantity, and the remainder goes to "ไม่ระบุชนิด". Paper bar falls back to
+ *  packageasts.partition. Read-only: materials are never updated with these values.
+ *  This split is the single classification rule: the summary's นำเข้า row sums it, and the
+ *  legacy carried-forward ต้องส่งคืน is carved out of it (carveDue). */
+export function importSplit(r: ImportSource): ColumnTotals {
+  const t = emptyTotals()
+  const split = (category: string, qty: number | null, own: string | null, legacyQty: number | null | undefined, legacyType: string | null | undefined) => {
+    const q = qty ?? 0
+    if (own != null || !r.legacy) {
+      t[columnOf(category, own)] += q
+      return
+    }
+    const typed = Math.min(q, Math.max(0, legacyQty ?? 0))
+    t[columnOf(category, legacyType)] += typed
+    t[columnOf(category, null)] += q - typed
+  }
+  split('SPOOL', r.spool, r.spoolType, r.legacy?.spool, r.legacy?.spoolType)
+  split('PALLET', r.pallet, r.palletType, r.legacy?.pallet, r.legacy?.palletType)
+  split('SACK', r.sack, r.sackType, r.legacy?.sack, r.legacy?.sackType)
+  t.box += r.box ?? 0
+  t.paperBar += r.paperBar ?? r.legacy?.partition ?? 0
+  return t
+}
+
+/** "นำเข้า" row of the summary = importSplit summed over the supplier's materials. */
 export function importedTotals(rows: ImportSource[]): ColumnTotals {
   const t = emptyTotals()
   for (const r of rows) {
-    const split = (category: string, qty: number | null, own: string | null, legacyQty: number | null | undefined, legacyType: string | null | undefined) => {
-      const q = qty ?? 0
-      if (own != null || !r.legacy) {
-        t[columnOf(category, own)] += q
-        return
-      }
-      const typed = Math.min(q, Math.max(0, legacyQty ?? 0))
-      t[columnOf(category, legacyType)] += typed
-      t[columnOf(category, null)] += q - typed
-    }
-    split('SPOOL', r.spool, r.spoolType, r.legacy?.spool, r.legacy?.spoolType)
-    split('PALLET', r.pallet, r.palletType, r.legacy?.pallet, r.legacy?.palletType)
-    split('SACK', r.sack, r.sackType, r.legacy?.sack, r.legacy?.sackType)
-    t.box += r.box ?? 0
-    t.paperBar += r.paperBar ?? r.legacy?.partition ?? 0
+    const s = importSplit(r)
+    for (const c of SUMMARY_COLUMNS) t[c.key] += s[c.key]
   }
   return t
+}
+
+/** Column groups of the summary (หลอด / กระสอบ / กล่อง / พาเลท / กระดาษกั้น), typed columns first,
+ *  the group's "ไม่ระบุชนิด" column (if any) last. */
+export const COLUMN_GROUPS: { group: string; cols: ColumnKey[] }[] = Object.values(
+  SUMMARY_COLUMNS.reduce<Record<string, { group: string; cols: ColumnKey[] }>>((acc, c) => {
+    ;(acc[c.group] ??= { group: c.group, cols: [] }).cols.push(c.key)
+    return acc
+  }, {})
+).map((g) => ({ ...g, cols: [...g.cols.filter((k) => !k.endsWith('Unspecified')), ...g.cols.filter((k) => k.endsWith('Unspecified'))] }))
+
+/**
+ * ต้องส่งคืน of ONE material under the rule "ต้องส่งคืนต้องไม่เกินนำเข้า" (customer, 2026-10-09):
+ *  - per group the due is capped at that material's นำเข้า of the group (`cut` = what was dropped)
+ *  - the carried quantity is carved out of the material's own นำเข้า split: its own subtype first,
+ *    then the group's ไม่ระบุชนิด, then any typed column of the group that still has room
+ * So for every column the result is ≤ imp, and summing materials keeps ต้องส่งคืน ≤ นำเข้า.
+ * `due` = everything the legacy system said is due on this material (all its sources added up).
+ */
+export function carveDue(imp: ColumnTotals, due: ColumnTotals): { carried: ColumnTotals; cut: Record<string, number> } {
+  const carried = emptyTotals()
+  const cut: Record<string, number> = {}
+  for (const { group, cols } of COLUMN_GROUPS) {
+    const want = cols.reduce((s, c) => s + Math.max(0, due[c]), 0)
+    if (want <= 0) continue
+    const cap = cols.reduce((s, c) => s + Math.max(0, imp[c]), 0)
+    let left = Math.min(want, cap)
+    if (want > cap) cut[group] = want - cap
+    const room = Object.fromEntries(cols.map((c) => [c, Math.max(0, imp[c])])) as Record<ColumnKey, number>
+    const take = (c: ColumnKey, q: number) => {
+      const x = Math.min(q, room[c], left)
+      if (x <= 0) return
+      room[c] -= x
+      carried[c] += x
+      left -= x
+    }
+    for (const c of cols) take(c, Math.max(0, due[c]))
+    const unspecified = cols.find((c) => c.endsWith('Unspecified'))
+    if (unspecified) take(unspecified, left)
+    for (const c of cols) take(c, left)
+  }
+  return { carried, cut }
 }
 
 export interface AllocationLine {

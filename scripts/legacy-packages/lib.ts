@@ -10,7 +10,7 @@
 
 import fs from 'node:fs'
 import pg, { type ClientBase } from 'pg'
-import { SUMMARY_COLUMNS, columnOf, emptyTotals, importedTotals, type ColumnKey, type ColumnTotals } from '../../src/lib/package-return-columns'
+import { COLUMN_GROUPS, SUMMARY_COLUMNS, carveDue, columnOf, emptyTotals, importSplit, importedTotals, type ColumnKey, type ColumnTotals } from '../../src/lib/package-return-columns'
 
 // Prisma stores DateTime in `timestamp without time zone` columns as UTC. node-pg by default
 // writes and reads those in the machine's local zone (Bangkok here) — pin both to UTC.
@@ -283,5 +283,206 @@ export async function newSummary(db: ClientBase, supplierName: string, supplierI
 }
 
 export const sumOf = (t: Totals, keys: ColumnKey[]) => keys.reduce((s, k) => s + t[k], 0)
+
+// ─── carry-forward plan: "ต้องส่งคืนต้องไม่เกินนำเข้า" (customer decision 2026-10-09) ─────────────
+//
+// A legacy ต้องส่งคืน is carried forward only when
+//   ก) it links to a material that still exists. packageasts rows link by ref_id; packages rows
+//      with no packageasts pair (before 2023-02-25) link by importStatus + created_at within
+//      LINK_WINDOW_MS, any supplier name (names were often edited later), strictly closest hit
+//   ข) it goes to that material's current company
+//   ค) per material and group it is at most the material's own นำเข้า (all its sources added up)
+//   ง) its subtypes are carved out of the material's นำเข้า split (carveDue)
+
+export const LINK_WINDOW_MS = 30_000
+
+/** Material columns the plan reads (read-only). Legacy scope = created before CUTOVER, deleted ones included. */
+export interface PlanMaterial {
+  id: number; supplierName: string; importStatus: string | null; createdAt: Date; deletedAt: Date | null
+  spool: number | null; pallet: number | null; box: number | null; sack: number | null; paperBar: number | null
+  spoolType: string | null; palletType: string | null; sackType: string | null
+}
+
+export async function loadPlanMaterials(db: ClientBase): Promise<PlanMaterial[]> {
+  return (await db.query(
+    `SELECT id, "supplierName", "importStatus", "createdAt", "deletedAt", spool, pallet, box, sack, "paperBar", "spoolType", "palletType", "sackType"
+       FROM materials WHERE "createdAt" < $1 ORDER BY id`,
+    [CUTOVER]
+  )).rows
+}
+
+export interface DueSource {
+  ref: string // "packageasts:<id>" | "packages:<id>"
+  legacyName: string
+  createdAt: Date
+  due: ColumnTotals
+  materialId: number | null
+  link: 'ref_id' | 'time' | null
+  linkSeconds: number | null // packages rows: seconds between the row and the linked material
+}
+
+export type DropReason = 'ใบรับเข้าถูกลบในระบบเดิม' | 'หาใบรับเข้าไม่พบ' | 'ใบรับเข้าถูกลบในระบบใหม่' | 'บริษัทของใบรับเข้าไม่อยู่ในระบบ'
+export interface Dropped { reason: DropReason; source: DueSource; note: string }
+
+export interface Cut {
+  materialId: number; importStatus: string | null; company: string; group: string
+  want: number; cap: number; cut: number
+  duplicate: number // part of the cut explained by more than one legacy row on the same import
+  edited: number // the rest: legacy quantity above the material's current quantity
+  sources: string[]
+}
+
+export type Category = 'SPOOL' | 'SACK' | 'BOX' | 'PALLET' | 'PAPER_BAR'
+
+export interface CarriedObligation {
+  legacyRef: string // "material:<id>/<column>", unique per (legacyRef, category)
+  materialId: number; supplierId: number; company: string
+  col: ColumnKey; category: Category; variant: string | null
+  qtyDue: number; createdAt: Date; sources: string[]
+}
+
+/** Summary column → obligation category + variant (inverse of columnOf). */
+export function categoryOf(col: ColumnKey): { category: Category; variant: string | null } {
+  const variants: Partial<Record<ColumnKey, string>> = {
+    spoolPaper: 'spool_paper', spoolPlastic: 'spool_plastic', spoolCPaper: 'spoolC_paper', spoolCPlastic: 'spoolC_plastic',
+    palletWood: 'wood', palletSteel: 'steel', sackPlastic: 'plastic', sackJute: 'p',
+  }
+  const category: Category = col.startsWith('spool') ? 'SPOOL' : col.startsWith('pallet') ? 'PALLET' : col.startsWith('sack') ? 'SACK' : col === 'box' ? 'BOX' : 'PAPER_BAR'
+  return { category, variant: variants[col] ?? null }
+}
+
+export interface CarryPlan {
+  sources: DueSource[]
+  obligations: CarriedObligation[]
+  dropped: Dropped[]
+  cuts: Cut[]
+  pairOf: Map<string, Row> // packages.id → its packageasts packageReturn row
+  unpairedReturns: Row[]
+  unpairedPackages: Row[]
+  packageMaterial: Map<string, number | null> // packages.id → materials.id (stored in packages.materialId)
+  companyOfMaterial: Map<number, string | null>
+}
+
+const sumGroup = (t: ColumnTotals, cols: ColumnKey[]) => cols.reduce((s, c) => s + t[c], 0)
+
+export function planCarryForward(data: LegacyData, mats: PlanMaterial[], suppliers: SupplierRow[], map: Record<string, number>): CarryPlan {
+  const matById = new Map(mats.map((m) => [m.id, m]))
+  const supplierById = new Map(suppliers.map((s) => [s.id, s]))
+  const companyOfMaterial = new Map<number, string | null>()
+  const supplierIdOfMaterial = new Map<number, number | null>()
+  for (const m of mats) {
+    const id = resolveSupplier(m.supplierName, suppliers, map)
+    supplierIdOfMaterial.set(m.id, id)
+    companyOfMaterial.set(m.id, id == null ? null : supplierById.get(id)!.name)
+  }
+
+  // pair packages ↔ packageasts packageReturn (same request in legacy MaterialController::store)
+  const returns = data.packageasts.filter((p) => p.package_status === 'packageReturn')
+  const pkgByName = new Map<string, Row[]>()
+  for (const p of data.packages) pkgByName.set(p.supplier_name!, [...(pkgByName.get(p.supplier_name!) ?? []), p])
+  const pairOf = new Map<string, Row>()
+  const sameQty = (a: Row, b: Row) => (['spool', 'sack', 'box', 'pallet'] as const).every((k) => int(a[k], 'pair') === int(b[k], 'pair'))
+  const unpairedReturns: Row[] = []
+  for (const r of returns) {
+    const t = utc(r.created_at)!.getTime()
+    const cand = (pkgByName.get(r.supplier_name!) ?? []).find(
+      (p) => !pairOf.has(p.id!) && Math.abs(utc(p.created_at)!.getTime() - t) <= 2000 && sameQty(p, r)
+    )
+    if (cand) pairOf.set(cand.id!, r)
+    else unpairedReturns.push(r)
+  }
+  const unpairedPackages = data.packages.filter((p) => !pairOf.has(p.id!))
+
+  const linkByTime = (p: Row): { id: number | null; seconds: number | null; note: string } => {
+    const t = utc(p.created_at)!.getTime()
+    const hits = mats
+      .filter((m) => m.importStatus === p.package_status)
+      .map((m) => ({ m, dt: (new Date(m.createdAt).getTime() - t) / 1000 }))
+      .filter((x) => Math.abs(x.dt) * 1000 <= LINK_WINDOW_MS)
+      .sort((a, b) => Math.abs(a.dt) - Math.abs(b.dt))
+    if (!hits.length) return { id: null, seconds: null, note: `ไม่มีใบรับเข้าเลขที่ "${p.package_status}" ที่บันทึกภายใน ${LINK_WINDOW_MS / 1000} วินาที` }
+    if (hits.length > 1 && Math.abs(hits[0].dt) === Math.abs(hits[1].dt)) return { id: null, seconds: null, note: `ใบรับเข้าที่เข้าเงื่อนไข ${hits.length} ใบ เวลาห่างเท่ากัน` }
+    return { id: hits[0].m.id, seconds: hits[0].dt, note: '' }
+  }
+
+  const packageMaterial = new Map<string, number | null>()
+  const sources: DueSource[] = []
+  const dropped: Dropped[] = []
+  const nonZero = (d: ColumnTotals) => SUMMARY_COLUMNS.some((c) => d[c.key] > 0)
+
+  for (const r of returns) {
+    const due = emptyTotals()
+    due[columnOf('SPOOL', r.spool_type)] += int(r.spool, 'spool')
+    due[columnOf('SACK', r.sack_type)] += int(r.sack, 'sack')
+    due.box += int(r.box, 'box')
+    due[columnOf('PALLET', r.pallet_type)] += int(r.pallet, 'pallet')
+    due.paperBar += int(r.partition, 'partition')
+    if (!nonZero(due)) continue
+    const ref = int(r.ref_id, 'ref_id')
+    const linked = matById.has(ref)
+    const src: DueSource = { ref: `packageasts:${r.id}`, legacyName: r.supplier_name!, createdAt: utc(r.created_at)!, due, materialId: linked ? ref : null, link: linked ? 'ref_id' : null, linkSeconds: null }
+    sources.push(src)
+    if (!linked) dropped.push({ reason: 'ใบรับเข้าถูกลบในระบบเดิม', source: src, note: `ref_id ${ref} ไม่มีใน materials` })
+  }
+  for (const p of data.packages) {
+    const pair = pairOf.get(p.id!)
+    if (pair) { const ref = int(pair.ref_id, 'ref_id'); packageMaterial.set(p.id!, matById.has(ref) ? ref : null); continue }
+    const hit = linkByTime(p)
+    packageMaterial.set(p.id!, hit.id)
+    const due = emptyTotals()
+    due.spoolUnspecified += int(p.spool, 'spool'); due.sackUnspecified += int(p.sack, 'sack')
+    due.box += int(p.box, 'box'); due.palletUnspecified += int(p.pallet, 'pallet')
+    if (!nonZero(due)) continue
+    const src: DueSource = { ref: `packages:${p.id}`, legacyName: p.supplier_name!, createdAt: utc(p.created_at)!, due, materialId: hit.id, link: hit.id == null ? null : 'time', linkSeconds: hit.seconds }
+    sources.push(src)
+    if (hit.id == null) dropped.push({ reason: 'หาใบรับเข้าไม่พบ', source: src, note: hit.note })
+  }
+
+  // per material: all its sources together, capped + carved out of its own นำเข้า split
+  const firstImport = new Map<number, Row>()
+  for (const p of data.packageasts.filter((x) => x.package_status === 'packageImport').sort((a, b) => int(a.id, 'id') - int(b.id, 'id')))
+    if (!firstImport.has(int(p.ref_id, 'ref_id'))) firstImport.set(int(p.ref_id, 'ref_id'), p)
+  const num = (v: string | null | undefined) => (v == null ? null : int(v, 'packageasts'))
+
+  const byMaterial = new Map<number, DueSource[]>()
+  for (const s of sources) if (s.materialId != null) byMaterial.set(s.materialId, [...(byMaterial.get(s.materialId) ?? []), s])
+
+  const obligations: CarriedObligation[] = []
+  const cuts: Cut[] = []
+  for (const [mid, srcs] of [...byMaterial].sort((a, b) => a[0] - b[0])) {
+    const m = matById.get(mid)!
+    const company = companyOfMaterial.get(mid)
+    if (m.deletedAt || company == null) {
+      for (const s of srcs) dropped.push({ reason: m.deletedAt ? 'ใบรับเข้าถูกลบในระบบใหม่' : 'บริษัทของใบรับเข้าไม่อยู่ในระบบ', source: s, note: `material #${mid} ${m.supplierName}` })
+      continue
+    }
+    const l = firstImport.get(mid)
+    const imp = importSplit({
+      spool: m.spool, pallet: m.pallet, box: m.box, sack: m.sack, paperBar: m.paperBar,
+      spoolType: m.spoolType, palletType: m.palletType, sackType: m.sackType,
+      legacy: l ? { spool: num(l.spool), spoolType: l.spool_type, pallet: num(l.pallet), palletType: l.pallet_type, sack: num(l.sack), sackType: l.sack_type, partition: num(l.partition) } : null,
+    })
+    const due = emptyTotals()
+    for (const s of srcs) for (const c of SUMMARY_COLUMNS) due[c.key] += s.due[c.key]
+    const { carried, cut } = carveDue(imp, due)
+    for (const { group, cols } of COLUMN_GROUPS) {
+      if (!cut[group]) continue
+      const want = sumGroup(due, cols)
+      const biggest = Math.max(...srcs.map((s) => sumGroup(s.due, cols)))
+      const duplicate = Math.min(cut[group], want - biggest)
+      cuts.push({ materialId: mid, importStatus: m.importStatus, company, group, want, cap: sumGroup(imp, cols), cut: cut[group], duplicate, edited: cut[group] - duplicate, sources: srcs.map((s) => s.ref) })
+    }
+    const createdAt = new Date(Math.min(...srcs.map((s) => s.createdAt.getTime())))
+    for (const c of SUMMARY_COLUMNS) {
+      if (carried[c.key] <= 0) continue
+      obligations.push({
+        legacyRef: `material:${mid}/${c.key}`, materialId: mid, supplierId: supplierIdOfMaterial.get(mid)!, company,
+        col: c.key, ...categoryOf(c.key), qtyDue: carried[c.key], createdAt, sources: srcs.map((s) => s.ref),
+      })
+    }
+  }
+
+  return { sources, obligations, dropped, cuts, pairOf, unpairedReturns, unpairedPackages, packageMaterial, companyOfMaterial }
+}
 export const legacyAsNew = (t: LegacyTotals, keys: ColumnKey[]) =>
   LEGACY_COLUMNS.filter((lk) => LEGACY_TO_NEW[lk].some((k) => keys.includes(k))).reduce((s, lk) => s + t[lk], 0)
