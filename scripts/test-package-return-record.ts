@@ -85,6 +85,19 @@ async function listObligations(cookie: string, params: Record<string, string>) {
   return { status: res.status, json }
 }
 
+// Every id the list returns for these filters, across all pages. The list is ordered oldest
+// first, so on a database with carried-forward legacy obligations a new test row is never on
+// page 1 — membership has to be checked against the whole list.
+async function listAllIds(cookie: string, params: Record<string, string>): Promise<{ status: number; ids: number[] }> {
+  const ids: number[] = []
+  for (let page = 1; ; page++) {
+    const r = await listObligations(cookie, { ...params, limit: '100', page: String(page) })
+    if (r.status !== 200) return { status: r.status, ids }
+    ids.push(...(r.json.data as Array<{ id: number }>).map(o => o.id))
+    if (page >= r.json.totalPages) return { status: 200, ids }
+  }
+}
+
 async function getHistory(cookie: string, obligationId: number) {
   const res = await fetch(`${BASE_URL}/api/warehouse/package-returns/obligations/${obligationId}/entries`, { headers: { Cookie: cookie } })
   const json = await res.json()
@@ -122,12 +135,12 @@ async function main() {
   const unassignedObligation = await createImportObligation(5, { needsSupplierAssignment: true })
   createdObligationIds.push(assignedObligation.id, unassignedObligation.id)
 
-  const list1 = await listObligations(cookie, { sourceType: 'MATERIAL_IMPORT' })
-  const ids1 = (list1.json.data as Array<{ id: number }>).map(o => o.id)
+  const list1 = await listAllIds(cookie, { sourceType: 'MATERIAL_IMPORT' })
+  const ids1 = list1.ids
   const test1Pass = list1.status === 200 && ids1.includes(assignedObligation.id) && !ids1.includes(unassignedObligation.id)
   console.log(test1Pass
     ? '✅ Test 1 PASS (assigned obligation listed, needs-assignment obligation excluded)'
-    : `❌ Test 1 FAIL (status=${list1.status}, ids=${JSON.stringify(ids1)})`)
+    : `❌ Test 1 FAIL (status=${list1.status}, listed=${ids1.includes(assignedObligation.id)}, unassignedListed=${ids1.includes(unassignedObligation.id)})`)
   allPass &&= test1Pass
 
   // ── Test 2: default status filter excludes RETURNED, explicit status=RETURNED includes it ──
@@ -137,10 +150,8 @@ async function main() {
   const fullReturn = await postEntry(cookie, returnedObligation.id, 3)
   const fullReturnOk = fullReturn.status === 201
 
-  const list2Default = await listObligations(cookie, { sourceType: 'MATERIAL_IMPORT' })
-  const ids2Default = (list2Default.json.data as Array<{ id: number }>).map(o => o.id)
-  const list2Returned = await listObligations(cookie, { sourceType: 'MATERIAL_IMPORT', status: 'RETURNED' })
-  const ids2Returned = (list2Returned.json.data as Array<{ id: number }>).map(o => o.id)
+  const ids2Default = (await listAllIds(cookie, { sourceType: 'MATERIAL_IMPORT' })).ids
+  const ids2Returned = (await listAllIds(cookie, { sourceType: 'MATERIAL_IMPORT', status: 'RETURNED' })).ids
   const test2Pass = fullReturnOk && !ids2Default.includes(returnedObligation.id) && ids2Returned.includes(returnedObligation.id)
   console.log(test2Pass
     ? '✅ Test 2 PASS (RETURNED excluded by default, present with status=RETURNED)'
@@ -211,8 +222,8 @@ async function main() {
   const grantedObligation = await createImportObligation(6)
   createdObligationIds.push(grantedObligation.id)
 
-  const listGranted = await listObligations(grantedCookie, { sourceType: 'MATERIAL_IMPORT' })
-  const foundGranted = (listGranted.json.data as Array<{ id: number }>).some(o => o.id === grantedObligation.id)
+  const listGranted = await listAllIds(grantedCookie, { sourceType: 'MATERIAL_IMPORT' })
+  const foundGranted = listGranted.ids.includes(grantedObligation.id)
   const postGranted = await postEntry(grantedCookie, grantedObligation.id, 6)
   const grantedEntryId = postGranted.json?.data?.id as number | undefined
   const historyGranted = grantedEntryId !== undefined ? await getHistory(grantedCookie, grantedObligation.id) : { status: 0, json: null }
