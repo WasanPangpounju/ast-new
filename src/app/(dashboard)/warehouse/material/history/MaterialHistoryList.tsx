@@ -7,6 +7,7 @@ import { useFieldSuggestions } from "@/hooks/useFieldSuggestions";
 import { useLoadMoreSentinel } from "@/hooks/useLoadMoreSentinel";
 import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
 import { bangkokYmd } from "@/lib/bangkokDate";
+import { packagingQty } from "@/lib/packaging-qty";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -264,9 +265,9 @@ export default function MaterialHistoryList() {
         weightKgNet:     parseFloat(editState.weightKgNet) || undefined,
         weightKgSum:     parseFloat(editState.weightKgSum) || undefined,
         weightKgPackage: parseFloat(editState.weightKgPackage) || undefined,
-        pallet:          parseInt(editState.pallet) || undefined,
-        box:             parseInt(editState.box) || undefined,
-        sack:            parseInt(editState.sack) || undefined,
+        pallet:          packagingQty(editState.pallet),
+        box:             packagingQty(editState.box),
+        sack:            packagingQty(editState.sack),
         emp:             editState.emp.trim() || undefined,
         note:            editState.note.trim() || undefined,
         importDate:      editState.importDate || null,
