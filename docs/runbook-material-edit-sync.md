@@ -8,6 +8,8 @@ Branch: `feature/material-patch-sync-obligations` (แตกจาก main `4402
 - ลบใบรับเข้า → ยอดต้องส่งคืนของใบถูกลบไปด้วย; ถ้ามีการคืนแล้ว ลบไม่ได้
 - ฟอร์มแก้ใบรับเข้ากรอก 0 ได้
 - เปลี่ยนชื่อซัพพลายเออร์ → ใบรับเข้าเก่ายังนับเป็นของบริษัทนั้น; ไม่ยอมเปลี่ยนชื่อถ้าชื่อเดิมซ้ำกับซัพพลายเออร์อื่น หรือชื่อใหม่เป็นของรายอื่นอยู่แล้ว
+- สร้างหรือเปลี่ยนชื่อซัพพลายเออร์เป็นชื่อเดิมของรายอื่น → ไม่ยอม (ใบรับเข้าเก่าที่ใช้ชื่อนั้นยังเป็นของรายเดิม)
+- ลบซัพพลายเออร์ที่ยังมียอดบรรจุภัณฑ์ต้องส่งคืนคงค้าง → ไม่ยอม และบอกว่าค้างอะไรเท่าไร
 
 วิธีอ่านเหมือน runbook รอบก่อน: ทุกกล่องคือคำสั่งเดียว, ใต้กล่องมี **ต้องเห็น** ถ้าไม่ตรงให้หยุด, รันบน server เป็น root จาก `/home/deploy/ast-new` ยกเว้นขั้น "เครื่องคุณ"
 
@@ -37,7 +39,22 @@ git merge --ff-only feature/material-patch-sync-obligations
 git log --oneline 44029b7..HEAD
 ```
 
-ต้องเห็น: เฉพาะ commit ของ branch นี้ (ยอดต้องส่งคืนตามใบรับเข้า, ชื่อซัพพลายเออร์, ฟอร์มกรอก 0, runbook นี้)
+ต้องเห็น 6 บรรทัดนี้เท่านั้น (บนลงล่าง ใหม่ไปเก่า, hash ของบรรทัดแรกคือ commit ที่แก้ runbook นี้):
+
+```
+<hash> docs: runbook lists the final commits of the import edit / supplier round
+a5897db feat: guard supplier delete and names another supplier used before
+25f14bf docs: prod runbook and user notice for import edit / supplier rename changes
+68a6c9b feat: imports stay counted under a renamed supplier
+1438b5a fix: import edit form sends 0 for pallet, box and sack
+37e380d feat: import edits and deletes keep its package-return obligations in step
+```
+
+```sh
+git rev-list --count 44029b7..HEAD
+```
+
+ต้องเห็น: `6`
 
 ```sh
 git diff --name-only 44029b7 HEAD -- prisma/migrations
@@ -92,6 +109,12 @@ git pull --ff-only origin main
 ```
 
 (ถ้าเจ้าของ repo เป็น `deploy` ใช้ `sudo -u deploy git pull --ff-only origin main`) ต้องเห็น: `Updating 44029b7..<hash>` และ `Fast-forward`
+
+```sh
+git rev-list --count 44029b7..HEAD
+```
+
+ต้องเห็น: `6` (ตรงกับขั้น 0) ถ้าไม่ใช่ให้หยุด และย้อน repo ด้วย `git reset --hard 44029b7` (ยังไม่ได้ build อะไร)
 
 ```sh
 test -f src/lib/material-obligation-sync.ts && test -f src/lib/supplier-names.ts && echo READY
@@ -151,7 +174,7 @@ docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d a
 | ประวัติการนำเข้า | เปิดแก้ใบใดก็ได้ แล้ว**ปิดโดยไม่บันทึก** | ฟอร์มเปิดได้ปกติ ช่องพาเลท/กล่อง/กระสอบพิมพ์ 0 ได้ |
 | ซัพพลายเออร์ | เปิดแก้รายการใดก็ได้ แล้ว**ปิดโดยไม่บันทึก** | ฟอร์มเปิดได้ปกติ |
 
-ไม่ต้องทดลองแก้หรือลบใบจริงบน prod — ทดสอบครบแล้วบนสำเนา (`test-material-patch-obligations.ts` 31 ข้อ, `test-supplier-rename.ts` 14 ข้อ)
+ไม่ต้องทดลองแก้หรือลบใบรับเข้า และไม่ต้องทดลองลบหรือเปลี่ยนชื่อซัพพลายเออร์บน prod — ทดสอบครบแล้วบนสำเนา (`test-material-patch-obligations.ts` 31 ข้อ, `test-supplier-rename.ts` 22 ข้อ)
 
 ผ่านแล้วแจ้งผู้ใช้ตามข้อความแจ้งผู้ใช้ และยกเลิกข้อห้ามแก้จำนวนบรรจุภัณฑ์ในใบรับเข้าเก่า
 
@@ -184,5 +207,9 @@ docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d a
 > **เปลี่ยนชื่อซัพพลายเออร์**
 > - ใบรับเข้าเก่าที่ใช้ชื่อเดิมยังนับเป็นของบริษัทนั้นเหมือนเดิม
 > - เปลี่ยนชื่อไม่ได้ ถ้ามีซัพพลายเออร์อีกรายการใช้ชื่อเดียวกันอยู่ หรือชื่อใหม่ซ้ำกับซัพพลายเออร์รายอื่น
+>
+> **เพิ่มหรือลบซัพพลายเออร์**
+> - ตั้งชื่อซัพพลายเออร์ใหม่ให้ซ้ำกับชื่อเดิมของรายอื่นที่เคยเปลี่ยนชื่อไปแล้วไม่ได้ เพราะใบรับเข้าเก่าที่ใช้ชื่อนั้นยังเป็นของรายเดิม
+> - ลบซัพพลายเออร์ที่ยังมีบรรจุภัณฑ์ต้องส่งคืนค้างอยู่ไม่ได้ ระบบจะแจ้งว่าค้างอะไรเท่าไร ให้คืนให้ครบก่อน
 >
 > ข้อห้ามแก้จำนวนบรรจุภัณฑ์ในใบรับเข้าเก่าที่แจ้งไปก่อนหน้า ยกเลิกแล้ว แก้ได้ตามปกติ
