@@ -2,13 +2,14 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { requirePermission, PermissionError } from '@/lib/permissions'
 import { supplierIdsSharingName } from '@/lib/package-return-obligations'
+import { companyMaterialNames } from '@/lib/supplier-names'
 import { columnOf, emptyTotals, importedTotals, SUMMARY_COLUMNS, type ColumnTotals, type ImportSource } from '@/lib/package-return-columns'
 import type { NextRequest } from 'next/server'
 
 // ─── GET /api/warehouse/package-returns/summary?supplierId= ──────────────────
 // Per-supplier summary table of the legacy page: นำเข้า / ต้องส่งคืน / คืนแล้ว / คงค้าง.
 // นำเข้า = all packaging on that supplier's materials (returnable or not), matched by name
-// since Material.supplierName is free text; materials from the legacy system carry no subtype,
+// since Material.supplierName is free text (the current name and any name it was renamed from); materials from the legacy system carry no subtype,
 // so theirs comes from the legacy packageasts import row (see importedTotals) — read-only.
 // The other three rows come from the supplier's
 // MATERIAL_IMPORT obligations, so they include returns recorded before ใบคืน existed.
@@ -34,6 +35,8 @@ export async function GET(request: NextRequest) {
     const company = await supplierIdsSharingName(prisma, supplierId)
     if (!company) return Response.json({ error: 'ไม่พบบริษัท' }, { status: 404 })
     const supplier = { id: supplierId, name: company.name }
+    // current name + names it was renamed away from (imports keep the name they were keyed in with)
+    const names = await companyMaterialNames(prisma, company.ids)
 
     const [materialRows, obligations] = await Promise.all([
       prisma.$queryRaw<(Omit<ImportSource, 'legacy'> & LegacyCols & { legacyId: number | null })[]>`
@@ -44,7 +47,7 @@ export async function GET(request: NextRequest) {
           LEFT JOIN (
             SELECT DISTINCT ON (ref_id) * FROM packageasts WHERE "packageStatus" = 'packageImport' ORDER BY ref_id, id
           ) pa ON pa.ref_id = m.id
-         WHERE m."supplierName" = ${supplier.name} AND m."deletedAt" IS NULL
+         WHERE m."supplierName" = ANY(${names}::text[]) AND m."deletedAt" IS NULL
       `,
       prisma.packageReturnObligation.findMany({
         where: { supplierId: { in: company.ids }, sourceType: 'MATERIAL_IMPORT', needsSupplierAssignment: false, deletedAt: null },

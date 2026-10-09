@@ -1,5 +1,7 @@
 import type { Prisma } from '@/generated/prisma/client/client'
 
+import { supplierIdByOldName } from './supplier-names'
+
 type TxClient = Prisma.TransactionClient
 
 /** Thrown for expected validation failures (not found, exceeds quota, already cancelled) —
@@ -19,7 +21,8 @@ export function computeReturnStatus(qtyReturned: number, qtyDue: number): 'PENDI
 
 /** Exact-match (trimmed) lookup of Supplier by name — 100% of current Material/MaterialOutside
  *  supplierName values match a Supplier.name, but that isn't guaranteed for future free-text input,
- *  so an unmatched name falls back to needsSupplierAssignment instead of failing the transaction. */
+ *  so an unmatched name falls back to the supplier it was renamed away from (supplier-names.ts),
+ *  then to needsSupplierAssignment instead of failing the transaction. */
 export async function resolveSupplierId(
   tx: TxClient,
   supplierName: string | null | undefined
@@ -32,8 +35,11 @@ export async function resolveSupplierId(
     select: { id: true },
   })
 
-  return supplier
-    ? { supplierId: supplier.id, needsSupplierAssignment: false }
+  if (supplier) return { supplierId: supplier.id, needsSupplierAssignment: false }
+  // an import keyed in before its supplier was renamed still carries the old name
+  const renamedFrom = await supplierIdByOldName(tx, name)
+  return renamedFrom != null
+    ? { supplierId: renamedFrom, needsSupplierAssignment: false }
     : { supplierId: null, needsSupplierAssignment: true }
 }
 

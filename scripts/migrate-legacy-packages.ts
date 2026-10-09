@@ -652,8 +652,15 @@ async function summaryAsPage(db: pg.ClientBase, company: string, ids: number[]):
        FROM materials m
        LEFT JOIN (SELECT DISTINCT ON (ref_id) * FROM packageasts WHERE "packageStatus" = 'packageImport' ORDER BY ref_id, id) pa
          ON pa.ref_id = m.id
-      WHERE m."supplierName" = $1 AND m."deletedAt" IS NULL`,
-    [company]
+      -- the company's names: current + renamed-from (same rule as src/lib/supplier-names.ts)
+      WHERE m."supplierName" IN (
+         SELECT name FROM suppliers WHERE id = ANY($1::int[]) AND deleted_at IS NULL
+         UNION
+         SELECT a.old_value FROM audit_logs a
+          WHERE a.table_name = 'suppliers' AND a.field_name = 'name' AND a.old_value IS NOT NULL
+            AND a.record_key = ANY($1::text[])
+            AND NOT EXISTS (SELECT 1 FROM suppliers s WHERE s.name = a.old_value AND s.deleted_at IS NULL AND NOT (s.id = ANY($1::int[])))) AND m."deletedAt" IS NULL`,
+    [ids]
   )
   const imported = importedTotals(mats.rows.map((m) => ({
     spool: m.spool, pallet: m.pallet, box: m.box, sack: m.sack, paperBar: m.paperBar,
