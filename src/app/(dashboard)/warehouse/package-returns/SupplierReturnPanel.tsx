@@ -36,6 +36,7 @@ type Receipt = Record<FieldKey, number> & {
   unspecifiedSpool: number;
   unspecifiedPallet: number;
   unspecifiedSack: number;
+  legacy: boolean; // ย้ายมาจากระบบเดิม — ยกเลิกไม่ได้
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -547,10 +548,14 @@ function ReceiptHistory({ supplierId, receipts, loading, error }: {
                     <td className="px-2 py-2 text-gray-600 whitespace-nowrap">{r.emp ?? "-"}</td>
                     <td className="px-2 py-2 text-gray-600 max-w-[160px] truncate" title={r.note ?? ""}>{r.note ?? "-"}</td>
                     <td className="px-2 py-2">
-                      <button type="button" onClick={() => handleCancel(r)} disabled={cancelling === r.id}
-                        className="text-red-500 hover:text-red-700 disabled:opacity-50 font-medium whitespace-nowrap">
-                        {cancelling === r.id ? "กำลังยกเลิก..." : "ยกเลิก"}
-                      </button>
+                      {r.legacy ? (
+                        <span className="text-gray-400 whitespace-nowrap" title="ใบคืนที่ย้ายมาจากระบบเดิม ยกเลิกไม่ได้">ระบบเดิม</span>
+                      ) : (
+                        <button type="button" onClick={() => handleCancel(r)} disabled={cancelling === r.id}
+                          className="text-red-500 hover:text-red-700 disabled:opacity-50 font-medium whitespace-nowrap">
+                          {cancelling === r.id ? "กำลังยกเลิก..." : "ยกเลิก"}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

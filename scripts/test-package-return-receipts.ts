@@ -51,6 +51,7 @@ async function main() {
   let legacySupplierId: number | null = null
   const legacyMaterialIds: number[] = []
   const legacyPackageAstIds: number[] = []
+  let htrId: number | null = null
   const supplier = await prisma.supplier.create({ data: { name: `${TAG} บริษัททดสอบ` } })
   const material = await prisma.material.create({
     data: {
@@ -161,6 +162,7 @@ async function main() {
 
     const list = (await (await api(`/receipts?supplierId=${supplier.id}`)).json()).data
     check('receipt history lists it with unspecifiedSpool=2, unspecifiedSack=1', list.length === 1 && list[0].id === receiptId && list[0].unspecifiedSpool === 2 && list[0].unspecifiedSack === 1 && list[0].spoolPaper === 7, list)
+    check('receipt recorded in the new system is not marked legacy', list[0].legacy === false, list[0].legacy)
 
     // ── single-entry cancel is blocked for receipt entries ──
     r = await api(`/entries/${entries[0].id}`, { method: 'DELETE' })
@@ -189,6 +191,17 @@ async function main() {
     r = await post({ returnDate: '2026-10-06', box: 9 })
     check('receipt can allocate onto same-name supplier obligations', r.status === 201, await r.json())
     check('twin obligation returned', (await ob(oTwinBox.id)).status === 'RETURNED')
+
+    // ── ใบคืนที่ย้ายมาจากระบบเดิม (linked from htrpackages) is locked ──
+    const twinReceipt = (await prisma.packageReturnReceipt.findFirst({ where: { supplierId: supplier.id, deletedAt: null }, orderBy: { id: 'desc' } }))!
+    const htr = await prisma.htrPackage.create({ data: { supplierName: supplier.name, box: 9, receiptId: twinReceipt.id } })
+    htrId = htr.id
+    const hist = (await (await api(`/receipts?supplierId=${supplier.id}`)).json()).data as { id: number; legacy: boolean }[]
+    check('legacy receipt flagged in history', hist.find(x => x.id === twinReceipt.id)?.legacy === true, hist)
+    r = await api(`/receipts/${twinReceipt.id}`, { method: 'DELETE' })
+    j = await r.json()
+    check('cancel legacy receipt → 409 ย้ายมาจากระบบเดิม', r.status === 409 && /ระบบเดิม/.test(j.error), j)
+    check('legacy receipt still active, obligation still returned', (await prisma.packageReturnReceipt.findUnique({ where: { id: twinReceipt.id } }))?.deletedAt === null && (await ob(oTwinBox.id)).status === 'RETURNED')
 
     // ── นำเข้า for legacy materials: subtype from packageasts import row, read-only ──
     const legacySupplier = await prisma.supplier.create({ data: { name: `${TAG} บริษัทระบบเดิม` } })
@@ -219,6 +232,7 @@ async function main() {
     const after = await prisma.material.findMany({ where: { id: { in: legacyMaterialIds } }, orderBy: { id: 'asc' } })
     check('summary did not write to materials', JSON.stringify(before) === JSON.stringify(after))
   } finally {
+    if (htrId) await prisma.htrPackage.deleteMany({ where: { id: htrId } })
     await prisma.packageAst.deleteMany({ where: { id: { in: legacyPackageAstIds } } })
     await prisma.material.deleteMany({ where: { id: { in: legacyMaterialIds } } })
     if (legacySupplierId) await prisma.supplier.deleteMany({ where: { id: legacySupplierId } })

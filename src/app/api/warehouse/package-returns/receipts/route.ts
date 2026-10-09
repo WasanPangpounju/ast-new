@@ -64,10 +64,11 @@ export async function GET(request: NextRequest) {
           where: { deletedAt: null },
           select: { qty: true, obligation: { select: { category: true, variant: true } } },
         },
+        htrPackage: { select: { id: true } },
       },
     })
 
-    const data = receipts.map(({ entries, ...r }) => {
+    const data = receipts.map(({ entries, htrPackage, ...r }) => {
       let unspecifiedSpool = 0
       let unspecifiedPallet = 0
       let unspecifiedSack = 0
@@ -77,7 +78,8 @@ export async function GET(request: NextRequest) {
         if (col === 'palletUnspecified') unspecifiedPallet += e.qty
         if (col === 'sackUnspecified') unspecifiedSack += e.qty
       }
-      return { ...r, unspecifiedSpool, unspecifiedPallet, unspecifiedSack }
+      // legacy = ใบคืนย้อนหลังจากระบบเดิม (htrpackages) — cannot be cancelled
+      return { ...r, unspecifiedSpool, unspecifiedPallet, unspecifiedSack, legacy: htrPackage !== null }
     })
 
     return Response.json({ success: true, data })

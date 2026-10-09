@@ -15,6 +15,7 @@ interface ObligationRow {
 // ─── DELETE /api/warehouse/package-returns/receipts/[receiptId] ──────────────
 // Cancels a whole ใบคืน: soft-deletes the receipt and every entry it allocated, and reverses
 // those quantities on the obligations (same effect as cancelling each entry individually).
+// ใบคืนที่ย้ายมาจากระบบเดิม (linked from htrpackages) are locked: 409.
 
 export async function DELETE(_request: NextRequest, { params }: Params) {
   try {
@@ -39,6 +40,9 @@ export async function DELETE(_request: NextRequest, { params }: Params) {
       `
       if (receipts.length === 0) throw new PackageReturnError('ไม่พบใบคืน', 404)
       if (receipts[0].deletedAt !== null) throw new PackageReturnError('ใบคืนนี้ถูกยกเลิกไปแล้ว', 409)
+      // ใบคืนย้อนหลังที่ย้ายมาจากระบบเดิม (htrpackages) ยกเลิกไม่ได้ — ยอดคืนของระบบเดิมต้องคงอยู่
+      const legacy = await tx.htrPackage.findUnique({ where: { receiptId }, select: { id: true } })
+      if (legacy) throw new PackageReturnError(`ใบคืน #${receiptId} ย้ายมาจากระบบเดิม ยกเลิกไม่ได้`, 409)
 
       const entries = await tx.packageReturnEntry.findMany({
         where: { receiptId, deletedAt: null },
