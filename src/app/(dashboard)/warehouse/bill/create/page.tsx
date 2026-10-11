@@ -129,6 +129,11 @@ export default function BillCreatePage() {
   const inputRefs = useRef<(HTMLInputElement | null)[]>(
     Array(TOTAL_SLOTS).fill(null),
   );
+  // ลบหลายพับพร้อมกัน — คลิกเลขลำดับเพื่อเลือก (Shift+คลิก = เลือกช่วง)
+  // แล้วกด "ลบพับที่เลือก" ช่องที่ลบถูกตัดออกและพับถัดไปเลื่อนขึ้นมาแทน
+  const [selectedSlots, setSelectedSlots] = useState<Set<number>>(new Set());
+  const [confirmClearSlots, setConfirmClearSlots] = useState(false);
+  const selectAnchorRef = useRef<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -386,6 +391,45 @@ export default function BillCreatePage() {
 
   const yardNums = yards.map((v) => parseFloat(v) || 0);
   const totalFold = yardNums.filter((v) => v > 0).length;
+  const selectedYard = [...selectedSlots].reduce((s, i) => s + yardNums[i], 0);
+
+  const clearSlotSelection = () => {
+    setSelectedSlots(new Set());
+    setConfirmClearSlots(false);
+    selectAnchorRef.current = null;
+  };
+
+  // เลือกได้เฉพาะช่องที่มีหลาแล้ว — Shift+คลิกเลือกทุกช่องที่มีหลาในช่วงจาก
+  // ช่องที่คลิกล่าสุดถึงช่องนี้
+  const toggleSlot = (idx: number, shift: boolean) => {
+    if (!(yardNums[idx] > 0)) return;
+    setConfirmClearSlots(false);
+    // อ่าน anchor ก่อน setState — updater ของ React รันทีหลัง (ตอน render)
+    // ซึ่งตอนนั้น selectAnchorRef ถูกเขียนทับเป็น idx ไปแล้ว
+    const anchor = selectAnchorRef.current;
+    setSelectedSlots((prev) => {
+      const next = new Set(prev);
+      if (shift && anchor != null) {
+        const [a, b] = anchor < idx ? [anchor, idx] : [idx, anchor];
+        for (let i = a; i <= b; i++) if (yardNums[i] > 0) next.add(i);
+      } else if (next.has(idx)) {
+        next.delete(idx);
+      } else {
+        next.add(idx);
+      }
+      return next;
+    });
+    selectAnchorRef.current = idx;
+  };
+
+  // ตัดช่องที่เลือกออก แล้วเลื่อนทุกช่องถัดไปขึ้นมาแทน (เติมช่องว่างท้ายตาราง)
+  const clearSelectedSlots = () => {
+    setYards((prev) => {
+      const kept = prev.filter((_, i) => !selectedSlots.has(i));
+      return [...kept, ...Array(TOTAL_SLOTS - kept.length).fill("")];
+    });
+    clearSlotSelection();
+  };
   const totalYard = yardNums.reduce((a, b) => a + b, 0);
 
   // Combined remaining capacity across every linked order, and how much the
@@ -434,6 +478,7 @@ export default function BillCreatePage() {
         if (i < TOTAL_SLOTS) next[i] = String(row.yards);
       });
       setYards(next);
+      clearSlotSelection();
     }
     if (data.confidence) {
       Object.entries(data.confidence).forEach(([key, val]) => {
@@ -470,6 +515,7 @@ export default function BillCreatePage() {
   // (เรียกจากปุ่ม "ล้างฟอร์ม" และท้าย handleSave "บันทึกเสร็จสิ้น")
   function resetForm() {
     setYards(Array(TOTAL_SLOTS).fill(""));
+    clearSlotSelection();
     setStockSearch("");
     setStockResults([]);
     setStockDropdown(false);
@@ -506,6 +552,7 @@ export default function BillCreatePage() {
   // เพราะม้วนถัดไปในบิลเดียวกัน (refId เดิม) เป็นบิลเดิม ต่างกันแค่จำนวนหลาที่คีย์รอบใหม่
   function resetYardsOnly() {
     setYards(Array(TOTAL_SLOTS).fill(""));
+    clearSlotSelection();
     setPendingRequestId(null);
   }
 
@@ -712,6 +759,7 @@ export default function BillCreatePage() {
       });
     }
     setYards(nextYards);
+    clearSlotSelection();
     setAiFilledFields(new Set());
     setAiLowConfidence(new Set());
     setSavedCount(0);
@@ -1608,17 +1656,27 @@ export default function BillCreatePage() {
                     const idx = g * ROWS + r;
                     const slotNo = idx + 1;
                     const filled = yardNums[idx] > 0;
+                    const selected = selectedSlots.has(idx);
                     return (
                       <td
                         key={g}
                         colSpan={2}
-                        className="border border-gray-200 p-0"
+                        className={
+                          "border border-gray-200 p-0" +
+                          (selected ? " bg-red-100" : "")
+                        }
                       >
                         <div className="flex items-center">
                           <span
+                            onClick={(e) => toggleSlot(idx, e.shiftKey)}
+                            title={filled ? "คลิกเพื่อเลือกลบ (Shift+คลิก = เลือกช่วง)" : undefined}
                             className={
                               "text-xs w-7 text-right pr-1 select-none flex-shrink-0" +
-                              (filled ? " text-gray-900 font-bold" : " text-gray-400")
+                              (selected
+                                ? " text-red-700 font-bold cursor-pointer"
+                                : filled
+                                  ? " text-gray-900 font-bold cursor-pointer hover:text-red-600"
+                                  : " text-gray-400")
                             }
                           >
                             {slotNo}
@@ -1641,7 +1699,8 @@ export default function BillCreatePage() {
                             }}
                             className={
                               "w-full text-right text-xs border-0 outline-none py-1 px-1 focus:bg-yellow-50" +
-                              (filled ? " text-blue-800 font-semibold" : "")
+                              (filled ? " text-blue-800 font-semibold" : "") +
+                              (selected ? " bg-red-100 line-through" : "")
                             }
                           />
                         </div>
@@ -1683,6 +1742,49 @@ export default function BillCreatePage() {
       {/* Action buttons */}
       <div className="flex items-center justify-end gap-3">
         <div className="mr-auto flex items-center gap-2 text-xs text-gray-500">
+          {selectedSlots.size > 0 && (
+            <span className="flex items-center gap-2 text-red-700">
+              <span>
+                เลือก {selectedSlots.size} พับ (รวม{" "}
+                {selectedYard.toLocaleString(undefined, { maximumFractionDigits: 2 })} หลา)
+              </span>
+              {confirmClearSlots ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearSlots(false)}
+                    className="px-3 py-1.5 border border-gray-300 text-gray-600 bg-white hover:bg-gray-50"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearSelectedSlots}
+                    className="px-3 py-1.5 bg-red-500 text-white hover:bg-red-600 font-medium"
+                  >
+                    ยืนยันลบ {selectedSlots.size} พับ
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClearSlots(true)}
+                    className="px-3 py-1.5 border border-red-300 text-red-600 bg-white hover:bg-red-50 font-medium"
+                  >
+                    ลบพับที่เลือก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearSlotSelection}
+                    className="px-3 py-1.5 border border-gray-300 text-gray-600 bg-white hover:bg-gray-50"
+                  >
+                    ยกเลิกเลือก
+                  </button>
+                </>
+              )}
+            </span>
+          )}
           {savedCount > 0 && <span>บันทึกแล้ว {savedCount} รายการ</span>}
           {draftId != null && (
             <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
