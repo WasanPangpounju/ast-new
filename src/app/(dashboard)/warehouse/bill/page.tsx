@@ -91,10 +91,17 @@ interface OrderResult {
 
 type ActiveTab = 'bill' | 'stock' | 'order' | 'folds';
 
+const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+const FILTER_YEARS = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
+
 export default function BillListPage() {
   const [search, setSearch] = useState("");
   const [applied, setApplied] = useState("");
   const [noStockOnly, setNoStockOnly] = useState(false);
+  // "" = ทั้งหมด; month applies only when a year is chosen
+  const [vatTypeFilter, setVatTypeFilter] = useState("");
+  const [yearFilter, setYearFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
   const [searchDropdown, setSearchDropdown] = useState(false);
 
@@ -109,6 +116,10 @@ export default function BillListPage() {
   const [editingFold, setEditingFold] = useState<{ id: number; yard: string } | null>(null);
   const [foldSaving, setFoldSaving] = useState(false);
   const [confirmDeleteFold, setConfirmDeleteFold] = useState<number | null>(null);
+  // เลือกหลายพับแล้วลบพร้อมกัน — ห้ามเลือกครบทุกพับ (นั่นคือ "ลบบิล" ไม่ใช่แก้พับ)
+  const [selectedFoldIds, setSelectedFoldIds] = useState<Set<number>>(new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // เพิ่มพับย้อนหลัง — newFoldYard คือช่องกรอกหลาท้ายตาราง, addFoldRequestId คือ
   // idempotency token ต่อการกด "เพิ่มพับ" หนึ่งครั้ง (เหมือน pendingRequestId ใน
@@ -143,10 +154,15 @@ export default function BillListPage() {
     const p = new URLSearchParams({ page: String(page) });
     if (applied) p.set("search", applied);
     if (noStockOnly) p.set("noStockOnly", "1");
+    if (vatTypeFilter) p.set("vatType", vatTypeFilter);
+    if (yearFilter) {
+      p.set("year", yearFilter);
+      if (monthFilter) p.set("month", monthFilter);
+    }
     return fetch(`/api/warehouse/bill?${p}`)
       .then((r) => r.json())
       .then((d) => ({ items: d.bills ?? [], total: d.total ?? 0 }));
-  }, [applied, noStockOnly]);
+  }, [applied, noStockOnly, vatTypeFilter, yearFilter, monthFilter]);
 
   const { items: bills, total, initialLoading, loadingMore, hasMore, sentinelRef, reload } = useInfiniteScroll<Bill>(fetchBillsPage);
 
@@ -271,6 +287,8 @@ export default function BillListPage() {
 
   const fetchFolds = useCallback((vatType: string, vatNo: number) => {
     setFoldsLoading(true);
+    setSelectedFoldIds(new Set());
+    setConfirmBulkDelete(false);
     fetch(`/api/warehouse/bill/folds?vatType=${vatType}&vatNo=${vatNo}`)
       .then(r => r.json())
       .then(d => setFolds(d.folds ?? []))
@@ -310,6 +328,7 @@ export default function BillListPage() {
     setConfirmDelete(false);
     setEditingFold(null);
     setConfirmDeleteFold(null);
+    setSelectedFoldIds(new Set()); setConfirmBulkDelete(false);
     setNewFoldYard(""); setAddFoldRequestId(null);
     setStockSearch(""); setStockResults([]);
     setOrderSearch(""); setOrderResults([]);
@@ -323,6 +342,7 @@ export default function BillListPage() {
     setConfirmDelete(false);
     setEditingFold(null);
     setConfirmDeleteFold(null);
+    setSelectedFoldIds(new Set()); setConfirmBulkDelete(false);
     setNewFoldYard(""); setAddFoldRequestId(null);
     setStockResults([]);
     setOrderResults([]);
@@ -336,6 +356,7 @@ export default function BillListPage() {
     setConfirmDelete(false);
     setEditingFold(null);
     setConfirmDeleteFold(null);
+    setSelectedFoldIds(new Set()); setConfirmBulkDelete(false);
     setNewFoldYard(""); setAddFoldRequestId(null);
     setEditingDate(null);
     setEditingVatNo(null); setVatNoError(null);
@@ -510,6 +531,39 @@ export default function BillListPage() {
     reload();
   };
 
+  const toggleFoldSelected = (id: number) => {
+    setConfirmBulkDelete(false);
+    setSelectedFoldIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDeleteFolds = async () => {
+    if (!manageBill || bulkDeleting || selectedFoldIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch('/api/warehouse/bill/folds/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vatType: manageBill.vatType, vatNo: manageBill.vatNo, ids: [...selectedFoldIds] }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "ลบพับไม่สำเร็จ");
+      // same reason as handleDeleteFold — manageBill is a snapshot, adjust it here
+      setManageBill(b => b ? { ...b, foldCount: b.foldCount - data.count, totalYard: b.totalYard - data.deletedYard } : b);
+      fetchFolds(manageBill.vatType, manageBill.vatNo);
+      reload();
+    } catch (err: unknown) {
+      alert("เกิดข้อผิดพลาด: " + (err instanceof Error ? err.message : String(err)));
+      fetchFolds(manageBill.vatType, manageBill.vatNo);
+    } finally {
+      setBulkDeleting(false);
+      setConfirmBulkDelete(false);
+    }
+  };
+
   // เพิ่มพับย้อนหลังเข้าบิลที่มีอยู่แล้ว — ระวัง: บิลนี้อาจเคยพิมพ์/ส่งลูกค้าไปแล้ว
   // (ดูป้ายเตือนใน UI) เพิ่มพับใหม่จะทำให้เอกสารที่พิมพ์ไปแล้วไม่ตรงกับระบบอีกต่อไป
   const handleAddFold = async () => {
@@ -607,11 +661,45 @@ export default function BillListPage() {
             </div>
           )}
         </div>
+        <select
+          value={vatTypeFilter}
+          onChange={(e) => setVatTypeFilter(e.target.value)}
+          title="ประเภทบิล"
+          className="border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">ทุกประเภทบิล</option>
+          <option value="A">บิล A</option>
+          <option value="B">บิล B</option>
+          <option value="C">บิล C</option>
+        </select>
+        <select
+          value={yearFilter}
+          onChange={(e) => { setYearFilter(e.target.value); if (!e.target.value) setMonthFilter(""); }}
+          title="ปี"
+          className="border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">ทุกปี</option>
+          {FILTER_YEARS.map((y) => (
+            <option key={y} value={y}>{y + 543}</option>
+          ))}
+        </select>
+        <select
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(e.target.value)}
+          disabled={!yearFilter}
+          title={yearFilter ? "เดือน" : "เลือกปีก่อน"}
+          className="border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-400"
+        >
+          <option value="">ทุกเดือน</option>
+          {THAI_MONTHS.map((m, i) => (
+            <option key={i + 1} value={i + 1}>{m}</option>
+          ))}
+        </select>
         <button type="button" onClick={() => { setApplied(search); }}
           className="px-6 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 font-medium">
           ค้นหา
         </button>
-        <button type="button" onClick={() => { setSearch(""); setApplied(""); setNoStockOnly(false); setSearchDropdown(false); }}
+        <button type="button" onClick={() => { setSearch(""); setApplied(""); setNoStockOnly(false); setVatTypeFilter(""); setYearFilter(""); setMonthFilter(""); setSearchDropdown(false); }}
           className="px-4 py-1.5 text-sm border border-gray-300 hover:bg-gray-50 text-gray-600">
           เคลียร์
         </button>
@@ -1126,9 +1214,47 @@ export default function BillListPage() {
                 ) : folds.length === 0 ? (
                   <div className="text-center py-8 text-gray-400 text-xs">ไม่พบข้อมูล</div>
                 ) : (
+                  <>
+                  {selectedFoldIds.size > 0 && (() => {
+                    const selYard = folds.filter(f => selectedFoldIds.has(f.id)).reduce((s, f) => s + f.sumYard, 0);
+                    const all = selectedFoldIds.size >= folds.length;
+                    return (
+                      <div className="px-3 py-2 bg-red-50 border-b border-red-200 text-xs flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-red-800">
+                          เลือก {selectedFoldIds.size} พับ (รวม {selYard.toLocaleString(undefined, { maximumFractionDigits: 2 })} หลา)
+                          {all && <span className="block text-red-600">ไม่สามารถลบทุกพับได้ — หากต้องการลบทั้งบิลให้ใช้ปุ่ม &quot;ลบบิล&quot; ในแท็บข้อมูลบิล</span>}
+                        </span>
+                        {confirmBulkDelete ? (
+                          <div className="flex gap-1">
+                            <button type="button" onClick={() => setConfirmBulkDelete(false)} disabled={bulkDeleting}
+                              className="px-2 py-0.5 text-xs border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 disabled:opacity-50">ยกเลิก</button>
+                            <button type="button" onClick={handleBulkDeleteFolds} disabled={bulkDeleting}
+                              className="px-2 py-0.5 text-xs bg-red-500 text-white hover:bg-red-600 disabled:opacity-50">
+                              {bulkDeleting ? "กำลังลบ..." : `ยืนยันลบ ${selectedFoldIds.size} พับ`}
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-1">
+                            <button type="button" onClick={() => setSelectedFoldIds(new Set())}
+                              className="px-2 py-0.5 text-xs border border-gray-300 text-gray-600 bg-white hover:bg-gray-50">ล้างที่เลือก</button>
+                            <button type="button" onClick={() => setConfirmBulkDelete(true)} disabled={all}
+                              className="px-2 py-0.5 text-xs bg-red-500 text-white hover:bg-red-600 disabled:opacity-50">ลบที่เลือก</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200">
+                        <th className="text-center px-2 py-2 w-8">
+                          <input
+                            type="checkbox"
+                            title="เลือกทั้งหมด"
+                            checked={folds.length > 0 && selectedFoldIds.size === folds.length}
+                            onChange={e => { setConfirmBulkDelete(false); setSelectedFoldIds(e.target.checked ? new Set(folds.map(f => f.id)) : new Set()); }}
+                          />
+                        </th>
                         <th className="text-center px-3 py-2 font-medium text-gray-600 w-12">ลำดับ</th>
                         <th className="text-right px-3 py-2 font-medium text-gray-600">หลา</th>
                         <th className="px-3 py-2 w-28" aria-label="actions"></th>
@@ -1136,7 +1262,10 @@ export default function BillListPage() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {folds.map((f, idx) => (
-                        <tr key={f.id} className="hover:bg-gray-50">
+                        <tr key={f.id} className={selectedFoldIds.has(f.id) ? "bg-red-50/50" : "hover:bg-gray-50"}>
+                          <td className="px-2 py-2 text-center">
+                            <input type="checkbox" title={`เลือกพับที่ ${idx + 1}`} checked={selectedFoldIds.has(f.id)} onChange={() => toggleFoldSelected(f.id)} />
+                          </td>
                           <td className="px-3 py-2 text-center text-gray-500">{idx + 1}</td>
                           <td className="px-3 py-2 text-right">
                             {editingFold?.id === f.id ? (
@@ -1175,6 +1304,7 @@ export default function BillListPage() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-50 border-t border-gray-200">
+                        <td />
                         <td className="px-3 py-2 text-xs text-gray-500 text-center">{folds.length} พับ</td>
                         <td className="px-3 py-2 text-right text-xs font-semibold text-gray-800">
                           {folds.reduce((s, f) => s + f.sumYard, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
@@ -1183,6 +1313,7 @@ export default function BillListPage() {
                       </tr>
                     </tfoot>
                   </table>
+                  </>
                 )}
 
                 {/* ฟอร์มเพิ่มพับ — แสดงเสมอไม่ว่าจะมีพับอยู่แล้วกี่แถว (ยกเว้นระหว่างโหลด) */}
