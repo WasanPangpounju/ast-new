@@ -127,6 +127,8 @@ export default function BillListPage() {
   const [newFoldYard, setNewFoldYard] = useState("");
   const [addFoldSaving, setAddFoldSaving] = useState(false);
   const [addFoldRequestId, setAddFoldRequestId] = useState<string | null>(null);
+  // กด "บันทึก" แล้วต้องยืนยันอีกชั้นก่อนยิง POST — เดิม Enter/คลิกครั้งเดียวเพิ่มทันที
+  const [confirmAddFold, setConfirmAddFold] = useState(false);
 
   const [stockSearch, setStockSearch] = useState("");
   const [stockResults, setStockResults] = useState<StockResult[]>([]);
@@ -329,7 +331,7 @@ export default function BillListPage() {
     setEditingFold(null);
     setConfirmDeleteFold(null);
     setSelectedFoldIds(new Set()); setConfirmBulkDelete(false);
-    setNewFoldYard(""); setAddFoldRequestId(null);
+    setNewFoldYard(""); setAddFoldRequestId(null); setConfirmAddFold(false);
     setStockSearch(""); setStockResults([]);
     setOrderSearch(""); setOrderResults([]);
     setEditingDate(null);
@@ -343,7 +345,7 @@ export default function BillListPage() {
     setEditingFold(null);
     setConfirmDeleteFold(null);
     setSelectedFoldIds(new Set()); setConfirmBulkDelete(false);
-    setNewFoldYard(""); setAddFoldRequestId(null);
+    setNewFoldYard(""); setAddFoldRequestId(null); setConfirmAddFold(false);
     setStockResults([]);
     setOrderResults([]);
     setEditingDate(null);
@@ -357,7 +359,7 @@ export default function BillListPage() {
     setEditingFold(null);
     setConfirmDeleteFold(null);
     setSelectedFoldIds(new Set()); setConfirmBulkDelete(false);
-    setNewFoldYard(""); setAddFoldRequestId(null);
+    setNewFoldYard(""); setAddFoldRequestId(null); setConfirmAddFold(false);
     setEditingDate(null);
     setEditingVatNo(null); setVatNoError(null);
     setHistoryOpenKey(null);
@@ -566,13 +568,20 @@ export default function BillListPage() {
 
   // เพิ่มพับย้อนหลังเข้าบิลที่มีอยู่แล้ว — ระวัง: บิลนี้อาจเคยพิมพ์/ส่งลูกค้าไปแล้ว
   // (ดูป้ายเตือนใน UI) เพิ่มพับใหม่จะทำให้เอกสารที่พิมพ์ไปแล้วไม่ตรงกับระบบอีกต่อไป
-  const handleAddFold = async () => {
+  // ขั้นแรก: ตรวจค่าแล้วเปิดกล่องยืนยัน — ยังไม่บันทึกอะไร
+  const requestAddFold = () => {
     if (!manageBill || addFoldSaving) return;
-    const yard = parseFloat(newFoldYard);
-    if (!(yard > 0)) {
+    if (!(parseFloat(newFoldYard) > 0)) {
       alert("กรุณากรอกจำนวนหลาให้ถูกต้อง");
       return;
     }
+    setConfirmAddFold(true);
+  };
+
+  const handleAddFold = async () => {
+    if (!manageBill || addFoldSaving) return;
+    const yard = parseFloat(newFoldYard);
+    if (!(yard > 0)) return;
     // Reuse the same requestId on a retry of a still-pending attempt (fetch
     // failed/lost response) — same pattern as bill/create/page.tsx's
     // pendingRequestId. Cleared on success or when newFoldYard changes below.
@@ -589,6 +598,7 @@ export default function BillListPage() {
       if (!res.ok) throw new Error(data.error ?? "เพิ่มพับไม่สำเร็จ");
       setNewFoldYard("");
       setAddFoldRequestId(null);
+      setConfirmAddFold(false);
       setManageBill(b => b ? { ...b, foldCount: b.foldCount + 1, totalYard: b.totalYard + yard } : b);
       fetchFolds(manageBill.vatType, manageBill.vatNo);
       reload();
@@ -1317,7 +1327,26 @@ export default function BillListPage() {
                 )}
 
                 {/* ฟอร์มเพิ่มพับ — แสดงเสมอไม่ว่าจะมีพับอยู่แล้วกี่แถว (ยกเว้นระหว่างโหลด) */}
-                {!foldsLoading && (
+                {!foldsLoading && confirmAddFold && (
+                  <div className="px-3 py-2 border-t border-blue-200 bg-blue-50 text-xs flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-blue-900">
+                      ยืนยันเพิ่มพับ <span className="font-semibold">{parseFloat(newFoldYard).toLocaleString(undefined, { maximumFractionDigits: 2 })} หลา</span> เข้าบิล{" "}
+                      <span className="font-semibold">{manageBill.vatType}-{manageBill.vatNo}</span>?
+                      <span className="block text-blue-700">
+                        หลังบันทึก: {manageBill.foldCount + 1} พับ รวม {(manageBill.totalYard + parseFloat(newFoldYard)).toLocaleString(undefined, { maximumFractionDigits: 2 })} หลา
+                      </span>
+                    </span>
+                    <div className="flex gap-1">
+                      <button type="button" onClick={() => setConfirmAddFold(false)} disabled={addFoldSaving}
+                        className="px-2 py-1 text-xs border border-gray-300 text-gray-600 bg-white hover:bg-gray-50 disabled:opacity-50">ยกเลิก</button>
+                      <button type="button" onClick={handleAddFold} disabled={addFoldSaving}
+                        className="px-3 py-1 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                        {addFoldSaving ? "กำลังบันทึก..." : "ยืนยันบันทึก"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {!foldsLoading && !confirmAddFold && (
                   <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-200 bg-gray-50 flex-wrap">
                     <span className="text-xs text-gray-500 flex-shrink-0">เพิ่มพับใหม่:</span>
                     <input
@@ -1329,14 +1358,14 @@ export default function BillListPage() {
                         // ของเดิม — ต้อง invalidate token กันไม่ให้ backend เข้าใจผิดว่าซ้ำ
                         if (addFoldRequestId) setAddFoldRequestId(null);
                       }}
-                      onKeyDown={e => { if (e.key === 'Enter') handleAddFold(); }}
+                      onKeyDown={e => { if (e.key === 'Enter') requestAddFold(); }}
                       placeholder="จำนวนหลา"
                       title="จำนวนหลา"
                       className="w-28 border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
-                    <button type="button" onClick={handleAddFold} disabled={addFoldSaving}
+                    <button type="button" onClick={requestAddFold} disabled={addFoldSaving}
                       className="px-3 py-1 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
-                      {addFoldSaving ? "กำลังเพิ่ม..." : "เพิ่มพับ"}
+                      บันทึก
                     </button>
                   </div>
                 )}
