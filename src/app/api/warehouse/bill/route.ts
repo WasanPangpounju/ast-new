@@ -40,15 +40,42 @@ export async function GET(request: NextRequest) {
     const offset      = (page - 1) * limit
     const search      = searchParams.get('search')      ?? ''
     const noStockOnly = searchParams.get('noStockOnly') === '1'
+    // Filters are interpolated into raw SQL below, so only whitelisted values
+    // get through — anything else is ignored as if the filter were unset.
+    const vatTypeParam = searchParams.get('vatType') ?? ''
+    const vatTypeFilter = ['A', 'B', 'C'].includes(vatTypeParam) ? vatTypeParam : null
+    const yearNum  = Number(searchParams.get('year'))
+    const monthNum = Number(searchParams.get('month'))
+    const yearFilter  = Number.isInteger(yearNum) && yearNum >= 2000 && yearNum <= 2100 ? yearNum : null
+    // month only applies together with a year
+    const monthFilter = yearFilter && Number.isInteger(monthNum) && monthNum >= 1 && monthNum <= 12 ? monthNum : null
 
-    const baseWhere = search
-      ? (() => {
-          const esc = search.replace(/'/g, "''")
-          const digits = search.replace(/[^0-9]/g, '')
-          const vatNoClause = digits ? ` OR CAST("vatNo" AS TEXT) LIKE '%${digits}%'` : ''
-          return `deleted_at IS NULL AND ("customerName" ILIKE '%${esc}%' OR "receiveName" ILIKE '%${esc}%' OR "vatType" ILIKE '%${esc}%'${vatNoClause})`
-        })()
-      : `deleted_at IS NULL`
+    const conds = [`deleted_at IS NULL`]
+    if (search) {
+      const esc = search.replace(/'/g, "''")
+      const digits = search.replace(/[^0-9]/g, '')
+      const vatNoClause = digits ? ` OR CAST("vatNo" AS TEXT) LIKE '%${digits}%'` : ''
+      conds.push(`("customerName" ILIKE '%${esc}%' OR "receiveName" ILIKE '%${esc}%' OR "vatType" ILIKE '%${esc}%'${vatNoClause})`)
+    }
+    if (vatTypeFilter) conds.push(`"vatType" = '${vatTypeFilter}'`)
+    const baseWhere = conds.join(' AND ')
+
+    // Year/month filters on the bill's own date (MIN over its rows — the date the
+    // list shows), not per row: a few bills have folds dated across a month
+    // boundary, and a row-level filter would list them in both months with only
+    // part of their folds. Compared in Thai local time to match fmtDate.
+    const outerConds: string[] = []
+    if (noStockOnly) outerConds.push('NOT has_stock_match')
+    if (yearFilter) {
+      const pad = (n: number) => String(n).padStart(2, '0')
+      const from = monthFilter ? `${yearFilter}-${pad(monthFilter)}-01` : `${yearFilter}-01-01`
+      const to = monthFilter
+        ? (monthFilter === 12 ? `${yearFilter + 1}-01-01` : `${yearFilter}-${pad(monthFilter + 1)}-01`)
+        : `${yearFilter + 1}-01-01`
+      const local = `("createDate" AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Bangkok')`
+      outerConds.push(`${local} >= '${from}' AND ${local} < '${to}'`)
+    }
+    const outerWhere = outerConds.length ? `WHERE ${outerConds.join(' AND ')}` : ''
 
     const [bills, totalRaw] = await Promise.all([
       prisma.$queryRawUnsafe(`
@@ -82,7 +109,7 @@ export async function GET(request: NextRequest) {
           SELECT b.*, ${STOCK_MATCH_EXPR} AS has_stock_match FROM agg b
         )
         SELECT * FROM with_match
-        ${noStockOnly ? 'WHERE NOT has_stock_match' : ''}
+        ${outerWhere}
         ORDER BY "vatNo" DESC
         LIMIT ${limit} OFFSET ${offset}
       `) as Promise<any[]>,
@@ -93,6 +120,7 @@ export async function GET(request: NextRequest) {
             "vatType", "vatNo",
             "customerName", "receiveName",
             "fabricStruct", "fabricPattern", "fabricW",
+            MIN("createDate")         AS "createDate",
             COALESCE(MAX("stockFabricStruct"),  '') AS s_struct,
             COALESCE(MAX("stockFabricW"),       '') AS s_w,
             COALESCE(MAX("stockFabricPattern"), '') AS s_pattern,
@@ -102,10 +130,10 @@ export async function GET(request: NextRequest) {
           GROUP BY "vatType", "vatNo", "customerName", "receiveName", "fabricStruct", "fabricPattern", "fabricW"
         ),
         with_match AS (
-          SELECT ${STOCK_MATCH_EXPR} AS has_stock_match FROM agg b
+          SELECT b."createDate", ${STOCK_MATCH_EXPR} AS has_stock_match FROM agg b
         )
         SELECT COUNT(*)::int AS cnt FROM with_match
-        ${noStockOnly ? 'WHERE NOT has_stock_match' : ''}
+        ${outerWhere}
       `) as Promise<any[]>,
     ])
 
