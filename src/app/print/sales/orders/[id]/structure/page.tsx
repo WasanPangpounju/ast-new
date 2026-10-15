@@ -71,6 +71,75 @@ function fmtDate(d: string | null) {
   }
 }
 
+// Print-sheet layout. Applied inside @media print, and under
+// html.print-layout so fitToPage can measure it (and the PDF capture use it)
+// without printing.
+const printLayoutRules = (p: string) => `
+          ${p}#print-body {
+            page-break-after: avoid; page-break-inside: avoid;
+            break-after: avoid; break-inside: avoid;
+            width: calc((8.5in - 1mm) / var(--fit, 1)) !important;
+            max-width: none !important;
+            height: calc(5.5in / var(--fit, 1)) !important;
+            min-height: 0 !important;
+            zoom: var(--fit, 1);
+            margin: 0 !important;
+            padding: 6mm 5mm 5mm !important;
+            box-sizing: border-box !important;
+            box-shadow: none !important;
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+          }
+          ${p}#print-body .text-base { font-size: 13pt !important; line-height: 1.35 !important; }
+          ${p}#print-body .text-sm  { font-size: 9.5pt !important; }
+          ${p}#print-body .text-lg  { font-size: 14pt !important; }
+          ${p}#print-body .text-xl  { font-size: 15.5pt !important; }
+          ${p}#print-body .w-40 { width: 118px !important; }
+          ${p}#print-body .gap-8  { gap: 1.5rem !important; }
+          ${p}#print-body .gap-16 { gap: 2rem !important; }
+          ${p}#print-body .pb-6   { padding-bottom: 0.3rem !important; }
+          ${p}#print-body .mt-8   { margin-top: 0 !important; }
+          ${p}#print-body .mt-6   { margin-top: 0 !important; }
+          ${p}#print-body .mt-5   { margin-top: 0 !important; }
+          ${p}#print-body .mt-4   { margin-top: 0 !important; }
+          ${p}#print-body .mt-3   { margin-top: 0 !important; }
+          ${p}#print-body .mt-2   { margin-top: 0 !important; }
+          ${p}#print-body .mt-1   { margin-top: 0 !important; }
+          ${p}#print-body .mb-2   { margin-bottom: 0 !important; }
+          ${p}#print-body .mb-1   { margin-bottom: 0 !important; }
+          ${p}#print-body .mt-1\.5 { margin-top: 0 !important; }
+          ${p}#print-body .print-sig { margin-top: auto !important; padding-top: 0 !important; }
+          ${p}#print-body .border-dashed { border-style: dashed !important; }
+          ${p}#print-body .border-b { border-bottom-width: 1px !important; }
+          ${p}#print-body .border-t-2 { border-top-width: 2px !important; }
+          ${p}#print-body .border-gray-800 { border-color: #1f2937 !important; }
+          ${p}#print-body .border-gray-400 { border-color: #9ca3af !important; }
+          ${p}#print-body .border-gray-500 { border-color: #6b7280 !important; }
+          ${p}#print-body * { color: #000 !important; background-color: transparent !important; }
+          ${p}#print-body { background-color: #fff !important; }
+`;
+
+// The printed sheet is a fixed 8.5x5.5in with overflow hidden, so a long
+// order used to lose its signature row off the bottom. Lay the sheet out with
+// the print rules (html.print-layout), and if the content is taller than the
+// sheet, zoom the whole sheet down just enough to fit (--fit). Sheets that
+// already fit keep --fit = 1 and print exactly as before.
+function fitToPage(pb: HTMLElement): number {
+  const html = document.documentElement;
+  const had = html.classList.contains("print-layout");
+  html.classList.add("print-layout");
+  let fit = 1;
+  pb.style.setProperty("--fit", "1");
+  for (let i = 0; i < 5 && pb.scrollHeight > pb.clientHeight; i++) {
+    fit = Math.floor(((fit * pb.clientHeight) / pb.scrollHeight) * 1000) / 1000;
+    pb.style.setProperty("--fit", String(fit));
+  }
+  if (!had) html.classList.remove("print-layout");
+  return fit;
+}
+
 function Field({
   label,
   value,
@@ -120,6 +189,21 @@ export default function StructurePrintPage({
       .finally(() => setLoading(false));
   }, [id]);
 
+  useEffect(() => {
+    if (!order) return;
+    let cancelled = false;
+    const refit = () => {
+      const pb = document.getElementById("print-body");
+      if (pb && !cancelled) fitToPage(pb);
+    };
+    document.fonts.ready.then(refit);
+    window.addEventListener("beforeprint", refit);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("beforeprint", refit);
+    };
+  }, [order]);
+
   if (loading)
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -142,6 +226,15 @@ export default function StructurePrintPage({
 
   const hRatio1 = nd(s?.yarnHRatio1);
   const wRatio1 = nd(s?.yarnWRatio1);
+
+  // อัตราส่วนที่เป็นตัวเลข ("25:1 (2เส้น)", "3/1") แสดงขนาดเท่าโครงสร้าง;
+  // ค่าที่เป็นข้อความหมายเหตุยาว ("ใช้ด้าย 7200 Lbs@ ...") คงตัวเล็กสีเทา
+  // ไม่งั้นจะล้นไปทับคอลัมน์ลายผ้า. leading-[0.97] ทำให้สูงเท่าตัวเล็กเดิม
+  // หน้าพิมพ์จะได้ไม่ถูกดันลง
+  const ratioClass = (v: string) =>
+    /^\d+\s*[:/]\s*\d+/.test(v)
+      ? "font-semibold text-lg leading-[0.97]"
+      : "text-sm text-gray-500";
 
   const cleanName = (v: string | null | undefined) =>
     v?.replace("บริษัท", "").replace("จำกัด", "").trim();
@@ -293,6 +386,8 @@ export default function StructurePrintPage({
     try {
       const el = document.getElementById("print-body");
       if (!el) return;
+      await document.fonts.ready;
+      fitToPage(el);
 
       const canvas = await html2canvas(el, {
         scale: 3,
@@ -302,6 +397,10 @@ export default function StructurePrintPage({
         windowWidth: Math.max(document.documentElement.scrollWidth, 1280),
         onclone: (_clonedDoc, clonedEl) => {
           const doc = clonedEl.ownerDocument!;
+          // same layout as the printed sheet; the image is shrunk to the
+          // sheet size below, which does what zoom does when printing
+          doc.documentElement.classList.add("print-layout");
+          clonedEl.style.zoom = "1";
           const style = doc.createElement("style");
           style.textContent = `
           #print-body, #print-body * {
@@ -340,7 +439,10 @@ export default function StructurePrintPage({
         unit: "mm",
         format: [pdfW, pdfH],
       });
-      pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
+      // keep the sheet's own aspect (8.5in - 1mm wide, as printed) instead of
+      // stretching it to 9in, centred on the page
+      const imgW = (pdfH * canvas.width) / canvas.height;
+      pdf.addImage(imgData, "PNG", (pdfW - imgW) / 2, 0, imgW, pdfH);
       pdf.save(`ใบโครงสร้าง-${order!.purchaseOrder}.pdf`);
     } catch (e) {
       console.error("PDF error:", e);
@@ -364,50 +466,9 @@ export default function StructurePrintPage({
             margin-bottom: 0;
             margin-left: 0.5mm;
             margin-right: 0.5mm; }
-          #print-body {
-            page-break-after: avoid; page-break-inside: avoid;
-            break-after: avoid; break-inside: avoid;
-            width: 9in !important;
-            max-width: 100% !important;
-            height: 5.5in !important;
-            max-height: 100vh !important;
-            margin: 0 !important;
-            padding: 6mm 5mm 5mm !important;
-            box-sizing: border-box !important;
-            box-shadow: none !important;
-            overflow: hidden !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: space-between !important;
-          }
-          #print-body .text-base { font-size: 13pt !important; line-height: 1.35 !important; }
-          #print-body .text-sm  { font-size: 9.5pt !important; }
-          #print-body .text-lg  { font-size: 14pt !important; }
-          #print-body .text-xl  { font-size: 15.5pt !important; }
-          #print-body .w-40 { width: 118px !important; }
-          #print-body .gap-8  { gap: 1.5rem !important; }
-          #print-body .gap-16 { gap: 2rem !important; }
-          #print-body .pb-6   { padding-bottom: 0.3rem !important; }
-          #print-body .mt-8   { margin-top: 0 !important; }
-          #print-body .mt-6   { margin-top: 0 !important; }
-          #print-body .mt-5   { margin-top: 0 !important; }
-          #print-body .mt-4   { margin-top: 0 !important; }
-          #print-body .mt-3   { margin-top: 0 !important; }
-          #print-body .mt-2   { margin-top: 0 !important; }
-          #print-body .mt-1   { margin-top: 0 !important; }
-          #print-body .mb-2   { margin-bottom: 0 !important; }
-          #print-body .mb-1   { margin-bottom: 0 !important; }
-          #print-body .mt-1\.5 { margin-top: 0 !important; }
-          #print-body .print-sig { margin-top: auto !important; padding-top: 0 !important; }
-          #print-body .border-dashed { border-style: dashed !important; }
-          #print-body .border-b { border-bottom-width: 1px !important; }
-          #print-body .border-t-2 { border-top-width: 2px !important; }
-          #print-body .border-gray-800 { border-color: #1f2937 !important; }
-          #print-body .border-gray-400 { border-color: #9ca3af !important; }
-          #print-body .border-gray-500 { border-color: #6b7280 !important; }
-          #print-body * { color: #000 !important; background-color: transparent !important; }
-          #print-body { background-color: #fff !important; }
+          ${printLayoutRules("")}
         }
+        ${printLayoutRules("html.print-layout ")}
         body { font-family: 'Sarabun', 'Tahoma', sans-serif; }
       .a4-page {
         font-family: 'Sarabun', 'Tahoma', sans-serif;
@@ -511,7 +572,7 @@ export default function StructurePrintPage({
                         <div className="flex justify-center items-center gap-3 mb-2">
                           <div className="text-center whitespace-nowrap pb-1">
                             {hRatio1 && (
-                              <div className="text-sm text-gray-500">
+                              <div className={ratioClass(hRatio1)}>
                                 {hRatio1}
                               </div>
                             )}
@@ -522,7 +583,7 @@ export default function StructurePrintPage({
                           <div className="font-bold text-lg px-1">x</div>
                           <div className="text-center whitespace-nowrap">
                             {wRatio1 && (
-                              <div className="text-sm text-gray-500">
+                              <div className={ratioClass(wRatio1)}>
                                 {wRatio1}
                               </div>
                             )}
