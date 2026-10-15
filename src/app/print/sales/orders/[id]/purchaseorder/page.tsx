@@ -510,39 +510,19 @@ export default function PurchaseOrderPrintPage({
                       .filter(Boolean);
                   }
 
-                  const hRatio =
-                    fas?.yarnHRatio1 && fas.yarnHRatio1 !== "no data"
-                      ? fas.yarnHRatio1
-                      : null;
-                  const wRatio =
-                    fas?.yarnWRatio1 && fas.yarnWRatio1 !== "no data"
-                      ? fas.yarnWRatio1
-                      : null;
+                  // อัตราส่วนเส้นด้าย (yarnHRatio1/yarnWRatio1 เช่น "25:1 (2เส้น)",
+                  // "12:1") ไม่แสดงในใบสั่งขาย — ยังแสดงในใบโครงสร้าง
 
                   return (
                     <>
-                      {/* แถว ratio + struct: "25:1-->2เส้น  OE20  x  (OE20+OE7)  12:1" */}
+                      {/* แถว struct: "OE20  x  (OE20+OE7)" */}
                       {structParts.length >= 2 && (
                         <div className="print-struct-row  grid grid-cols-3 text-center items-center mb-4">
                           <span className="whitespace-nowrap">
-                            {hRatio ? (
-                              <div className="text-sm text-gray-500">
-                                {hRatio}
-                              </div>
-                            ) : (
-                              ""
-                            )}
                             {structParts[0]}
                           </span>
                           <span>x</span>
                           <span className="whitespace-nowrap">
-                            {wRatio ? (
-                              <div className="text-sm text-gray-500">
-                                {wRatio}
-                              </div>
-                            ) : (
-                              ""
-                            )}
                             {structParts[1]}
                           </span>
                         </div>
@@ -564,10 +544,9 @@ export default function PurchaseOrderPrintPage({
                         </div>
                       ) : null}
 
-                      {/* pattern: "25:1-->2เส้น กันลม 63" */}
+                      {/* pattern: "กันลม 63" */}
                       {pattern && (
                         <div className="text-center my-3">
-                          {hRatio ? `${hRatio} ` : ""}
                           {pattern}
                           {fa?.fabricW ? ` ${fa.fabricW}"` : ""}
                         </div>
