@@ -35,3 +35,29 @@ export const NORM_OUTS_CTE = `
     WHERE deleted_at IS NULL
     GROUP BY 1, 2, 3, 4
   )`
+
+// Normalize stock customer the same way EFF_CUSTOMER does on the fabricouts side.
+export const NC = (col: string) => `COALESCE(NULLIF(TRIM(${col}), ''), 'AST')`
+
+// One stock group = customer + struct + width + pattern, normalized exactly like the
+// "ใช้ไป" match above (fabricCode is NOT part of the key). Grouping stockfabrics by raw
+// values instead split one fabric into several rows that each got the full "ใช้ไป".
+export const STOCK_GROUP_KEY = (alias = 's') => [
+  NC(`${alias}."customer"`),
+  NS(`${alias}."fabricStruct"`),
+  NW(`${alias}."fabricW"`),
+  NP(`${alias}."fabricPattern"`),
+]
+
+// WHERE fragment selecting every stockfabrics row of the group a displayed row belongs to.
+export const stockGroupWhere = (
+  g: { customer: string; fabricStruct: string; fabricPattern: string; fabricW: string },
+  alias = 's',
+) => {
+  const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
+  const [kc, ks, kw, kp] = STOCK_GROUP_KEY(alias)
+  return `${kc} = ${NC(lit(g.customer))}
+    AND ${ks} = ${NS(lit(g.fabricStruct))}
+    AND ${kw} = ${NW(lit(g.fabricW))}
+    AND ${kp} = ${NP(lit(g.fabricPattern))}`
+}

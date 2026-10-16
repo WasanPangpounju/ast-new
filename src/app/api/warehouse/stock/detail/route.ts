@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
-import { NS, NW, NP, EFF_STRUCT, EFF_WIDTH, EFF_PATTERN, EFF_CUSTOMER } from '@/lib/fabricOutMatch'
+import { NS, NW, NP, EFF_STRUCT, EFF_WIDTH, EFF_PATTERN, EFF_CUSTOMER, stockGroupWhere } from '@/lib/fabricOutMatch'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +10,6 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = request.nextUrl
     const customer      = searchParams.get('customer')      ?? ''
-    const fabricCode    = searchParams.get('fabricCode')    ?? ''
     const fabricStruct  = searchParams.get('fabricStruct')  ?? ''
     const fabricPattern = searchParams.get('fabricPattern') ?? ''
     const fabricW       = searchParams.get('fabricW')       ?? ''
@@ -18,7 +17,7 @@ export async function GET(request: NextRequest) {
     const esc = (s: string) => s.replace(/'/g, "''")
 
     const [stockEntries, billEntries] = await Promise.all([
-      // Stock entries grouped by refId — use $queryRawUnsafe to match exact stored values
+      // Stock entries grouped by refId — same normalized group key as the stock summary (fabricCode not part of it)
       prisma.$queryRawUnsafe(`
         SELECT
           "refId",
@@ -30,11 +29,7 @@ export async function GET(request: NextRequest) {
           MAX("createDate")                AS create_date
         FROM stockfabrics
         WHERE deleted_at IS NULL
-          AND COALESCE("customer",      'AST') = '${esc(customer)}'
-          AND COALESCE("fabricCode",    '')    = '${esc(fabricCode)}'
-          AND COALESCE("fabricStruct",  '')    = '${esc(fabricStruct)}'
-          AND COALESCE("fabricPattern", '')    = '${esc(fabricPattern)}'
-          AND COALESCE("fabricW",       '')    = '${esc(fabricW)}'
+          AND ${stockGroupWhere({ customer, fabricStruct, fabricPattern, fabricW }, 'stockfabrics')}
         GROUP BY "refId"
         ORDER BY MAX("createDate") DESC
       `) as Promise<any[]>,
@@ -90,7 +85,6 @@ export async function DELETE(request: NextRequest) {
   const { searchParams } = request.nextUrl
   const tab            = searchParams.get('tab') ?? ''
   const customer       = searchParams.get('customer')      ?? ''
-  const fabricCode     = searchParams.get('fabricCode')    ?? ''
   const fabricStruct   = searchParams.get('fabricStruct')  ?? ''
   const fabricPattern  = searchParams.get('fabricPattern') ?? ''
   const fabricW        = searchParams.get('fabricW')       ?? ''
@@ -103,16 +97,12 @@ export async function DELETE(request: NextRequest) {
 
   try {
     if (tab === 'stock') {
-      // Same group filter as the GET above
+      // Same normalized group filter as the GET above
       const count = await prisma.$executeRawUnsafe(`
         UPDATE stockfabrics
         SET deleted_at = NOW()
         WHERE deleted_at IS NULL
-          AND COALESCE("customer",      'AST') = '${esc(customer)}'
-          AND COALESCE("fabricCode",    '')    = '${esc(fabricCode)}'
-          AND COALESCE("fabricStruct",  '')    = '${esc(fabricStruct)}'
-          AND COALESCE("fabricPattern", '')    = '${esc(fabricPattern)}'
-          AND COALESCE("fabricW",       '')    = '${esc(fabricW)}'
+          AND ${stockGroupWhere({ customer, fabricStruct, fabricPattern, fabricW }, 'stockfabrics')}
       `)
       return Response.json({ ok: true, count })
     }

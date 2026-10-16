@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
-import { NS, NW, NP, NORM_OUTS_CTE } from '@/lib/fabricOutMatch'
+import { NORM_OUTS_CTE, STOCK_GROUP_KEY } from '@/lib/fabricOutMatch'
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,37 +25,49 @@ export async function GET(request: NextRequest) {
     }
     const searchField = searchFieldMap[searchBy] ?? '"fabricCode"'
 
+    // Row filters (stock type) apply before grouping; search filters apply to the whole
+    // group (HAVING) so a match on one code variant still shows the group's full total.
     const conditions: string[] = ['s.deleted_at IS NULL']
     if (stockType === 'produced')  conditions.push('s.is_purchased = false')
     if (stockType === 'purchased') conditions.push('s.is_purchased = true')
-    if (q)        conditions.push(`s.${searchField} ILIKE '%${q.replace(/'/g, "''")}%'`)
-    if (customer) conditions.push(`COALESCE(s."customer", 'AST') ILIKE '%${customer.replace(/'/g, "''")}%'`)
     const whereClause = conditions.join(' AND ')
+
+    const having: string[] = []
+    if (q)        having.push(`BOOL_OR(s.${searchField} ILIKE '%${q.replace(/'/g, "''")}%')`)
+    if (customer) having.push(`BOOL_OR(COALESCE(s."customer", 'AST') ILIKE '%${customer.replace(/'/g, "''")}%')`)
+    const havingClause = having.length ? `HAVING ${having.join(' AND ')}` : ''
+
+    const [kc, ks, kw, kp] = STOCK_GROUP_KEY('s')
+    // Display values come from the most recently keyed row of the group
+    const latest = (col: string, filter = '') =>
+      `(ARRAY_AGG(${col} ORDER BY s."createDate" DESC NULLS LAST, s.id DESC)${filter ? ` FILTER (WHERE ${filter})` : ''})[1]`
 
     const [stocks, totalRaw] = await Promise.all([
       prisma.$queryRawUnsafe(`
         WITH ${NORM_OUTS_CTE},
         agg_stock AS (
           SELECT
-            COALESCE(s."customer", 'AST')       AS customer,
-            s."fabricStruct",
-            s."fabricPattern",
-            s."fabricW",
-            s."fabricCode",
-            MIN(${NS('s."fabricStruct"')})       AS n_struct,
-            MIN(${NW('s."fabricW"')})            AS n_width,
-            MIN(${NP('s."fabricPattern"')})      AS n_pattern,
-            MIN(COALESCE(s."customer", 'AST'))   AS n_customer,
+            ${kc}                                AS n_customer,
+            ${ks}                                AS n_struct,
+            ${kw}                                AS n_width,
+            ${kp}                                AS n_pattern,
+            ${latest(`s."fabricStruct"`)}        AS "fabricStruct",
+            ${latest(`s."fabricPattern"`)}       AS "fabricPattern",
+            ${latest(`s."fabricW"`)}             AS "fabricW",
+            ${latest(`s."fabricCode"`, `COALESCE(s."fabricCode", '') <> ''`)} AS "fabricCode",
+            ARRAY_REMOVE(ARRAY_AGG(DISTINCT NULLIF(TRIM(s."fabricCode"), '')), NULL) AS "fabricCodes",
             COUNT(s.id)::int                     AS lot_count,
             SUM(s."fold")::int                   AS produced_fold,
             SUM(s."sumYard")::float              AS produced_yard
           FROM stockfabrics s
           WHERE ${whereClause}
-          GROUP BY COALESCE(s."customer", 'AST'), s."fabricStruct", s."fabricPattern", s."fabricW", s."fabricCode"
+          GROUP BY 1, 2, 3, 4
+          ${havingClause}
         )
         SELECT
-          s.customer,
+          s.n_customer AS customer,
           s."fabricCode",
+          s."fabricCodes",
           s."fabricStruct",
           s."fabricPattern",
           s."fabricW",
@@ -86,7 +98,8 @@ export async function GET(request: NextRequest) {
         SELECT COUNT(*)::int AS cnt FROM (
           SELECT 1 FROM stockfabrics s
           WHERE ${whereClause}
-          GROUP BY COALESCE(s."customer", 'AST'), s."fabricStruct", s."fabricPattern", s."fabricW", s."fabricCode"
+          GROUP BY ${kc}, ${ks}, ${kw}, ${kp}
+          ${havingClause}
         ) sub
       `) as Promise<any[]>,
     ])

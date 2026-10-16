@@ -14,6 +14,7 @@ interface SearchSuggestion {
 interface StockGroup {
   customer: string
   fabricCode: string | null
+  fabricCodes?: string[]   // every distinct code merged into this group
   fabricStruct: string | null
   fabricPattern: string | null
   fabricW: string | null
@@ -446,7 +447,12 @@ export default function StockPage() {
                 return (
                   <tr key={i} className="hover:bg-blue-50/30 transition-colors">
                     <td className="px-3 py-2 text-gray-700 font-medium">{s.customer}</td>
-                    <td className="px-3 py-2 text-gray-600">{s.fabricCode ?? '-'}</td>
+                    <td className="px-3 py-2 text-gray-600">
+                      {s.fabricCode ?? '-'}
+                      {(s.fabricCodes ?? []).filter(c => c !== s.fabricCode?.trim()).map(c => (
+                        <div key={c} className="text-[11px] text-gray-400" title="รหัสอื่นที่รวมอยู่ในกองนี้">{c}</div>
+                      ))}
+                    </td>
                     <td className="px-3 py-2 text-gray-800 max-w-[160px] truncate">{s.fabricStruct ?? '-'}</td>
                     <td className="px-3 py-2 text-gray-600 max-w-[120px] truncate">{s.fabricPattern ?? '-'}</td>
                     <td className="px-3 py-2 text-center text-gray-700">{s.fabricW ?? '-'}</td>
