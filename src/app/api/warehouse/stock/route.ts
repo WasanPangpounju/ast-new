@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
-import { NORM_OUTS_CTE, STOCK_GROUP_KEY } from '@/lib/fabricOutMatch'
+import { NORM_OUTS_CTE, STOCK_GROUP_KEY, CK, NC } from '@/lib/fabricOutMatch'
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,7 +34,8 @@ export async function GET(request: NextRequest) {
 
     const having: string[] = []
     if (q)        having.push(`BOOL_OR(s.${searchField} ILIKE '%${q.replace(/'/g, "''")}%')`)
-    if (customer) having.push(`BOOL_OR(COALESCE(s."customer", 'AST') ILIKE '%${customer.replace(/'/g, "''")}%')`)
+    // Customer search ignores whitespace too ("เอ็มเคเค" finds "เอ็ม เค เค")
+    if (customer) having.push(`BOOL_OR(${CK(NC('s."customer"'))} ILIKE ${CK(`'%${customer.replace(/'/g, "''")}%'`)})`)
     const havingClause = having.length ? `HAVING ${having.join(' AND ')}` : ''
 
     const [kc, ks, kw, kp] = STOCK_GROUP_KEY('s')
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
             ${ks}                                AS n_struct,
             ${kw}                                AS n_width,
             ${kp}                                AS n_pattern,
+            ${latest(NC('s."customer"'))}        AS customer,
             ${latest(`s."fabricStruct"`)}        AS "fabricStruct",
             ${latest(`s."fabricPattern"`)}       AS "fabricPattern",
             ${latest(`s."fabricW"`)}             AS "fabricW",
@@ -65,7 +67,7 @@ export async function GET(request: NextRequest) {
           ${havingClause}
         )
         SELECT
-          s.n_customer AS customer,
+          s.customer,
           s."fabricCode",
           s."fabricCodes",
           s."fabricStruct",
