@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const like = search ? `%${search}%` : null
 
     const whereDeposit = like
-      ? `f.deleted_at IS NULL AND f."isDeposit" = true AND (f."customerName" ILIKE '${like.replace(/'/g, "''")}' OR f."fabricStruct" ILIKE '${like.replace(/'/g, "''")}')`
+      ? `f.deleted_at IS NULL AND f."isDeposit" = true AND (f."customerName" ILIKE '${like.replace(/'/g, "''")}' OR f."receiveName" ILIKE '${like.replace(/'/g, "''")}' OR f."fabricStruct" ILIKE '${like.replace(/'/g, "''")}')`
       : `f.deleted_at IS NULL AND f."isDeposit" = true`
 
     const bills = await prisma.$queryRawUnsafe(`
@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
         MAX(f."vatType")                         AS "vatType",
         MAX(f."vatNo")::int                      AS "vatNo",
         MAX(f."customerName")                    AS "customerName",
+        MAX(f."receiveName")                     AS "receiveName",
         MAX(f."fabricStruct")                    AS "fabricStruct",
         MAX(f."fabricPattern")                   AS "fabricPattern",
         MAX(f."fabricW")                         AS "fabricW",
