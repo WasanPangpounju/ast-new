@@ -35,5 +35,12 @@ export async function GET(
     },
   })
 
-  return Response.json({ rolls })
+  // stock-deposit withdrawals keep their deposit bill's refId in altPurchaseOrder
+  // (the withdrawal link), so it is not an orderer name to print.
+  const alt = rolls[0]?.altPurchaseOrder
+  const altPurchaseOrderIsDepositLink = alt
+    ? (await prisma.fabricOut.count({ where: { refId: alt, isDeposit: true } })) > 0
+    : false
+
+  return Response.json({ rolls, altPurchaseOrderIsDepositLink })
 }

@@ -31,6 +31,7 @@ interface Bill {
   totalYard: number;
   altFabricStruct: string | null;
   altPurchaseOrder: string | null;
+  altPurchaseOrderIsDepositLink: boolean;
   hasStockMatch: boolean;
   stockFabricStruct: string | null;
   stockFabricW: string | null;
@@ -760,7 +761,7 @@ export default function BillListPage() {
                     {b.altFabricStruct || b.fabricStruct || "-"}{" "}
                     {b.fabricW ? `${b.fabricW}''` : ""}{" "}
                     {b.fabricPattern ?? ""}
-                    {b.altPurchaseOrder && <span className="ml-1 text-gray-400">({b.altPurchaseOrder})</span>}
+                    {b.altPurchaseOrder && !b.altPurchaseOrderIsDepositLink && <span className="ml-1 text-gray-400">({b.altPurchaseOrder})</span>}
                   </td>
                   <td className="px-3 py-2 text-right text-gray-800">{b.foldCount}</td>
                   <td className="px-3 py-2 text-right font-medium text-gray-900">{Number(b.totalYard).toLocaleString()}</td>

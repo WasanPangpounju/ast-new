@@ -36,12 +36,16 @@ export default function BillPrintPage({
   const { vatNo } = use(params);
   const { vatType = "A" } = use(searchParams);
   const [rolls, setRolls] = useState<Roll[]>([]);
+  const [altIsDepositLink, setAltIsDepositLink] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch(`/api/warehouse/bill/${vatNo}?vatType=${vatType}`)
       .then((r) => r.json())
-      .then((d) => setRolls(d.rolls ?? []))
+      .then((d) => {
+        setRolls(d.rolls ?? []);
+        setAltIsDepositLink(Boolean(d.altPurchaseOrderIsDepositLink));
+      })
       .catch((err) => console.error("fetch error:", err))
       .finally(() => setLoading(false));
   }, [vatNo, vatType]);
@@ -102,7 +106,8 @@ export default function BillPrintPage({
     toPrintableFabricPattern(first.fabricPattern),
   );
 
-  const ordererName = first.altPurchaseOrder
+  // A stock-deposit withdrawal's altPurchaseOrder is its deposit link, not a name.
+  const ordererName = first.altPurchaseOrder && !altIsDepositLink
     ? first.altPurchaseOrder
     : trimCompanyName(first.customerName);
 
