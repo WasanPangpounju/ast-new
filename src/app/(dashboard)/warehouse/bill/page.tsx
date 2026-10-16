@@ -615,10 +615,14 @@ export default function BillListPage() {
   const handleSave = async () => {
     if (!manageBill) return;
     setSaving(true);
+    // A stock-deposit withdrawal's altPurchaseOrder is its link to the deposit bill:
+    // leave it out so the PATCH keeps it as is.
+    const { altPurchaseOrder, ...rest } = editForm;
+    const fields = manageBill.altPurchaseOrderIsDepositLink ? rest : { ...rest, altPurchaseOrder };
     await fetch("/api/warehouse/bill", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vatType: manageBill.vatType, vatNo: manageBill.vatNo, ...editForm }),
+      body: JSON.stringify({ vatType: manageBill.vatType, vatNo: manageBill.vatNo, ...fields }),
     });
     setSaving(false);
     closeManage();
@@ -849,12 +853,21 @@ export default function BillListPage() {
                     ] as { label: string; key: keyof EditForm }[]).map(({ label, key }) => (
                       <div key={key}>
                         <label className="block text-xs text-gray-500 mb-1">{label}</label>
+                        {key === "altPurchaseOrder" && manageBill.altPurchaseOrderIsDepositLink ? (
+                          <input
+                            value="บิลเบิกผ้าฝาก (ผูกกับบิลฝาก)"
+                            readOnly
+                            title="ผูกกับบิลฝากในสต็อกผ้าฝากจัดเก็บ แก้ไขไม่ได้"
+                            className="w-full border border-gray-200 bg-gray-100 px-3 py-1.5 text-sm text-gray-500 cursor-not-allowed"
+                          />
+                        ) : (
                         <input
                           value={editForm[key]}
                           onChange={e => setEditForm(f => ({ ...f, [key]: e.target.value }))}
                           title={label}
                           className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
+                        )}
                       </div>
                     ))}
 
