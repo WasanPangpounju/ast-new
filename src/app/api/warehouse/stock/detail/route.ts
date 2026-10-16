@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
-import { NS, NW, NP, EFF_STRUCT, EFF_WIDTH, EFF_PATTERN, EFF_CUSTOMER, stockGroupWhere } from '@/lib/fabricOutMatch'
+import { NS, NW, NP, EFF_STRUCT, EFF_WIDTH, EFF_PATTERN, EFF_CUSTOMER, CK, NC, stockGroupWhere } from '@/lib/fabricOutMatch'
 
 export async function GET(request: NextRequest) {
   try {
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
           AND ${NW(EFF_WIDTH)}    = ${NW(`'${esc(fabricW)}'`)}
           AND ${NP(EFF_PATTERN)}  = ${NP(`'${esc(fabricPattern)}'`)}
           AND ${NP(`'${esc(fabricPattern)}'`)} <> ''
-          AND ${EFF_CUSTOMER}     = COALESCE(NULLIF(TRIM('${esc(customer)}'), ''), 'AST')
+          AND ${CK(EFF_CUSTOMER)} = ${CK(NC(`'${esc(customer)}'`))}
         GROUP BY "vatType", "vatNo"
         ORDER BY MAX("createDate") DESC
       `) as Promise<any[]>,
@@ -116,7 +116,7 @@ export async function DELETE(request: NextRequest) {
         AND ${NW(EFF_WIDTH)}    = ${NW(`'${esc(fabricW)}'`)}
         AND ${NP(EFF_PATTERN)}  = ${NP(`'${esc(fabricPattern)}'`)}
         AND ${NP(`'${esc(fabricPattern)}'`)} <> ''
-        AND ${EFF_CUSTOMER}     = COALESCE(NULLIF(TRIM('${esc(customer)}'), ''), 'AST')
+        AND ${CK(EFF_CUSTOMER)} = ${CK(NC(`'${esc(customer)}'`))}
     `)
     return Response.json({ ok: true, count })
   } catch (e) {
