@@ -20,6 +20,7 @@ interface DepositBill {
   vatType: string
   vatNo: number
   customerName: string | null
+  receiveName: string | null
   fabricStruct: string | null
   fabricPattern: string | null
   fabricW: string | null
@@ -52,6 +53,11 @@ function fmtDate(d: string) {
     const dt = new Date(d)
     return `${dt.getDate().toString().padStart(2, '0')}/${(dt.getMonth() + 1).toString().padStart(2, '0')}/${dt.getFullYear() + 543}`
   } catch { return '-' }
+}
+
+// ชื่อผู้รับจากบิลฝากจัดเก็บ (ถ้าบิลไม่มีผู้รับ ใช้ชื่อลูกค้าแทน)
+function depositReceiver(b: DepositBill) {
+  return b.receiveName?.trim() || b.customerName || ''
 }
 
 function YardGrid({
@@ -220,7 +226,7 @@ export default function StockDepositPage() {
   // ── Create withdrawal ──
   const openCreate = (bill: DepositBill) => {
     setCreateTarget(bill)
-    setCreateReceiver(bill.customerName ?? '')
+    setCreateReceiver(depositReceiver(bill))
     setCreateYards(Array(TOTAL_SLOTS).fill(''))
     setCreateDate(new Date().toISOString().slice(0, 10))
     setCreateOpen(true)
@@ -245,7 +251,7 @@ export default function StockDepositPage() {
           vatType: createBillType,
           vatNo: Number(createBillNo),
           customerName: createTarget.customerName,
-          receiveName: createReceiver || createTarget.customerName,
+          receiveName: createReceiver || depositReceiver(createTarget),
           fabricStruct: createTarget.altFabricStruct || createTarget.fabricStruct,
           fabricPattern: createTarget.fabricPattern,
           fabricW: createTarget.fabricW,
@@ -417,7 +423,7 @@ export default function StockDepositPage() {
                 <tr key={i} className="hover:bg-blue-50/30 transition-colors">
                   <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(b.createDate)}</td>
                   <td className="px-3 py-2 font-mono font-medium text-blue-700">{b.vatType}-{b.vatNo}</td>
-                  <td className="px-3 py-2 font-medium text-gray-800 max-w-[160px] truncate">{b.customerName ?? '-'}</td>
+                  <td className="px-3 py-2 font-medium text-gray-800 max-w-[160px] truncate">{depositReceiver(b) || '-'}</td>
                   <td className="px-3 py-2 text-gray-600 max-w-[160px] truncate">{b.altFabricStruct || b.fabricStruct || '-'}</td>
                   <td className="px-3 py-2 text-gray-500">{b.fabricPattern || '-'}</td>
                   <td className="px-3 py-2 text-gray-500">{b.fabricW ? `${b.fabricW}''` : '-'}</td>
@@ -467,7 +473,7 @@ export default function StockDepositPage() {
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="font-semibold text-gray-900 text-sm">รายละเอียดการเบิกผ้าออก</h2>
-                <p className="text-xs text-gray-500 mt-0.5">บิล {detailBill.vatType}-{detailBill.vatNo} · {detailBill.customerName}</p>
+                <p className="text-xs text-gray-500 mt-0.5">บิล {detailBill.vatType}-{detailBill.vatNo} · {depositReceiver(detailBill)}</p>
                 <p className="text-xs text-gray-400 mt-0.5">
                   {detailBill.altFabricStruct || detailBill.fabricStruct}
                   {detailBill.fabricPattern ? ` / ${detailBill.fabricPattern}` : ''}
@@ -629,7 +635,7 @@ export default function StockDepositPage() {
               <div>
                 <h2 className="text-base font-semibold text-gray-900">เบิกผ้าออก</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  จากบิลฝากจัดเก็บ {createTarget.vatType}-{createTarget.vatNo} · {createTarget.customerName}
+                  จากบิลฝากจัดเก็บ {createTarget.vatType}-{createTarget.vatNo} · {depositReceiver(createTarget)}
                 </p>
               </div>
               <button onClick={closeCreate} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
@@ -637,7 +643,7 @@ export default function StockDepositPage() {
 
             <div className="p-5">
               <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-4 text-xs text-blue-800 space-y-1">
-                <div><span className="font-medium">ลูกค้า:</span> {createTarget.customerName}</div>
+                <div><span className="font-medium">ลูกค้า:</span> {depositReceiver(createTarget) || '-'}</div>
                 <div><span className="font-medium">โครงสร้างผ้า:</span> {createTarget.altFabricStruct || createTarget.fabricStruct || '-'}</div>
                 {createTarget.fabricPattern && <div><span className="font-medium">ลายผ้า:</span> {createTarget.fabricPattern}</div>}
                 {createTarget.fabricW && <div><span className="font-medium">หน้ากว้าง:</span> {createTarget.fabricW}''</div>}
