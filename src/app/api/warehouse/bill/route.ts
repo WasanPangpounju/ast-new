@@ -106,7 +106,11 @@ export async function GET(request: NextRequest) {
           GROUP BY "vatType", "vatNo", "customerName", "receiveName", "fabricStruct", "fabricPattern", "fabricW"
         ),
         with_match AS (
-          SELECT b.*, ${STOCK_MATCH_EXPR} AS has_stock_match FROM agg b
+          SELECT b.*, ${STOCK_MATCH_EXPR} AS has_stock_match,
+            -- stock-deposit withdrawals keep their deposit's refId here as the link
+            EXISTS (SELECT 1 FROM fabricouts d WHERE d."refId" = b."altPurchaseOrder" AND d."isDeposit")
+              AS alt_is_deposit_link
+          FROM agg b
         )
         SELECT * FROM with_match
         ${outerWhere}
@@ -153,6 +157,7 @@ export async function GET(request: NextRequest) {
         totalYard:          Number(b.totalYard),
         vatNo:              Number(b.vatNo),
         hasStockMatch:      Boolean(b.has_stock_match),
+        altPurchaseOrderIsDepositLink: Boolean(b.alt_is_deposit_link),
         stockFabricStruct:  b.s_struct  || null,
         stockFabricW:       b.s_w       || null,
         stockFabricPattern: b.s_pattern || null,
