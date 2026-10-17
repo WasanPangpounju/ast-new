@@ -362,10 +362,13 @@ export default function BillListPage() {
       .finally(() => setStockSearching(false));
   }, []);
 
-  const doOrderSearch = useCallback((q: string) => {
+  // `bill` = the bill being re-linked — its own rolls are left out of each
+  // order's คงเหลือ, so results match the draft list above them.
+  const doOrderSearch = useCallback((q: string, bill: { vatType: string; vatNo: number } | null) => {
     if (!q.trim()) { setOrderResults([]); return; }
     setOrderSearching(true);
-    fetch(`/api/warehouse/orders/search?q=${encodeURIComponent(q.trim())}`)
+    const exclude = bill ? `&excludeVatType=${encodeURIComponent(bill.vatType)}&excludeVatNo=${bill.vatNo}` : "";
+    fetch(`/api/warehouse/orders/search?q=${encodeURIComponent(q.trim())}${exclude}`)
       .then(r => r.json())
       .then(d => setOrderResults(d.orders ?? []))
       .finally(() => setOrderSearching(false));
@@ -434,7 +437,7 @@ export default function BillListPage() {
       loadOrderDraft(manageBill.vatType, manageBill.vatNo);
       const q =manageBill.orders[0]?.purchaseOrder || manageBill.customerName || "";
       setOrderSearch(q);
-      if (q) doOrderSearch(q);
+      if (q) doOrderSearch(q, manageBill);
     }
   };
 
@@ -483,7 +486,7 @@ export default function BillListPage() {
   const handleOrderSearchChange = (v: string) => {
     setOrderSearch(v);
     if (orderTimer.current) clearTimeout(orderTimer.current);
-    orderTimer.current = setTimeout(() => doOrderSearch(v), 400);
+    orderTimer.current = setTimeout(() => doOrderSearch(v, manageBill), 400);
   };
 
   // Loads the orders currently linked to this bill (in fill order) as the
@@ -1191,7 +1194,7 @@ export default function BillListPage() {
                     <input
                       value={orderSearch}
                       onChange={e => handleOrderSearchChange(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && doOrderSearch(orderSearch)}
+                      onKeyDown={e => e.key === 'Enter' && doOrderSearch(orderSearch, manageBill)}
                       placeholder="เลขที่ SO, ชื่อลูกค้า..."
                       className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
