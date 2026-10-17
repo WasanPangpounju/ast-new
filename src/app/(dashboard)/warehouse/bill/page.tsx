@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useInfiniteScroll } from "@/hooks/useInfiniteScroll";
 import { InfiniteScrollStatus } from "@/components/InfiniteScrollStatus";
+import { assignOrdersWholeRoll } from "@/lib/billOrders";
 
 // Per-click idempotency token for "เพิ่มพับ" — same pattern as newSessionId()
 // in bill/create/page.tsx.
@@ -90,7 +91,16 @@ interface OrderResult {
   remainingYard: number;
 }
 
-type ActiveTab = 'bill' | 'stock' | 'order' | 'folds';
+// An order queued in the "จัดการ" modal order tab — saved as an ordered list
+// (order 1 fills first, overflow spills to order 2, ...) like เปิดบิลผ้า.
+// remainingYard excludes this bill's own rolls (see /api/warehouse/bill/orders).
+interface DraftOrder {
+  id: number;
+  purchaseOrder: string;
+  remainingYard: number;
+}
+
+type ActiveTab ='bill' | 'stock' | 'order' | 'folds';
 
 const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 const FILTER_YEARS = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
@@ -142,6 +152,11 @@ export default function BillListPage() {
   const [orderSearching, setOrderSearching] = useState(false);
   const [orderSaving, setOrderSaving] = useState(false);
   const orderTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [orderDraft, setOrderDraft] = useState<DraftOrder[]>([]);
+  const [orderDraftInitial, setOrderDraftInitial] = useState<number[]>([]);
+  const [orderDraftLoading, setOrderDraftLoading] = useState(false);
+  const [billRollYards, setBillRollYards] = useState<number[]>([]);
+  const [confirmSaveOrders, setConfirmSaveOrders] = useState(false);
 
   // แก้ไขวันที่บิล (createDate) / เลขที่บิล (vatNo) — ในแท็บ "ข้อมูลบิล" ของ modal จัดการ
   const [editingDate, setEditingDate] = useState<{ vatType: string; vatNo: number; value: string } | null>(null);
@@ -198,6 +213,46 @@ export default function BillListPage() {
   };
 
   const dateKey = (vatType: string, vatNo: number) => `${vatType}-${vatNo}`;
+
+  // ประวัติแก้ไขของบิล (audit_logs) — shared by the "ข้อมูลบิล" and "ออร์เดอร์" tabs.
+  const HISTORY_LABELS: Record<string, string> = { createDate: "วันที่", vatNo: "เลขที่บิล", orders: "ออร์เดอร์" };
+  const fmtHistoryValue = (fieldName: string, v: string | null) => {
+    if (!v) return "-";
+    if (fieldName === "createDate") return fmtDate(v);
+    if (fieldName === "orders") {
+      try {
+        const list = JSON.parse(v) as { orderId: number; purchaseOrder: string | null; rolls: number }[];
+        return list.length === 0
+          ? "ไม่ผูกออร์เดอร์"
+          : list.map(o => `${o.purchaseOrder || `#${o.orderId}`} (${o.rolls} ม้วน)`).join(", ");
+      } catch { return v; }
+    }
+    return v;
+  };
+  const renderHistory = (b: Bill) => {
+    const entries = historyCache[dateKey(b.vatType, b.vatNo)] ?? [];
+    return (
+      <div className="mt-2 border border-gray-200 divide-y divide-gray-100 max-h-48 overflow-y-auto text-xs">
+        {historyLoading ? (
+          <div className="text-center py-3 text-gray-400">กำลังโหลด...</div>
+        ) : entries.length === 0 ? (
+          <div className="text-center py-3 text-gray-400">ยังไม่มีประวัติการแก้ไข</div>
+        ) : (
+          entries.map(h => (
+            <div key={h.id} className="px-3 py-2">
+              <div className="text-gray-400">{fmtDateTime(h.changedAt)} · {h.changedBy}</div>
+              <div className="text-gray-800 mt-0.5">
+                <span className="text-gray-500">{HISTORY_LABELS[h.fieldName] ?? h.fieldName}:</span>{" "}
+                {fmtHistoryValue(h.fieldName, h.oldValue)}
+                <span className="mx-1 text-gray-400">→</span>
+                <span className="font-medium text-blue-700">{fmtHistoryValue(h.fieldName, h.newValue)}</span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    );
+  };
 
   const openPrint = (vatType: string, vatNo: number) =>
     window.open(`/warehouse/bill/print/${vatNo}?vatType=${vatType}`, "_blank");
@@ -307,10 +362,13 @@ export default function BillListPage() {
       .finally(() => setStockSearching(false));
   }, []);
 
-  const doOrderSearch = useCallback((q: string) => {
+  // `bill` = the bill being re-linked — its own rolls are left out of each
+  // order's คงเหลือ, so results match the draft list above them.
+  const doOrderSearch = useCallback((q: string, bill: { vatType: string; vatNo: number } | null) => {
     if (!q.trim()) { setOrderResults([]); return; }
     setOrderSearching(true);
-    fetch(`/api/warehouse/orders/search?q=${encodeURIComponent(q.trim())}`)
+    const exclude = bill ? `&excludeVatType=${encodeURIComponent(bill.vatType)}&excludeVatNo=${bill.vatNo}` : "";
+    fetch(`/api/warehouse/orders/search?q=${encodeURIComponent(q.trim())}${exclude}`)
       .then(r => r.json())
       .then(d => setOrderResults(d.orders ?? []))
       .finally(() => setOrderSearching(false));
@@ -335,6 +393,7 @@ export default function BillListPage() {
     setNewFoldYard(""); setAddFoldRequestId(null); setConfirmAddFold(false);
     setStockSearch(""); setStockResults([]);
     setOrderSearch(""); setOrderResults([]);
+    setOrderDraft([]); setOrderDraftInitial([]); setBillRollYards([]); setConfirmSaveOrders(false);
     setEditingDate(null);
     setEditingVatNo(null); setVatNoError(null);
     setHistoryOpenKey(null);
@@ -349,6 +408,7 @@ export default function BillListPage() {
     setNewFoldYard(""); setAddFoldRequestId(null); setConfirmAddFold(false);
     setStockResults([]);
     setOrderResults([]);
+    setOrderDraft([]); setOrderDraftInitial([]); setBillRollYards([]); setConfirmSaveOrders(false);
     setEditingDate(null);
     setEditingVatNo(null); setVatNoError(null);
     setHistoryOpenKey(null);
@@ -372,10 +432,12 @@ export default function BillListPage() {
       setStockSearch(q);
       if (q) doStockSearch(q);
     }
+    setConfirmSaveOrders(false);
     if (tab === 'order' && manageBill) {
-      const q = manageBill.orders[0]?.purchaseOrder || manageBill.customerName || "";
+      loadOrderDraft(manageBill.vatType, manageBill.vatNo);
+      const q =manageBill.orders[0]?.purchaseOrder || manageBill.customerName || "";
       setOrderSearch(q);
-      if (q) doOrderSearch(q);
+      if (q) doOrderSearch(q, manageBill);
     }
   };
 
@@ -424,83 +486,66 @@ export default function BillListPage() {
   const handleOrderSearchChange = (v: string) => {
     setOrderSearch(v);
     if (orderTimer.current) clearTimeout(orderTimer.current);
-    orderTimer.current = setTimeout(() => doOrderSearch(v), 400);
+    orderTimer.current = setTimeout(() => doOrderSearch(v, manageBill), 400);
   };
 
-  // Replaces every order currently linked to this bill with just this one —
-  // the original single-order edit action, unchanged for bills that only
-  // ever have one order.
-  const handleSelectOrder = async (o: OrderResult) => {
-    if (!manageBill || orderSaving) return;
-    setOrderSaving(true);
-    await fetch("/api/warehouse/bill", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        vatType: manageBill.vatType, vatNo: manageBill.vatNo,
-        orderId: o.id, purchaseOrder: o.purchaseOrder,
-      }),
-    });
-    setOrderSaving(false);
-    setManageBill(b => b ? { ...b, orders: [{ orderId: o.id, purchaseOrder: o.purchaseOrder }] } : b);
-    reload();
-  };
-
-  // Links this order to whichever rolls in the bill aren't already claimed by
-  // another order — additive, so it never disturbs orders already linked.
-  const handleAddOrder = async (o: OrderResult) => {
-    if (!manageBill || orderSaving) return;
-    setOrderSaving(true);
-    const res = await fetch("/api/warehouse/bill", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        vatType: manageBill.vatType, vatNo: manageBill.vatNo,
-        linkOrderId: o.id,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setOrderSaving(false);
-    if (!data.count) {
-      alert("บิลนี้ไม่มีม้วนที่ยังไม่ได้ผูกออร์เดอร์ให้เพิ่มออร์เดอร์นี้ (ทุกม้วนถูกผูกกับออร์เดอร์อยู่แล้ว)");
-      return;
+  // Loads the orders currently linked to this bill (in fill order) as the
+  // editable draft list, plus each roll's yard for the split preview.
+  const loadOrderDraft = async (vatType: string, vatNo: number) => {
+    setOrderDraftLoading(true);
+    try {
+      const res = await fetch(`/api/warehouse/bill/orders?vatType=${encodeURIComponent(vatType)}&vatNo=${vatNo}`);
+      const d = await res.json();
+      const list: DraftOrder[] = (d.orders ?? []).map((o: DraftOrder) => ({ id: o.id, purchaseOrder: o.purchaseOrder, remainingYard: o.remainingYard }));
+      setOrderDraft(list);
+      setOrderDraftInitial(list.map(o => o.id));
+      setBillRollYards(d.rollYards ?? []);
+    } finally {
+      setOrderDraftLoading(false);
     }
-    setManageBill(b => b ? { ...b, orders: [...b.orders, { orderId: o.id, purchaseOrder: o.purchaseOrder }] } : b);
-    reload();
   };
 
-  // Unlinks every order from the bill at once (legacy footer action).
-  const handleUnlinkOrder = async () => {
-    if (!manageBill || orderSaving) return;
-    setOrderSaving(true);
-    await fetch("/api/warehouse/bill", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        vatType: manageBill.vatType, vatNo: manageBill.vatNo,
-        orderId: null, purchaseOrder: null,
-      }),
-    });
-    setOrderSaving(false);
-    setManageBill(b => b ? { ...b, orders: [] } : b);
-    reload();
+  // Queues an order at the end of the draft list — its remainingYard is
+  // re-fetched with this bill excluded, so it matches what the save will use.
+  const handleQueueOrder = async (o: OrderResult) => {
+    if (!manageBill || orderDraft.some(d => d.id === o.id)) return;
+    setConfirmSaveOrders(false);
+    const res = await fetch(`/api/warehouse/bill/orders?vatType=${encodeURIComponent(manageBill.vatType)}&vatNo=${manageBill.vatNo}&ids=${o.id}`);
+    const d = await res.json().catch(() => ({}));
+    const cap = (d.orders ?? [])[0];
+    setOrderDraft(prev => prev.some(x => x.id === o.id) ? prev : [
+      ...prev,
+      { id: o.id, purchaseOrder: o.purchaseOrder, remainingYard: cap ? cap.remainingYard : o.remainingYard },
+    ]);
   };
 
-  // Unlinks just this one order, leaving any other orders on the bill intact.
-  const handleUnlinkOneOrder = async (orderId: number) => {
+  const handleRemoveDraftOrder = (id: number) => {
+    setConfirmSaveOrders(false);
+    setOrderDraft(prev => prev.filter(x => x.id !== id));
+  };
+
+  // Re-links every roll in the bill to the draft list (whole rolls only —
+  // fold count and printed layout never change). Empty list unlinks all.
+  const handleSaveOrders = async () => {
     if (!manageBill || orderSaving) return;
     setOrderSaving(true);
-    await fetch("/api/warehouse/bill", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        vatType: manageBill.vatType, vatNo: manageBill.vatNo,
-        unlinkOrderId: orderId,
-      }),
-    });
-    setOrderSaving(false);
-    setManageBill(b => b ? { ...b, orders: b.orders.filter(x => x.orderId !== orderId) } : b);
-    reload();
+    try {
+      const res = await fetch("/api/warehouse/bill/orders", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ vatType: manageBill.vatType, vatNo: manageBill.vatNo, orderIds: orderDraft.map(o => o.id) }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) { alert(d.error ?? "บันทึกออร์เดอร์ไม่สำเร็จ"); return; }
+      const key = dateKey(manageBill.vatType, manageBill.vatNo);
+      setHistoryCache(c => { const n = { ...c }; delete n[key]; return n; }); // invalidate cached history
+      setManageBill(b => b ? { ...b, orders: d.orders ?? [] } : b);
+      setConfirmSaveOrders(false);
+      await loadOrderDraft(manageBill.vatType, manageBill.vatNo);
+      reload();
+    } finally {
+      setOrderSaving(false);
+    }
   };
 
   const handleSaveFold = async () => {
@@ -902,29 +947,7 @@ export default function BillListPage() {
                           </button>
                         </div>
                       )}
-                      {historyOpenKey === dateKey(manageBill.vatType, manageBill.vatNo) && (
-                        <div className="mt-2 border border-gray-200 divide-y divide-gray-100 max-h-48 overflow-y-auto text-xs">
-                          {historyLoading ? (
-                            <div className="text-center py-3 text-gray-400">กำลังโหลด...</div>
-                          ) : (historyCache[dateKey(manageBill.vatType, manageBill.vatNo)]?.length ?? 0) === 0 ? (
-                            <div className="text-center py-3 text-gray-400">ยังไม่มีประวัติแก้ไขวันที่</div>
-                          ) : (
-                            historyCache[dateKey(manageBill.vatType, manageBill.vatNo)].map(h => (
-                              <div key={h.id} className="px-3 py-2">
-                                <div className="text-gray-400">{fmtDateTime(h.changedAt)} · {h.changedBy}</div>
-                                <div className="text-gray-800 mt-0.5">
-                                  <span className="text-gray-500">{h.fieldName === "vatNo" ? "เลขที่บิล" : "วันที่"}:</span>{" "}
-                                  {h.fieldName === "vatNo" ? (h.oldValue ?? "-") : (h.oldValue ? fmtDate(h.oldValue) : "-")}
-                                  <span className="mx-1 text-gray-400">→</span>
-                                  <span className="font-medium text-blue-700">
-                                    {h.fieldName === "vatNo" ? (h.newValue ?? "-") : (h.newValue ? fmtDate(h.newValue) : "-")}
-                                  </span>
-                                </div>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      )}
+                      {historyOpenKey === dateKey(manageBill.vatType, manageBill.vatNo) && renderHistory(manageBill)}
                     </div>
 
                     {/* เลขที่บิล (vatType-vatNo) — บันทึกทันทีแยกจากฟอร์มด้านบน เหมือนวันที่บิล ประวัติแก้ไขดูรวมกับวันที่บิลได้จากปุ่ม "ดูประวัติการแก้ไข" ด้านบน */}
@@ -1095,34 +1118,73 @@ export default function BillListPage() {
             )}
 
             {/* Tab: ออร์เดอร์ */}
-            {activeTab === 'order' && (
+            {activeTab === 'order' && (() => {
+              // Preview with the same whole-roll fill the save uses: order 1
+              // first, overflow to the next, a roll never split across orders.
+              const preview = assignOrdersWholeRoll(
+                billRollYards.map(yard => ({ yard })),
+                orderDraft.map(o => ({ id: o.id, purchaseOrder: o.purchaseOrder, remaining: o.remainingYard })),
+              );
+              const previewOf = (id: number) => preview.filter(r => r.orderId === id);
+              const billYard = billRollYards.reduce((sum, y) => sum + y, 0);
+              const remainingTotal = orderDraft.reduce((sum, o) => sum + o.remainingYard, 0);
+              const overflowYard = orderDraft.length > 0 ? billYard - remainingTotal : 0;
+              const dirty = orderDraft.map(o => o.id).join(",") !== orderDraftInitial.join(",");
+              const fmtYard = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+              return (
               <div className="flex flex-col flex-1 overflow-hidden">
                 <div className="px-5 py-4 space-y-3 flex-1 overflow-y-auto">
-                  {/* Current order(s) — usually one, but a bill can span
-                      several when it covers overflow past the first order's yard */}
-                  {manageBill.orders.length > 0 && (
-                    <div className="space-y-1.5">
-                      <p className="text-blue-600 font-medium text-xs">
-                        ออร์เดอร์ปัจจุบัน ({manageBill.orders.length})
+                  <p className="text-xs text-gray-500">
+                    เลือกได้หลายออร์เดอร์ — ระบบเติมออร์เดอร์ 1 ก่อน ส่วนที่เกินไปออร์เดอร์ถัดไปตามลำดับ (ย้ายทั้งม้วน ไม่แบ่งม้วน จำนวนพับ/หน้าพิมพ์ไม่เปลี่ยน)
+                  </p>
+
+                  {/* Draft list — saved only on "บันทึกออร์เดอร์" */}
+                  {orderDraftLoading ? (
+                    <div className="text-center py-3 text-gray-400 text-xs">กำลังโหลด...</div>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="text-green-700 font-medium text-xs">
+                        ออร์เดอร์ที่ผูก ({orderDraft.length}) · บิลนี้ {billRollYards.length} ม้วน {fmtYard(billYard)} หลา
                       </p>
-                      {manageBill.orders.map((o) => (
-                        <div
-                          key={o.orderId}
-                          className="bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs flex items-center justify-between gap-2"
-                        >
-                          <span className="text-blue-800 font-medium">
-                            {o.purchaseOrder || `#${o.orderId}`}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleUnlinkOneOrder(o.orderId)}
-                            disabled={orderSaving}
-                            className="px-2 py-0.5 text-xs border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-50 transition-colors flex-shrink-0"
-                          >
-                            ยกเลิก
-                          </button>
+                      {orderDraft.length === 0 ? (
+                        <div className="px-3 py-2 border border-dashed border-gray-300 text-xs text-gray-400">
+                          {orderDraftInitial.length > 0
+                            ? "ไม่มีออร์เดอร์ในรายการ — บันทึกตอนนี้ = ยกเลิกการเชื่อมออร์เดอร์ทั้งหมด"
+                            : "ยังไม่ได้ผูกออร์เดอร์ — ค้นหาแล้วกด \"+ เพิ่มในรายการ\" ด้านล่าง"}
                         </div>
-                      ))}
+                      ) : orderDraft.map((o, i) => {
+                        const rolls = previewOf(o.id);
+                        return (
+                          <div key={o.id} className="px-3 py-1.5 bg-green-50 border border-green-200 flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs">
+                            <span className="font-mono font-semibold text-green-800">
+                              {orderDraft.length > 1 ? `${i + 1}. ` : ""}SO: {o.purchaseOrder || `#${o.id}`}
+                            </span>
+                            <span className={o.remainingYard > 0 ? "text-green-700" : "text-red-600"}>
+                              คงค้าง: {fmtYard(o.remainingYard)} หลา
+                            </span>
+                            <span className={rolls.length === 0 ? "text-gray-400" : "text-blue-700"}>
+                              {rolls.length === 0
+                                ? "จะไม่ได้รับม้วน"
+                                : `จะได้ ${rolls.length} ม้วน ${fmtYard(rolls.reduce((sum, r) => sum + r.yard, 0))} หลา`}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDraftOrder(o.id)}
+                              disabled={orderSaving}
+                              className="ml-auto text-green-700 hover:text-red-600 disabled:opacity-50"
+                            >
+                              ลบ
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {overflowYard > 0 && (
+                        <div className="px-3 py-1.5 bg-amber-50 border border-amber-300 text-xs text-amber-800">
+                          ยอดบิล ({fmtYard(billYard)} หลา) เกินออร์เดอร์ที่เลือก ({fmtYard(remainingTotal)} หลา) อยู่ {fmtYard(overflowYard)} หลา
+                          <br />
+                          ส่วนที่เกินจะไปอยู่ที่ออร์เดอร์สุดท้าย — เลือกออร์เดอร์เพิ่มเติมเพื่อรับส่วนที่เกิน
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1132,7 +1194,7 @@ export default function BillListPage() {
                     <input
                       value={orderSearch}
                       onChange={e => handleOrderSearchChange(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && doOrderSearch(orderSearch)}
+                      onKeyDown={e => e.key === 'Enter' && doOrderSearch(orderSearch, manageBill)}
                       placeholder="เลขที่ SO, ชื่อลูกค้า..."
                       className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
@@ -1144,11 +1206,11 @@ export default function BillListPage() {
                   ) : orderResults.length > 0 ? (
                     <div className="border border-gray-200 divide-y divide-gray-100 max-h-64 overflow-y-auto">
                       {orderResults.map((o, i) => {
-                        const isLinked = manageBill.orders.some(lo => lo.orderId === o.id);
+                        const isQueued = orderDraft.some(d => d.id === o.id);
                         return (
                           <div
                             key={i}
-                            className={`w-full text-left px-3 py-2.5 text-xs transition-colors ${isLinked ? 'bg-blue-50' : ''}`}
+                            className={`w-full text-left px-3 py-2.5 text-xs transition-colors ${isQueued ? 'bg-green-50' : ''}`}
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div>
@@ -1166,29 +1228,17 @@ export default function BillListPage() {
                                 <div className="text-gray-400">คงเหลือ</div>
                               </div>
                             </div>
-                            {isLinked ? (
-                              <span className="mt-1 inline-block text-blue-600 font-medium">✓ เชื่อมอยู่</span>
+                            {isQueued ? (
+                              <span className="mt-1 inline-block text-green-700 font-medium">✓ อยู่ในรายการ</span>
                             ) : (
-                              <div className="mt-1.5 flex gap-1.5">
-                                {manageBill.orders.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => handleSelectOrder(o)}
-                                    disabled={orderSaving}
-                                    className="px-2 py-0.5 text-xs border border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors"
-                                  >
-                                    แทนที่ทั้งหมด
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleAddOrder(o)}
-                                  disabled={orderSaving}
-                                  className="px-2 py-0.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                                >
-                                  {manageBill.orders.length > 0 ? "+ เพิ่มออร์เดอร์นี้" : "เชื่อมออร์เดอร์นี้"}
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleQueueOrder(o)}
+                                disabled={orderSaving || orderDraftLoading}
+                                className="mt-1.5 px-2 py-0.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                              >
+                                + เพิ่มในรายการ
+                              </button>
                             )}
                           </div>
                         );
@@ -1197,27 +1247,54 @@ export default function BillListPage() {
                   ) : orderSearch ? (
                     <div className="text-center py-4 text-gray-400 text-xs">ไม่พบออร์เดอร์</div>
                   ) : null}
+
+                  <div>
+                    <button type="button" onClick={() => toggleHistory(manageBill)}
+                      className="px-2 py-0.5 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50">
+                      {historyOpenKey === dateKey(manageBill.vatType, manageBill.vatNo) ? "ซ่อนประวัติ" : "ดูประวัติการแก้ไข"}
+                    </button>
+                    {historyOpenKey === dateKey(manageBill.vatType, manageBill.vatNo) && renderHistory(manageBill)}
+                  </div>
                 </div>
 
-                {/* Footer */}
-                {manageBill.orders.length > 0 && (
+                {/* Footer — save the draft list (with a confirm step) */}
+                {dirty && (
                   <div className="px-5 py-3 border-t border-gray-100 flex-shrink-0">
-                    <button
-                      type="button"
-                      onClick={handleUnlinkOrder}
-                      disabled={orderSaving}
-                      className="w-full py-1.5 text-xs border border-orange-300 text-orange-600 hover:bg-orange-50 disabled:opacity-50 transition-colors"
-                    >
-                      {orderSaving
-                        ? "กำลังบันทึก..."
-                        : manageBill.orders.length > 1
-                          ? "ยกเลิกการเชื่อมออร์เดอร์ทั้งหมด"
-                          : "ยกเลิกการเชื่อมออร์เดอร์"}
-                    </button>
+                    {confirmSaveOrders ? (
+                      <div className="space-y-2">
+                        <p className="text-xs text-gray-700">
+                          {orderDraft.length === 0
+                            ? "ยืนยันยกเลิกการเชื่อมออร์เดอร์ทั้งหมดของบิลนี้?"
+                            : `ยืนยันผูกบิลนี้กับ ${orderDraft.length} ออร์เดอร์ตามลำดับที่แสดง?`}
+                        </p>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={handleSaveOrders} disabled={orderSaving}
+                            className="flex-1 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                            {orderSaving ? "กำลังบันทึก..." : "ยืนยัน"}
+                          </button>
+                          <button type="button" onClick={() => setConfirmSaveOrders(false)} disabled={orderSaving}
+                            className="flex-1 py-1.5 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                            ยกเลิก
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setConfirmSaveOrders(true)}
+                          className="flex-1 py-1.5 text-xs bg-blue-600 text-white hover:bg-blue-700">
+                          บันทึกออร์เดอร์
+                        </button>
+                        <button type="button" onClick={() => loadOrderDraft(manageBill.vatType, manageBill.vatNo)}
+                          className="px-3 py-1.5 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50">
+                          คืนค่าเดิม
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
+              );
+            })()}
 
             {/* Tab: แก้ไขพับ */}
             {activeTab === 'folds' && (

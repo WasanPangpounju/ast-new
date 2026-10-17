@@ -8,6 +8,8 @@ export async function GET(request: NextRequest) {
 
   const q = (request.nextUrl.searchParams.get('q') ?? '').trim()
   if (!q) return Response.json({ orders: [] })
+  const excludeVatType = request.nextUrl.searchParams.get('excludeVatType')
+  const excludeVatNo = Number(request.nextUrl.searchParams.get('excludeVatNo'))
 
   const orders = await prisma.astPurchaseOrder.findMany({
     where: {
@@ -38,7 +40,15 @@ export async function GET(request: NextRequest) {
   if (poNumbers.length > 0) {
     const stats = await prisma.fabricOut.groupBy({
       by: ['purchaseOrder'],
-      where: { purchaseOrder: { in: poNumbers }, deletedAt: null },
+      where: {
+        purchaseOrder: { in: poNumbers },
+        deletedAt: null,
+        // จัดการบิล → ออร์เดอร์: leave the bill being re-linked out of "delivered",
+        // matching /api/warehouse/bill/orders so both lists show the same คงค้าง.
+        ...(excludeVatType && Number.isFinite(excludeVatNo)
+          ? { NOT: { vatType: excludeVatType, vatNo: excludeVatNo } }
+          : {}),
+      },
       _sum: { sumYard: true },
     })
     statsMap = new Map(stats.map(s => [s.purchaseOrder ?? '', Number(s._sum.sumYard ?? 0)]))
