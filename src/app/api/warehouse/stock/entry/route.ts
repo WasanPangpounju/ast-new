@@ -8,7 +8,20 @@ export async function POST(request: NextRequest) {
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await request.json()
-  const { fabricStruct, fabricPattern, fabricW, fabricCode, customer, emp, createDate, yards, refId: refIdInput } = body
+  const { fabricCode, emp, createDate, yards, refId: refIdInput } = body
+  let { fabricStruct, fabricPattern, fabricW, customer } = body
+
+  // กองผ้าที่สร้างเอง — the lot takes the pile's fabric + customer, so it can never
+  // land in a pile that describes different fabric. Omitted/null = กองหลัก as before.
+  const stockPileId = body.stockPileId == null || body.stockPileId === '' ? null : Number(body.stockPileId)
+  if (stockPileId != null) {
+    const pile = await prisma.stockPile.findFirst({ where: { id: stockPileId, deletedAt: null } })
+    if (!pile) return Response.json({ error: 'ไม่พบกองผ้าที่เลือก' }, { status: 400 })
+    fabricStruct = pile.fabricStruct
+    fabricPattern = pile.fabricPattern
+    fabricW = pile.fabricW
+    customer = pile.customer
+  }
 
   if (!fabricStruct || !emp) {
     return Response.json({ error: 'fabricStruct and emp are required' }, { status: 400 })
@@ -40,6 +53,7 @@ export async function POST(request: NextRequest) {
         fold: 1,
         sumYard: r.yard,
         createDate: date,
+        stockPileId,
       })),
     })
   } catch (err: unknown) {

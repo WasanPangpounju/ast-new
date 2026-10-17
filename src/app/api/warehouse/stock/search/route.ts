@@ -27,7 +27,15 @@ const NORM_OUTS_CTE = `
       SUM("sumYard")::float AS out_yard
     FROM fabricouts
     WHERE deleted_at IS NULL
+      -- bills cut from a user-made pile count toward that pile only (pile_outs)
+      AND stock_pile_id IS NULL
     GROUP BY 1, 2, 3, 4
+  ),
+  pile_outs AS (
+    SELECT stock_pile_id AS pile_id, COUNT(*)::int AS out_fold, SUM("sumYard")::float AS out_yard
+    FROM fabricouts
+    WHERE deleted_at IS NULL AND stock_pile_id IS NOT NULL
+    GROUP BY 1
   )`
 
 export async function GET(request: NextRequest) {
@@ -62,7 +70,7 @@ export async function GET(request: NextRequest) {
 
   const esc = (s: string) => s.replace(/'/g, "''")
   const conditions: string[] = ['s.deleted_at IS NULL']
-  if (q)             conditions.push(`(s."fabricStruct" ILIKE '%${esc(q)}%' OR s."fabricPattern" ILIKE '%${esc(q)}%' OR s."fabricW" ILIKE '%${esc(q)}%' OR s."fabricCode" ILIKE '%${esc(q)}%' OR COALESCE(s."customer", 'AST') ILIKE '%${esc(q)}%')`)
+  if (q)             conditions.push(`(s."fabricStruct" ILIKE '%${esc(q)}%' OR s."fabricPattern" ILIKE '%${esc(q)}%' OR s."fabricW" ILIKE '%${esc(q)}%' OR s."fabricCode" ILIKE '%${esc(q)}%' OR COALESCE(s."customer", 'AST') ILIKE '%${esc(q)}%' OR COALESCE(p.name, '') ILIKE '%${esc(q)}%')`)
   if (filterCustomer) conditions.push(`COALESCE(s."customer", 'AST') ILIKE '%${esc(filterCustomer)}%'`)
   if (filterStruct)   conditions.push(`s."fabricStruct" ILIKE '%${esc(filterStruct)}%'`)
   if (filterPattern)  conditions.push(`s."fabricPattern" ILIKE '%${esc(filterPattern)}%'`)
@@ -73,12 +81,15 @@ export async function GET(request: NextRequest) {
   const results = await prisma.$queryRawUnsafe<{
     fabricStruct: string; fabricPattern: string; fabricW: string
     fabricCode: string | null; customer: string
+    stockPileId: number | null; pileName: string | null
     produced_fold: number; produced_yard: number
     used_fold: number; used_yard: number
   }[]>(`
     WITH ${NORM_OUTS_CTE},
     agg_stock AS (
       SELECT
+        s.stock_pile_id                        AS pile_id,
+        MAX(p.name)                            AS pile_name,
         s."fabricStruct",
         s."fabricPattern",
         s."fabricW",
@@ -91,8 +102,10 @@ export async function GET(request: NextRequest) {
         SUM(s."fold")::int                      AS produced_fold,
         SUM(s."sumYard")::float                 AS produced_yard
       FROM stockfabrics s
+      LEFT JOIN stock_piles p ON p.id = s.stock_pile_id
       WHERE ${whereClause}
-      GROUP BY s."fabricStruct", s."fabricPattern", s."fabricW", COALESCE(s."customer", 'AST')
+      -- a user-made pile (กองผ้า) lists separately from กองหลัก
+      GROUP BY s.stock_pile_id, s."fabricStruct", s."fabricPattern", s."fabricW", COALESCE(s."customer", 'AST')
     )
     SELECT
       s."fabricStruct",
@@ -100,26 +113,34 @@ export async function GET(request: NextRequest) {
       s."fabricW",
       s."fabricCode",
       s.customer,
+      s.pile_id   AS "stockPileId",
+      s.pile_name AS "pileName",
       s.produced_fold,
       s.produced_yard,
-      COALESCE(
-        (SELECT SUM(o.out_fold) FROM norm_outs o
-         WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
-           AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern
-           AND o.n_customer = s.n_customer),
-        0
-      )::int AS used_fold,
-      COALESCE(
-        (SELECT SUM(o.out_yard) FROM norm_outs o
-         WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
-           AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern
-           AND o.n_customer = s.n_customer),
-        0
-      )::float AS used_yard
+      CASE WHEN s.pile_id IS NOT NULL
+        THEN COALESCE((SELECT po.out_fold FROM pile_outs po WHERE po.pile_id = s.pile_id), 0)
+        ELSE COALESCE(
+          (SELECT SUM(o.out_fold) FROM norm_outs o
+           WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
+             AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern
+             AND o.n_customer = s.n_customer),
+          0)
+      END::int AS used_fold,
+      CASE WHEN s.pile_id IS NOT NULL
+        THEN COALESCE((SELECT po.out_yard FROM pile_outs po WHERE po.pile_id = s.pile_id), 0)
+        ELSE COALESCE(
+          (SELECT SUM(o.out_yard) FROM norm_outs o
+           WHERE o.n_struct = s.n_struct AND o.n_width = s.n_width
+             AND s.n_pattern <> '' AND o.n_pattern = s.n_pattern
+             AND o.n_customer = s.n_customer),
+          0)
+      END::float AS used_yard
     FROM agg_stock s
     ORDER BY produced_yard DESC
     LIMIT 15
   `)
 
-  return Response.json({ results })
+  return Response.json({
+    results: results.map(r => ({ ...r, stockPileId: r.stockPileId == null ? null : Number(r.stockPileId) })),
+  })
 }

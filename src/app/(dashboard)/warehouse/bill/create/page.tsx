@@ -23,6 +23,8 @@ interface StockResult {
   fabricW: string;
   fabricCode: string | null;
   customer: string;
+  stockPileId?: number | null; // กองที่สร้างเอง — null = กองหลัก
+  pileName?: string | null;
   produced_fold: number;
   produced_yard: number;
   used_fold: number;
@@ -610,6 +612,8 @@ export default function BillCreatePage() {
               ? linkedOrders.map((o) => o.id)
               : undefined,
           isStockSale: mode === "stock",
+          // กองผ้าที่สร้างเอง ที่เลือกใน "ตัดจากสต็อก" — null = กองหลัก (เหมือนเดิม)
+          stockPileId: selectedStock?.stockPileId ?? null,
           // ถ้าเคยกด "บันทึกรายการถัดไป" มาก่อน ให้ผูกม้วนชุดสุดท้ายนี้เข้า
           // บิลเดิม (refId เดิม) แล้วค่อยปิดบิลผ่าน resetForm()
           refId,
@@ -687,6 +691,8 @@ export default function BillCreatePage() {
               ? linkedOrders.map((o) => o.id)
               : undefined,
           isStockSale: mode === "stock",
+          // กองผ้าที่สร้างเอง ที่เลือกใน "ตัดจากสต็อก" — null = กองหลัก (เหมือนเดิม)
+          stockPileId: selectedStock?.stockPileId ?? null,
           refId,
           requestId,
         }),
@@ -1169,6 +1175,11 @@ export default function BillCreatePage() {
                       className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs border-b border-gray-100 last:border-0"
                     >
                       <div className="font-medium text-gray-800">
+                        {s.pileName && (
+                          <span className="mr-1.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px]">
+                            กอง: {s.pileName}
+                          </span>
+                        )}
                         {s.fabricStruct}
                         {s.fabricPattern ? ` / ${s.fabricPattern}` : ""}
                         {s.fabricW ? ` ${s.fabricW}"` : ""}
@@ -1202,6 +1213,9 @@ export default function BillCreatePage() {
             )}
             {selectedStock && (
               <div className="mt-1 px-3 py-1.5 bg-blue-50 border border-blue-200 flex flex-wrap gap-x-4 gap-y-0.5 text-xs">
+                <span className={selectedStock.pileName ? "text-purple-700 font-medium" : "text-gray-500"}>
+                  {selectedStock.pileName ? `กอง: ${selectedStock.pileName}` : "กองหลัก"}
+                </span>
                 <span className="text-blue-700">
                   ผลิตแล้ว:{" "}
                   {Number(selectedStock.produced_fold).toLocaleString()} พับ /{" "}

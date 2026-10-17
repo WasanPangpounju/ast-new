@@ -18,6 +18,8 @@ interface StockGroup {
   fabricStruct: string | null
   fabricPattern: string | null
   fabricW: string | null
+  stockPileId: number | null   // กองที่สร้างเอง — null = กองหลัก
+  pileName: string | null
   lot_count: number
   produced_fold: number
   produced_yard: number
@@ -34,6 +36,13 @@ interface StockEntry {
   total_yard: number
   create_date: string
 }
+
+// Where a lot can move to (ย้ายกอง): same struct/pattern/width, any customer
+interface MoveTargets {
+  mainGroups: string[]   // customers with a กองหลัก of this fabric
+  piles: { id: number; name: string; customer: string }[]
+}
+type MoveDest = { pileId: number; label: string } | { pileId: null; customer: string; label: string }
 
 interface BillEntry {
   vatType: string
@@ -136,6 +145,15 @@ export default function StockPage() {
   const [bulkDeleteCodeInput, setBulkDeleteCodeInput] = useState('')
   const [bulkDeleting, setBulkDeleting] = useState(false)
 
+  // ย้ายกอง — lots (refId) ticked in the คีย์เข้าสต็อก tab, moved via a dialog
+  const [selectedRefIds, setSelectedRefIds] = useState<Set<string>>(new Set())
+  const [moveOpen, setMoveOpen] = useState(false)
+  const [moveTargets, setMoveTargets] = useState<MoveTargets | null>(null)
+  const [moveDest, setMoveDest] = useState<MoveDest | null>(null)
+  const [moveNewPile, setMoveNewPile] = useState<{ name: string; customer: string } | null>(null)
+  const [moving, setMoving] = useState(false)
+  const [pileDeleting, setPileDeleting] = useState(false)
+
   const fetchStocksPage = useCallback((page: number) => {
     const p = new URLSearchParams({ page: String(page) })
     if (appliedQ) { p.set('q', appliedQ); p.set('searchBy', appliedSearchBy) }
@@ -163,6 +181,8 @@ export default function StockPage() {
       fabricPattern: g.fabricPattern ?? '',
       fabricW:       g.fabricW       ?? '',
     })
+    if (g.stockPileId) p.set('pileId', String(g.stockPileId))
+    setSelectedRefIds(new Set())
     fetch(`/api/warehouse/stock/detail?${p}`)
       .then(r => r.json())
       .then(d => { setStockEntries(d.stockEntries ?? []); setBillEntries(d.billEntries ?? []) })
@@ -181,6 +201,7 @@ export default function StockPage() {
 
   const closeDetail = () => {
     setDetailGroup(null)
+    closeMove()
     setEditingStock(null)
     setEditingBill(null)
     setDeleteStockRefId(null)
@@ -223,10 +244,98 @@ export default function StockPage() {
       fabricPattern: detailGroup.fabricPattern ?? '',
       fabricW:       detailGroup.fabricW       ?? '',
     })
+    if (detailGroup.stockPileId) p.set('pileId', String(detailGroup.stockPileId))
     await fetch(`/api/warehouse/stock/detail?${p}`, { method: 'DELETE' })
     setBulkDeleting(false)
     closeBulkDelete()
     fetchDetail(detailGroup)
+    reload()
+  }
+
+  // ── ย้ายกอง ────────────────────────────────────────────
+  const groupLabel = (customer: string, pileName: string | null) =>
+    pileName ? `กอง: ${pileName} (${customer})` : `กองหลัก (${customer})`
+
+  const openMove = async () => {
+    if (!detailGroup) return
+    setMoveOpen(true)
+    setMoveDest(null)
+    setMoveNewPile(null)
+    setMoveTargets(null)
+    const p = new URLSearchParams({
+      mode: 'targets',
+      fabricStruct:  detailGroup.fabricStruct  ?? '',
+      fabricPattern: detailGroup.fabricPattern ?? '',
+      fabricW:       detailGroup.fabricW       ?? '',
+    })
+    const d = await fetch(`/api/warehouse/stock/piles?${p}`).then(r => r.json()).catch(() => ({}))
+    setMoveTargets({ mainGroups: d.mainGroups ?? [], piles: d.piles ?? [] })
+  }
+
+  const closeMove = () => {
+    setMoveOpen(false)
+    setMoveDest(null)
+    setMoveNewPile(null)
+  }
+
+  const handleMove = async () => {
+    if (!detailGroup || selectedRefIds.size === 0 || moving) return
+    setMoving(true)
+    try {
+      let dest = moveDest
+      // "+ สร้างกองใหม่" — create the pile first (same fabric as this row), then move into it
+      if (moveNewPile) {
+        const res = await fetch('/api/warehouse/stock/piles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: moveNewPile.name,
+            customer: moveNewPile.customer,
+            fabricStruct:  detailGroup.fabricStruct  ?? '',
+            fabricPattern: detailGroup.fabricPattern ?? '',
+            fabricW:       detailGroup.fabricW       ?? '',
+          }),
+        })
+        const d = await res.json()
+        if (!res.ok) { alert(d.error ?? 'สร้างกองไม่สำเร็จ'); return }
+        dest = { pileId: d.pile.id, label: d.pile.name }
+      }
+      if (!dest) return
+      const res = await fetch('/api/warehouse/stock/piles/move', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          refIds: [...selectedRefIds],
+          from: {
+            pileId: detailGroup.stockPileId,
+            customer:      detailGroup.customer      ?? '',
+            fabricStruct:  detailGroup.fabricStruct  ?? '',
+            fabricPattern: detailGroup.fabricPattern ?? '',
+            fabricW:       detailGroup.fabricW       ?? '',
+          },
+          to: dest.pileId != null ? { pileId: dest.pileId } : { pileId: null, customer: dest.customer },
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) { alert(d.error ?? 'ย้ายไม่สำเร็จ'); return }
+      closeMove()
+      fetchDetail(detailGroup)
+      reload()
+    } finally {
+      setMoving(false)
+    }
+  }
+
+  // ลบกอง — only offered (and only allowed by the API) once the pile is empty
+  const handleDeletePile = async () => {
+    if (!detailGroup?.stockPileId || pileDeleting) return
+    if (!confirm(`ลบกอง "${detailGroup.pileName}"?`)) return
+    setPileDeleting(true)
+    const res = await fetch(`/api/warehouse/stock/piles?id=${detailGroup.stockPileId}`, { method: 'DELETE' })
+    const d = await res.json().catch(() => ({}))
+    setPileDeleting(false)
+    if (!res.ok) { alert(d.error ?? 'ลบกองไม่สำเร็จ'); return }
+    closeDetail()
     reload()
   }
 
@@ -446,7 +555,16 @@ export default function StockPage() {
                 const remYard = Number(s.produced_yard ?? 0) - Number(s.used_yard ?? 0)
                 return (
                   <tr key={i} className="hover:bg-blue-50/30 transition-colors">
-                    <td className="px-3 py-2 text-gray-700 font-medium">{s.customer}</td>
+                    <td className="px-3 py-2 text-gray-700 font-medium">
+                      {s.customer}
+                      {s.pileName && (
+                        <div className="mt-0.5">
+                          <span className="inline-block px-1.5 py-0.5 text-[11px] font-normal bg-purple-100 text-purple-700 rounded" title="กองที่สร้างเอง">
+                            กอง: {s.pileName}
+                          </span>
+                        </div>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-gray-600">
                       {s.fabricCode ?? '-'}
                       {(s.fabricCodes ?? []).filter(c => c !== s.fabricCode?.trim()).map(c => (
@@ -495,7 +613,21 @@ export default function StockPage() {
             {/* Header */}
             <div className="px-5 py-3 border-b border-gray-100 flex items-start justify-between shrink-0">
               <div>
-                <h2 className="font-semibold text-gray-900 text-sm">รายละเอียดสต็อก</h2>
+                <h2 className="font-semibold text-gray-900 text-sm">
+                  รายละเอียดสต็อก
+                  <span className={`ml-2 px-1.5 py-0.5 text-[11px] font-normal rounded ${detailGroup.pileName ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                    {detailGroup.pileName ? `กอง: ${detailGroup.pileName}` : 'กองหลัก'}
+                  </span>
+                  {detailGroup.stockPileId && !detailLoading && stockEntries.length === 0 && billEntries.length === 0 && (
+                    <button
+                      onClick={handleDeletePile}
+                      disabled={pileDeleting}
+                      className="ml-2 px-2 py-0.5 text-[11px] font-normal border border-red-200 text-red-500 hover:bg-red-50 rounded disabled:opacity-50"
+                    >
+                      {pileDeleting ? '...' : 'ลบกอง'}
+                    </button>
+                  )}
+                </h2>
                 <p className="text-xs text-gray-500 mt-0.5">
                   {detailGroup.customer}
                   {detailGroup.fabricCode ? ` · ${detailGroup.fabricCode}` : ''}
@@ -527,7 +659,17 @@ export default function StockPage() {
               (activeDetailTab === 'stock' && stockEntries.length > 0) ||
               (activeDetailTab === 'bill' && billEntries.length > 0)
             ) && (
-              <div className="flex justify-end px-3 py-1.5 border-b border-gray-100 bg-gray-50/50 shrink-0">
+              <div className="flex items-center justify-end gap-2 px-3 py-1.5 border-b border-gray-100 bg-gray-50/50 shrink-0">
+                {activeDetailTab === 'stock' && (
+                  <button
+                    onClick={openMove}
+                    disabled={selectedRefIds.size === 0}
+                    className="mr-auto px-2.5 py-1 text-xs border border-purple-300 text-purple-700 hover:bg-purple-50 rounded transition-colors disabled:opacity-40"
+                    title={selectedRefIds.size === 0 ? 'เลือกล็อตที่ต้องการย้ายก่อน' : ''}
+                  >
+                    ย้ายไปกองอื่น{selectedRefIds.size > 0 ? ` (${selectedRefIds.size} ล็อต)` : ''}
+                  </button>
+                )}
                 <button
                   onClick={() => openBulkDelete(activeDetailTab)}
                   className="px-2.5 py-1 text-xs border border-red-200 text-red-500 hover:bg-red-50 rounded transition-colors"
@@ -552,6 +694,14 @@ export default function StockPage() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-200 text-gray-600">
+                        <th className="pl-3 py-2 w-6">
+                          <input
+                            type="checkbox"
+                            aria-label="เลือกทุกล็อต"
+                            checked={stockEntries.length > 0 && selectedRefIds.size === stockEntries.length}
+                            onChange={ev => setSelectedRefIds(ev.target.checked ? new Set(stockEntries.map(x => x.refId)) : new Set())}
+                          />
+                        </th>
                         <th className="text-left px-3 py-2 font-medium">วันที่</th>
                         <th className="text-left px-3 py-2 font-medium">ผู้คีย์</th>
                         <th className="text-left px-3 py-2 font-medium">ประเภท</th>
@@ -565,6 +715,7 @@ export default function StockPage() {
                         editingStock?.refId === e.refId ? (
                           /* Edit row */
                           <tr key={e.refId} className="bg-blue-50/40">
+                            <td />
                             <td className="px-3 py-2">
                               <input
                                 type="date"
@@ -605,7 +756,7 @@ export default function StockPage() {
                         ) : deleteStockRefId === e.refId ? (
                           /* Delete confirm row */
                           <tr key={e.refId} className="bg-red-50/40">
-                            <td colSpan={5} className="px-3 py-2 text-xs text-red-700 font-medium">
+                            <td colSpan={6} className="px-3 py-2 text-xs text-red-700 font-medium">
                               ยืนยันลบรายการ {fmtDate(e.create_date)} ({e.fold_count} พับ, {Math.round(e.total_yard).toLocaleString()} หลา)?
                             </td>
                             <td className="px-3 py-2 text-center">
@@ -628,7 +779,19 @@ export default function StockPage() {
                           </tr>
                         ) : (
                           /* Normal row */
-                          <tr key={e.refId} className="hover:bg-gray-50/60 transition-colors">
+                          <tr key={e.refId} className={`hover:bg-gray-50/60 transition-colors ${selectedRefIds.has(e.refId) ? 'bg-purple-50/50' : ''}`}>
+                            <td className="pl-3 py-2">
+                              <input
+                                type="checkbox"
+                                aria-label="เลือกล็อตนี้"
+                                checked={selectedRefIds.has(e.refId)}
+                                onChange={ev => setSelectedRefIds(prev => {
+                                  const n = new Set(prev)
+                                  if (ev.target.checked) n.add(e.refId); else n.delete(e.refId)
+                                  return n
+                                })}
+                              />
+                            </td>
                             <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{fmtDate(e.create_date)}</td>
                             <td className="px-3 py-2 text-gray-800">{e.emp ?? '-'}</td>
                             <td className="px-3 py-2 text-gray-500">{e.is_purchased ? 'ผ้าซื้อเข้า' : 'ผ้าผลิต'}</td>
@@ -659,7 +822,7 @@ export default function StockPage() {
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
-                        <td colSpan={3} className="px-3 py-2 text-xs text-gray-600">รวมทั้งหมด</td>
+                        <td colSpan={4} className="px-3 py-2 text-xs text-gray-600">รวมทั้งหมด</td>
                         <td className="px-3 py-2 text-right text-xs text-gray-800">
                           {stockEntries.reduce((s, e) => s + e.fold_count, 0).toLocaleString()} พับ
                         </td>
@@ -830,6 +993,91 @@ export default function StockPage() {
           </div>
         </div>
       )}
+
+      {/* ── ย้ายกอง dialog ─────────────────────────────────── */}
+      {moveOpen && detailGroup && (() => {
+        const selected = stockEntries.filter(e => selectedRefIds.has(e.refId))
+        const selFold = selected.reduce((s, e) => s + e.fold_count, 0)
+        const selYard = selected.reduce((s, e) => s + e.total_yard, 0)
+        const isCurrentMain = (c: string) => !detailGroup.stockPileId && c.replace(/\s/g, '') === (detailGroup.customer ?? '').replace(/\s/g, '')
+        const options: MoveDest[] = moveTargets ? [
+          ...moveTargets.mainGroups.filter(c => !isCurrentMain(c)).map(c => ({ pileId: null, customer: c, label: groupLabel(c, null) })),
+          ...moveTargets.piles.filter(p => p.id !== detailGroup.stockPileId).map(p => ({ pileId: p.id, label: groupLabel(p.customer, p.name) })),
+        ] : []
+        const destKey = (d: MoveDest | null) => d == null ? '' : d.pileId != null ? `p${d.pileId}` : `m${d.customer}`
+        const canConfirm = moveNewPile ? moveNewPile.name.trim() !== '' : moveDest !== null
+        return (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={closeMove} />
+            <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-5 space-y-3">
+              <h3 className="font-semibold text-gray-900 text-sm">ย้ายไปกองอื่น</h3>
+              <p className="text-xs text-gray-600">
+                {selected.length} ล็อต · {selFold.toLocaleString()} พับ · {Math.round(selYard).toLocaleString()} หลา
+                <br />จาก {groupLabel(detailGroup.customer, detailGroup.pileName)}
+              </p>
+              <p className="text-[11px] text-gray-400">
+                ย้ายได้เฉพาะกองที่ โครงสร้าง/ลาย/หน้ากว้าง ตรงกัน — ถ้าลูกค้าต่างกัน ผ้าที่ย้ายจะเปลี่ยนเป็นลูกค้าของกองปลายทาง
+                บิลที่ตัดสต็อกไปแล้วไม่ย้ายตาม (ย้ายได้ที่ จัดการบิล → ตัดสต็อก)
+              </p>
+              <div className="border border-gray-200 rounded max-h-56 overflow-y-auto divide-y divide-gray-100">
+                {moveTargets === null ? (
+                  <div className="text-center py-4 text-xs text-gray-400">กำลังโหลด...</div>
+                ) : (
+                  <>
+                    {options.map(o => (
+                      <label key={destKey(o)} className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-gray-50">
+                        <input
+                          type="radio"
+                          name="move-dest"
+                          checked={!moveNewPile && destKey(moveDest) === destKey(o)}
+                          onChange={() => { setMoveDest(o); setMoveNewPile(null) }}
+                        />
+                        <span className={o.pileId != null ? 'text-purple-700' : 'text-gray-800'}>{o.label}</span>
+                      </label>
+                    ))}
+                    <label className="flex items-center gap-2 px-3 py-2 text-xs cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="radio"
+                        name="move-dest"
+                        checked={moveNewPile !== null}
+                        onChange={() => { setMoveNewPile({ name: '', customer: detailGroup.customer ?? '' }); setMoveDest(null) }}
+                      />
+                      <span className="text-purple-700">+ สร้างกองใหม่</span>
+                    </label>
+                    {moveNewPile && (
+                      <div className="px-3 py-2 space-y-1.5 bg-purple-50/40">
+                        <input
+                          autoFocus
+                          value={moveNewPile.name}
+                          onChange={ev => setMoveNewPile(p => p ? { ...p, name: ev.target.value } : p)}
+                          placeholder="ชื่อกอง เช่น TR16 ล็อต A"
+                          className="w-full border border-purple-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        />
+                        <input
+                          value={moveNewPile.customer}
+                          onChange={ev => setMoveNewPile(p => p ? { ...p, customer: ev.target.value } : p)}
+                          placeholder="ลูกค้า"
+                          className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={closeMove} disabled={moving}
+                  className="px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 text-gray-600">
+                  ยกเลิก
+                </button>
+                <button onClick={handleMove} disabled={!canConfirm || moving}
+                  className="px-3 py-1.5 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-40">
+                  {moving ? 'กำลังย้าย...' : 'ยืนยันย้าย'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Bulk delete confirm dialog ─────────────────────── */}
       {bulkDeleteTab && detailGroup && (

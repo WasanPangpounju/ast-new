@@ -18,8 +18,10 @@ const EFF_W = `CASE WHEN b.s_w        = '' THEN b."fabricW"        ELSE b.s_w   
 const EFF_P = `CASE WHEN b.s_pattern  = '' THEN b."fabricPattern"  ELSE b.s_pattern  END`
 const EFF_C = `COALESCE(NULLIF(TRIM(CASE WHEN b.s_customer = '' THEN b."customerName" ELSE b.s_customer END), ''), 'AST')`
 
+// A bill cut from a user-made pile (กองผ้า) always counts as matched.
 const STOCK_MATCH_EXPR = `
-  CASE WHEN ${NP(EFF_P)} <> '' AND EXISTS (
+  CASE WHEN b.stock_pile_id IS NOT NULL THEN true
+       WHEN ${NP(EFF_P)} <> '' AND EXISTS (
     SELECT 1 FROM stockfabrics sf
     WHERE sf.deleted_at IS NULL
       AND ${NP('sf."fabricPattern"')} <> ''
@@ -93,6 +95,7 @@ export async function GET(request: NextRequest) {
             COALESCE(MAX("stockFabricW"),       '') AS s_w,
             COALESCE(MAX("stockFabricPattern"), '') AS s_pattern,
             COALESCE(MAX("stockCustomer"),      '') AS s_customer,
+            MAX(stock_pile_id)        AS stock_pile_id,
             -- Every distinct order actually linked to a row in this bill (not
             -- just one, collapsed via MAX) — a bill can span multiple orders
             -- when it was used to cover overflow past the first order's yard.
@@ -107,6 +110,7 @@ export async function GET(request: NextRequest) {
         ),
         with_match AS (
           SELECT b.*, ${STOCK_MATCH_EXPR} AS has_stock_match,
+            (SELECT p.name FROM stock_piles p WHERE p.id = b.stock_pile_id) AS stock_pile_name,
             -- stock-deposit withdrawals keep their deposit's refId here as the link
             EXISTS (SELECT 1 FROM fabricouts d WHERE d."refId" = b."altPurchaseOrder" AND d."isDeposit")
               AS alt_is_deposit_link
@@ -128,7 +132,8 @@ export async function GET(request: NextRequest) {
             COALESCE(MAX("stockFabricStruct"),  '') AS s_struct,
             COALESCE(MAX("stockFabricW"),       '') AS s_w,
             COALESCE(MAX("stockFabricPattern"), '') AS s_pattern,
-            COALESCE(MAX("stockCustomer"),      '') AS s_customer
+            COALESCE(MAX("stockCustomer"),      '') AS s_customer,
+            MAX(stock_pile_id)        AS stock_pile_id
           FROM fabricouts
           WHERE ${baseWhere}
           GROUP BY "vatType", "vatNo", "customerName", "receiveName", "fabricStruct", "fabricPattern", "fabricW"
@@ -158,6 +163,8 @@ export async function GET(request: NextRequest) {
         vatNo:              Number(b.vatNo),
         hasStockMatch:      Boolean(b.has_stock_match),
         altPurchaseOrderIsDepositLink: Boolean(b.alt_is_deposit_link),
+        stockPileId:        b.stock_pile_id == null ? null : Number(b.stock_pile_id),
+        stockPileName:      b.stock_pile_name ?? null,
         stockFabricStruct:  b.s_struct  || null,
         stockFabricW:       b.s_w       || null,
         stockFabricPattern: b.s_pattern || null,
@@ -198,6 +205,11 @@ export async function POST(request: NextRequest) {
           fabricStruct, fabricPattern, fabricW, createDate, yards,
           isDeposit, altFabricStruct, altPurchaseOrder, isStockSale, refId: refIdInput,
           requestId } = body
+  // กองผ้าที่สร้างเอง ที่เลือกใน "ตัดจากสต็อก" — null/omitted = กองหลัก (match by fabric, as before)
+  const stockPileId = body.stockPileId == null || body.stockPileId === '' ? null : Number(body.stockPileId)
+  if (stockPileId != null && !(await prisma.stockPile.findFirst({ where: { id: stockPileId, deletedAt: null }, select: { id: true } }))) {
+    return Response.json({ error: 'ไม่พบกองผ้าที่เลือก' }, { status: 400 })
+  }
 
   // ขายผ้าจากคลังโดยตรง (ไม่มีออร์เดอร์อ้างอิง) — ignore orderIds/orderId/purchaseOrder
   // ที่หลุดมาจาก client เสมอไม่ว่า UI จะส่งอะไรมาก็ตาม (defensive: UI เคลียร์ state
@@ -280,6 +292,7 @@ export async function POST(request: NextRequest) {
           altFabricStruct: altFabricStruct || null,
           altPurchaseOrder: isStock ? null : (altPurchaseOrder || null),
           isStockSale: isStock,
+          stockPileId,
         })),
       })
     })
@@ -309,7 +322,7 @@ export async function PATCH(request: NextRequest) {
   const { vatType, vatNo, customerName, receiveName, fabricStruct, fabricPattern, fabricW,
           altFabricStruct, altPurchaseOrder,
           stockFabricStruct, stockFabricW, stockFabricPattern, stockCustomer,
-          orderId, purchaseOrder, linkOrderId, unlinkOrderId } = body
+          orderId, purchaseOrder, linkOrderId, unlinkOrderId, stockPileId } = body
   if (!vatType || vatNo == null) return Response.json({ error: 'vatType and vatNo required' }, { status: 400 })
 
   // Multi-order ops target only a subset of this bill's rolls, so linking or
@@ -352,6 +365,7 @@ export async function PATCH(request: NextRequest) {
       stockFabricW:       'stockFabricW'       in body ? (stockFabricW       || null) : undefined,
       stockFabricPattern: 'stockFabricPattern' in body ? (stockFabricPattern || null) : undefined,
       stockCustomer:      'stockCustomer'      in body ? (stockCustomer      || null) : undefined,
+      stockPileId:        'stockPileId'        in body ? (stockPileId != null && stockPileId !== '' ? Number(stockPileId) : null) : undefined,
       // Order link — explicit null unlinks
       orderId:       'orderId'       in body ? (orderId !== null && orderId !== undefined ? Number(orderId) : null) : undefined,
       purchaseOrder: 'purchaseOrder' in body ? (purchaseOrder || null) : undefined,

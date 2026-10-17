@@ -19,7 +19,19 @@ interface StockResult {
   fabricW: string;
   fabricCode: string | null;
   customer: string;
+  stockPileId: number | null;
+  pileName: string | null;
   produced_fold: number;
+}
+
+// กองผ้าที่ผู้ใช้สร้างเอง (stock_piles)
+interface PileOption {
+  id: number;
+  name: string;
+  customer: string;
+  fabricStruct: string;
+  fabricPattern: string;
+  fabricW: string;
 }
 
 interface FabricCodeOption {
@@ -46,6 +58,14 @@ export default function StockCreateForm({ emp }: Props) {
   const [fabricW, setFabricW] = useState("");
   const [fabricCode, setFabricCode] = useState("");
   const [customer, setCustomer] = useState("");
+
+  // กองผ้า — null = กองหลัก (ค่าเริ่มต้น, จัดกลุ่มแบบเดิม). เลือกกองที่สร้างเองแล้ว
+  // โครงสร้าง/ลาย/หน้ากว้าง/ลูกค้า จะล็อกตามกอง (API บังคับซ้ำอีกชั้น)
+  const [stockPile, setStockPile] = useState<PileOption | null>(null);
+  const [pileOptions, setPileOptions] = useState<PileOption[]>([]);
+  const [newPileName, setNewPileName] = useState<string | null>(null);
+  const [pileSaving, setPileSaving] = useState(false);
+  const pileLocked = stockPile !== null;
 
   const [stockSearch, setStockSearch] = useState("");
   const [stockResults, setStockResults] = useState<StockResult[]>([]);
@@ -91,6 +111,51 @@ export default function StockCreateForm({ emp }: Props) {
     }, 300);
     return () => clearTimeout(t);
   }, [stockSearch]);
+
+  // Piles that match the fabric currently typed (same customer + struct + pattern + width)
+  useEffect(() => {
+    if (stockPile || !fabricStruct.trim()) return;
+    const t = setTimeout(() => {
+      const sp = new URLSearchParams({ fabricStruct, fabricPattern, fabricW, customer: customer || "AST" });
+      fetch("/api/warehouse/stock/piles?" + sp)
+        .then((r) => r.json())
+        .then((d) => setPileOptions(d.piles ?? []))
+        .catch(() => {});
+    }, 300);
+    return () => clearTimeout(t);
+  }, [stockPile, fabricStruct, fabricPattern, fabricW, customer]);
+
+  function choosePile(p: PileOption | null) {
+    setStockPile(p);
+    setNewPileName(null);
+    if (!p) return;
+    setFabricStruct(p.fabricStruct);
+    setFabricPattern(p.fabricPattern);
+    setFabricW(p.fabricW);
+    setCustomer(p.customer === "AST" ? "" : p.customer);
+  }
+
+  async function handleCreatePile() {
+    const name = (newPileName ?? "").trim();
+    if (!name) { alert("กรุณาตั้งชื่อกอง"); return; }
+    if (!fabricStruct.trim()) { alert("กรุณากรอกโครงสร้างผ้าก่อนสร้างกอง"); return; }
+    setPileSaving(true);
+    try {
+      const res = await fetch("/api/warehouse/stock/piles", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, customer: customer || "AST", fabricStruct, fabricPattern, fabricW }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "สร้างกองไม่สำเร็จ");
+      setPileOptions((prev) => [...prev, data.pile]);
+      choosePile(data.pile);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPileSaving(false);
+    }
+  }
 
   useEffect(() => {
     if (!customer) {
@@ -138,6 +203,8 @@ export default function StockCreateForm({ emp }: Props) {
   function handleAiResult(data: AiReadResult) {
     const filled = new Set<string>();
     const lowConf = new Set<string>();
+    setStockPile(null);
+    setNewPileName(null);
     if (data.fabricCode != null) {
       setFabricCode(data.fabricCode);
       filled.add("fabricCode");
@@ -196,6 +263,8 @@ export default function StockCreateForm({ emp }: Props) {
     setFabricW("");
     setFabricCode("");
     setCustomer("");
+    setStockPile(null);
+    setNewPileName(null);
     setAiFilledFields(new Set());
     setAiLowConfidence(new Set());
     setSavedCount(0);
@@ -221,6 +290,7 @@ export default function StockCreateForm({ emp }: Props) {
           emp,
           createDate,
           yards,
+          stockPileId: stockPile?.id ?? null,
           // ถ้าเคยกด "บันทึกรายการถัดไป" มาก่อน ให้ผูก rows ชุดสุดท้ายนี้เข้า
           // record เดิม (groupId เดิม) แล้วค่อยปิด record ผ่าน resetForm()
           refId: groupId,
@@ -267,6 +337,7 @@ export default function StockCreateForm({ emp }: Props) {
           emp,
           createDate,
           yards,
+          stockPileId: stockPile?.id ?? null,
           // ส่ง refId เดิมทุกครั้ง เพื่อให้ rows ชุดใหม่ผูกเข้า record เดิม
           // แทนที่จะสร้าง record ใหม่ทุกครั้งที่กด
           refId: groupId,
@@ -425,12 +496,26 @@ export default function StockCreateForm({ emp }: Props) {
                       setFabricW(s.fabricW ?? "");
                       setFabricCode(s.fabricCode ?? "");
                       setCustomer(s.customer === "AST" ? "" : s.customer);
+                      // picking a user-made pile here selects it as the destination
+                      if (s.stockPileId) {
+                        choosePile({
+                          id: s.stockPileId, name: s.pileName ?? "", customer: s.customer,
+                          fabricStruct: s.fabricStruct, fabricPattern: s.fabricPattern ?? "", fabricW: s.fabricW ?? "",
+                        });
+                      } else {
+                        setStockPile(null);
+                      }
                       setStockDropdown(false);
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-blue-50 text-xs border-b border-gray-100 last:border-0"
                   >
                     <div className="font-medium text-gray-800">
                       {s.fabricStruct}
+                      {s.pileName && (
+                        <span className="ml-1.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 text-[10px]">
+                          กอง: {s.pileName}
+                        </span>
+                      )}
                     </div>
                     <div className="text-gray-500 flex gap-3 mt-0.5">
                       <span>{s.fabricPattern || "-"}</span>
@@ -453,7 +538,8 @@ export default function StockCreateForm({ emp }: Props) {
             <input
               value={fabricStruct}
               onChange={(e) => setFabricStruct(e.target.value)}
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              readOnly={pileLocked}
+              className={`w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500${pileLocked ? " bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
               style={aiInputStyle("fabricStruct")}
               placeholder="โครงสร้างผ้า"
             />
@@ -465,7 +551,8 @@ export default function StockCreateForm({ emp }: Props) {
             <input
               value={fabricPattern}
               onChange={(e) => setFabricPattern(e.target.value)}
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              readOnly={pileLocked}
+              className={`w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500${pileLocked ? " bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
               style={aiInputStyle("fabricPattern")}
               placeholder="ลายผ้า"
             />
@@ -477,7 +564,8 @@ export default function StockCreateForm({ emp }: Props) {
             <input
               value={fabricW}
               onChange={(e) => setFabricW(e.target.value)}
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              readOnly={pileLocked}
+              className={`w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500${pileLocked ? " bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
               style={aiInputStyle("fabricW")}
               placeholder="หน้ากว้าง"
             />
@@ -537,14 +625,15 @@ export default function StockCreateForm({ emp }: Props) {
                 setCustomerDropdown(true);
               }}
               onFocus={() => {
-                if (customer) setCustomerDropdown(true);
+                if (customer && !pileLocked) setCustomerDropdown(true);
               }}
               onBlur={() => setTimeout(() => setCustomerDropdown(false), 200)}
               placeholder="AST หรือชื่อลูกค้า..."
-              className="w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              readOnly={pileLocked}
+              className={`w-full border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500${pileLocked ? " bg-gray-100 text-gray-500 cursor-not-allowed" : ""}`}
               style={aiInputStyle("customer")}
             />
-            {customerDropdown && customerResults.length > 0 && (
+            {customerDropdown && !pileLocked && customerResults.length > 0 && (
               <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 shadow-lg max-h-48 overflow-y-auto">
                 {customerResults.map((c) => (
                   <button
@@ -561,6 +650,73 @@ export default function StockCreateForm({ emp }: Props) {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* กองผ้า — กองหลัก (default) or a user-made pile of this same fabric */}
+          <div className="sm:col-span-2 md:col-span-3">
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              กองผ้า
+            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                aria-label="กองผ้า"
+                value={stockPile ? String(stockPile.id) : ""}
+                onChange={(e) => {
+                  const id = Number(e.target.value);
+                  choosePile(pileOptions.find((p) => p.id === id) ?? null);
+                }}
+                className="border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[16rem]"
+              >
+                <option value="">กองหลัก (จัดกลุ่มตาม ลูกค้า/โครงสร้าง/ลาย/หน้ากว้าง)</option>
+                {(stockPile && !pileOptions.some((p) => p.id === stockPile.id) ? [stockPile, ...pileOptions] : fabricStruct.trim() ? pileOptions : []).map((p) => (
+                  <option key={p.id} value={String(p.id)}>
+                    กอง: {p.name}
+                  </option>
+                ))}
+              </select>
+              {newPileName === null ? (
+                <button
+                  type="button"
+                  onClick={() => setNewPileName("")}
+                  disabled={!fabricStruct.trim()}
+                  title={fabricStruct.trim() ? "" : "กรอกโครงสร้างผ้าก่อน"}
+                  className="px-3 py-1.5 text-sm border border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-40"
+                >
+                  + สร้างกองใหม่
+                </button>
+              ) : (
+                <>
+                  <input
+                    autoFocus
+                    value={newPileName}
+                    onChange={(e) => setNewPileName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleCreatePile(); } }}
+                    placeholder="ชื่อกอง เช่น TR16 ล็อต A"
+                    className="border border-purple-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreatePile}
+                    disabled={pileSaving}
+                    className="px-3 py-1.5 text-sm bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {pileSaving ? "กำลังสร้าง..." : "สร้างกอง"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewPileName(null)}
+                    className="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 hover:bg-gray-50"
+                  >
+                    ยกเลิก
+                  </button>
+                </>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-gray-400">
+              {pileLocked
+                ? "ผ้าจะเข้ากองนี้ — โครงสร้าง/ลาย/หน้ากว้าง/ลูกค้า ล็อกตามกอง (เลือก \"กองหลัก\" เพื่อแก้ไข)"
+                : "กองใหม่จะใช้ ลูกค้า/โครงสร้าง/ลาย/หน้ากว้าง ที่กรอกด้านบน"}
+            </p>
           </div>
         </div>
 

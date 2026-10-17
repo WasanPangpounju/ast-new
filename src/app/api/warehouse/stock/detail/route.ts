@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
-import { NS, NW, NP, EFF_STRUCT, EFF_WIDTH, EFF_PATTERN, EFF_CUSTOMER, CK, NC, stockGroupWhere } from '@/lib/fabricOutMatch'
+import { stockRowsWhere, pileOutsWhere } from '@/lib/fabricOutMatch'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,8 +13,8 @@ export async function GET(request: NextRequest) {
     const fabricStruct  = searchParams.get('fabricStruct')  ?? ''
     const fabricPattern = searchParams.get('fabricPattern') ?? ''
     const fabricW       = searchParams.get('fabricW')       ?? ''
-
-    const esc = (s: string) => s.replace(/'/g, "''")
+    // กองที่สร้างเอง — omitted/empty = กองหลัก
+    const pileId        = searchParams.get('pileId') ? Number(searchParams.get('pileId')) : null
 
     const [stockEntries, billEntries] = await Promise.all([
       // Stock entries grouped by refId — same normalized group key as the stock summary (fabricCode not part of it)
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
           MAX("createDate")                AS create_date
         FROM stockfabrics
         WHERE deleted_at IS NULL
-          AND ${stockGroupWhere({ customer, fabricStruct, fabricPattern, fabricW }, 'stockfabrics')}
+          AND ${stockRowsWhere({ customer, fabricStruct, fabricPattern, fabricW }, pileId, 'stockfabrics')}
         GROUP BY "refId"
         ORDER BY MAX("createDate") DESC
       `) as Promise<any[]>,
@@ -48,11 +48,7 @@ export async function GET(request: NextRequest) {
           SUM("sumYard")::float   AS "totalYard"
         FROM fabricouts
         WHERE deleted_at IS NULL
-          AND ${NS(EFF_STRUCT)}   = ${NS(`'${esc(fabricStruct)}'`)}
-          AND ${NW(EFF_WIDTH)}    = ${NW(`'${esc(fabricW)}'`)}
-          AND ${NP(EFF_PATTERN)}  = ${NP(`'${esc(fabricPattern)}'`)}
-          AND ${NP(`'${esc(fabricPattern)}'`)} <> ''
-          AND ${CK(EFF_CUSTOMER)} = ${CK(NC(`'${esc(customer)}'`))}
+          AND ${pileOutsWhere({ customer, fabricStruct, fabricPattern, fabricW }, pileId)}
         GROUP BY "vatType", "vatNo"
         ORDER BY MAX("createDate") DESC
       `) as Promise<any[]>,
@@ -88,12 +84,11 @@ export async function DELETE(request: NextRequest) {
   const fabricStruct   = searchParams.get('fabricStruct')  ?? ''
   const fabricPattern  = searchParams.get('fabricPattern') ?? ''
   const fabricW        = searchParams.get('fabricW')       ?? ''
+  const pileId         = searchParams.get('pileId') ? Number(searchParams.get('pileId')) : null
 
   if (tab !== 'stock' && tab !== 'bill') {
     return Response.json({ error: 'tab must be stock or bill' }, { status: 400 })
   }
-
-  const esc = (s: string) => s.replace(/'/g, "''")
 
   try {
     if (tab === 'stock') {
@@ -102,7 +97,7 @@ export async function DELETE(request: NextRequest) {
         UPDATE stockfabrics
         SET deleted_at = NOW()
         WHERE deleted_at IS NULL
-          AND ${stockGroupWhere({ customer, fabricStruct, fabricPattern, fabricW }, 'stockfabrics')}
+          AND ${stockRowsWhere({ customer, fabricStruct, fabricPattern, fabricW }, pileId, 'stockfabrics')}
       `)
       return Response.json({ ok: true, count })
     }
@@ -112,11 +107,7 @@ export async function DELETE(request: NextRequest) {
       UPDATE fabricouts
       SET deleted_at = NOW()
       WHERE deleted_at IS NULL
-        AND ${NS(EFF_STRUCT)}   = ${NS(`'${esc(fabricStruct)}'`)}
-        AND ${NW(EFF_WIDTH)}    = ${NW(`'${esc(fabricW)}'`)}
-        AND ${NP(EFF_PATTERN)}  = ${NP(`'${esc(fabricPattern)}'`)}
-        AND ${NP(`'${esc(fabricPattern)}'`)} <> ''
-        AND ${CK(EFF_CUSTOMER)} = ${CK(NC(`'${esc(customer)}'`))}
+        AND ${pileOutsWhere({ customer, fabricStruct, fabricPattern, fabricW }, pileId)}
     `)
     return Response.json({ ok: true, count })
   } catch (e) {
