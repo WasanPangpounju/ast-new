@@ -38,6 +38,9 @@ interface Bill {
   stockFabricW: string | null;
   stockFabricPattern: string | null;
   stockCustomer: string | null;
+  // กองผ้าที่สร้างเอง ที่บิลนี้ตัดสต็อก — null = กองหลัก
+  stockPileId: number | null;
+  stockPileName: string | null;
   orders: LinkedOrderRef[];
 }
 
@@ -72,6 +75,8 @@ interface StockResult {
   fabricW: string;
   fabricCode: string | null;
   customer: string;
+  stockPileId: number | null;
+  pileName: string | null;
   produced_fold: number;
   produced_yard: number;
   used_fold: number;
@@ -459,10 +464,12 @@ export default function BillListPage() {
         stockFabricW: s.fabricW,
         stockFabricPattern: s.fabricPattern,
         stockCustomer: s.customer,
+        // picking a user-made pile links the bill to it (its ใช้ไป moves there); กองหลัก clears it
+        stockPileId: s.stockPileId ?? null,
       }),
     });
     setStockSaving(false);
-    setManageBill(b => b ? { ...b, stockFabricStruct: s.fabricStruct, stockFabricW: s.fabricW, stockFabricPattern: s.fabricPattern, stockCustomer: s.customer, hasStockMatch: true } : b);
+    setManageBill(b => b ? { ...b, stockFabricStruct: s.fabricStruct, stockFabricW: s.fabricW, stockFabricPattern: s.fabricPattern, stockCustomer: s.customer, stockPileId: s.stockPileId ?? null, stockPileName: s.pileName ?? null, hasStockMatch: true } : b);
     reload();
   };
 
@@ -476,10 +483,11 @@ export default function BillListPage() {
         vatType: manageBill.vatType, vatNo: manageBill.vatNo,
         stockFabricStruct: null, stockFabricW: null,
         stockFabricPattern: null, stockCustomer: null,
+        stockPileId: null,
       }),
     });
     setStockSaving(false);
-    setManageBill(b => b ? { ...b, stockFabricStruct: null, stockFabricW: null, stockFabricPattern: null, stockCustomer: null } : b);
+    setManageBill(b => b ? { ...b, stockFabricStruct: null, stockFabricW: null, stockFabricPattern: null, stockCustomer: null, stockPileId: null, stockPileName: null } : b);
     reload();
   };
 
@@ -1029,9 +1037,14 @@ export default function BillListPage() {
               <div className="flex flex-col flex-1 overflow-hidden">
                 <div className="px-5 py-4 space-y-3 flex-1 overflow-y-auto">
                   {/* Current override info */}
-                  {(manageBill.stockFabricStruct || manageBill.stockFabricPattern || manageBill.stockFabricW) && (
+                  {(manageBill.stockFabricStruct || manageBill.stockFabricPattern || manageBill.stockFabricW || manageBill.stockPileId) && (
                     <div className="bg-blue-50 border border-blue-200 px-3 py-2.5 text-xs">
-                      <p className="text-blue-600 font-medium mb-0.5">ตัดจากสต็อก (กำหนดไว้)</p>
+                      <p className="text-blue-600 font-medium mb-0.5">
+                        ตัดจากสต็อก (กำหนดไว้)
+                        <span className={`ml-2 px-1.5 py-0.5 font-normal ${manageBill.stockPileName ? 'bg-purple-100 text-purple-700' : 'bg-white text-gray-500'}`}>
+                          {manageBill.stockPileName ? `กอง: ${manageBill.stockPileName}` : 'กองหลัก'}
+                        </span>
+                      </p>
                       <p className="text-blue-800">
                         {manageBill.stockFabricStruct || manageBill.fabricStruct}
                         {(manageBill.stockFabricW || manageBill.fabricW) ? ` ${manageBill.stockFabricW || manageBill.fabricW}''` : ""}
@@ -1064,7 +1077,8 @@ export default function BillListPage() {
                           (manageBill.stockFabricStruct || manageBill.fabricStruct) === s.fabricStruct &&
                           (manageBill.stockFabricW || manageBill.fabricW) === s.fabricW &&
                           (manageBill.stockFabricPattern || manageBill.fabricPattern) === s.fabricPattern &&
-                          (manageBill.stockCustomer || manageBill.customerName || 'AST') === s.customer;
+                          (manageBill.stockCustomer || manageBill.customerName || 'AST') === s.customer &&
+                          (manageBill.stockPileId ?? null) === (s.stockPileId ?? null);
                         return (
                           <button
                             key={i}
@@ -1080,7 +1094,12 @@ export default function BillListPage() {
                                 </span>
                                 {s.fabricPattern && <span className="text-gray-600"> ลาย {s.fabricPattern}</span>}
                                 {s.fabricCode && <span className="ml-1 text-gray-400">({s.fabricCode})</span>}
-                                <div className="text-gray-400 mt-0.5">{s.customer}</div>
+                                <div className="text-gray-400 mt-0.5">
+                                  {s.customer}
+                                  {s.pileName && (
+                                    <span className="ml-1.5 px-1.5 py-0.5 bg-purple-100 text-purple-700">กอง: {s.pileName}</span>
+                                  )}
+                                </div>
                               </div>
                               <div className="text-right flex-shrink-0">
                                 <div className={`font-medium ${remaining < 0 ? 'text-red-600' : 'text-gray-800'}`}>
@@ -1102,7 +1121,7 @@ export default function BillListPage() {
                 </div>
 
                 {/* Footer */}
-                {(manageBill.stockFabricStruct || manageBill.stockFabricPattern || manageBill.stockFabricW) && (
+                {(manageBill.stockFabricStruct || manageBill.stockFabricPattern || manageBill.stockFabricW || manageBill.stockPileId) && (
                   <div className="px-5 py-3 border-t border-gray-100 flex-shrink-0">
                     <button
                       type="button"

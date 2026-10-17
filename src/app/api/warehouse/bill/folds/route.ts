@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
           stockFabricStruct: template.stockFabricStruct,
           stockFabricPattern: template.stockFabricPattern,
           stockFabricW: template.stockFabricW,
+          stockPileId: template.stockPileId,
         },
       })
 

@@ -290,13 +290,17 @@ model FabricOut {
   stockFabricStruct  String?
   stockFabricPattern String?
   stockFabricW       String?
+  /// กองผ้าที่บิลนี้ตัดสต็อก — null = กองหลัก (จับคู่ด้วย ลูกค้า+โครงสร้าง+ลาย+หน้ากว้าง แบบเดิม)
+  stockPileId        Int?      @map("stock_pile_id")
 
-  order AstPurchaseOrder? @relation(fields: [orderId], references: [id])
+  order     AstPurchaseOrder? @relation(fields: [orderId], references: [id])
+  stockPile StockPile?        @relation(fields: [stockPileId], references: [id])
 
   @@index([refId])
   @@index([vatType, vatNo])
   @@index([orderId])
   @@index([customerName])
+  @@index([stockPileId])
   @@map("fabricouts")
 }
 
@@ -320,11 +324,36 @@ model StockFabric {
   billRef       String?   @map("bill_ref")
   pricePerYard  Float?    @map("price_per_yard")
   dyeLot        String?   @map("dye_lot")
+  /// กองผ้าที่ผู้ใช้สร้างเอง — null = กองหลัก (จัดกลุ่มด้วย ลูกค้า+โครงสร้าง+ลาย+หน้ากว้าง แบบเดิม)
+  stockPileId   Int?      @map("stock_pile_id")
+
+  stockPile StockPile? @relation(fields: [stockPileId], references: [id])
 
   @@index([refId])
   @@index([fabricPattern])
   @@index([isPurchased])
+  @@index([stockPileId])
   @@map("stockfabrics")
+}
+
+/// กองผ้าที่ผู้ใช้สร้างเอง (สต็อกผ้า) — แยกผ้าที่ ลูกค้า+โครงสร้าง+ลาย+หน้ากว้าง เหมือนกัน
+/// ออกจากกองหลักได้ ผ้าเข้า (stockfabrics) และบิลที่ตัดสต็อก (fabricouts) ผูกด้วย stock_pile_id
+model StockPile {
+  id            Int       @id @default(autoincrement())
+  name          String
+  customer      String
+  fabricStruct  String
+  fabricPattern String    @default("")
+  fabricW       String    @default("")
+  createdBy     String    @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+
+  stockFabrics StockFabric[]
+  fabricOuts   FabricOut[]
+
+  @@map("stock_piles")
 }
 
 model FabricImport {

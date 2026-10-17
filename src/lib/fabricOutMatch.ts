@@ -38,7 +38,21 @@ export const NORM_OUTS_CTE = `
       SUM("sumYard")::float AS out_yard
     FROM fabricouts
     WHERE deleted_at IS NULL
+      -- bills cut from a user-made pile count toward that pile only (PILE_OUTS_CTE)
+      AND stock_pile_id IS NULL
     GROUP BY 1, 2, 3, 4
+  )`
+
+// "ใช้ไป" of user-made piles (stock_piles): bills linked by stock_pile_id.
+export const PILE_OUTS_CTE = `
+  pile_outs AS (
+    SELECT
+      stock_pile_id         AS pile_id,
+      COUNT(*)::int         AS out_fold,
+      SUM("sumYard")::float AS out_yard
+    FROM fabricouts
+    WHERE deleted_at IS NULL AND stock_pile_id IS NOT NULL
+    GROUP BY 1
   )`
 
 // Stock customer for display: trimmed, empty → AST (same as EFF_CUSTOMER on the fabricouts side).
@@ -65,4 +79,38 @@ export const stockGroupWhere = (
     AND ${ks} = ${NS(lit(g.fabricStruct))}
     AND ${kw} = ${NW(lit(g.fabricW))}
     AND ${kp} = ${NP(lit(g.fabricPattern))}`
+}
+
+// ─── กองผ้า (stock piles) ──────────────────────────────────────────────────
+// A displayed stock row is either กองหลัก (pileId null — the 4-field group above,
+// excluding rows moved into a user-made pile) or one user-made pile (by id only).
+
+export type StockGroupRef = { customer: string; fabricStruct: string; fabricPattern: string; fabricW: string }
+
+// WHERE fragment for the stockfabrics rows of one displayed stock row.
+export const stockRowsWhere = (g: StockGroupRef, pileId: number | null, alias = 's') =>
+  pileId != null
+    ? `${alias}.stock_pile_id = ${Number(pileId)}`
+    : `${alias}.stock_pile_id IS NULL AND ${stockGroupWhere(g, alias)}`
+
+// WHERE fragment for the fabricouts rows ("ใช้ไป") of one displayed stock row —
+// the same match the summary uses (NORM_OUTS_CTE / PILE_OUTS_CTE).
+export const pileOutsWhere = (g: StockGroupRef, pileId: number | null) => {
+  if (pileId != null) return `stock_pile_id = ${Number(pileId)}`
+  const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
+  return `stock_pile_id IS NULL
+    AND ${NS(EFF_STRUCT)}   = ${NS(lit(g.fabricStruct))}
+    AND ${NW(EFF_WIDTH)}    = ${NW(lit(g.fabricW))}
+    AND ${NP(EFF_PATTERN)}  = ${NP(lit(g.fabricPattern))}
+    AND ${NP(lit(g.fabricPattern))} <> ''
+    AND ${CK(EFF_CUSTOMER)} = ${CK(NC(lit(g.customer)))}`
+}
+
+// Same struct + pattern + width (normalized), ignoring customer — the rule for which
+// stock rows a lot may be moved between (ย้ายกอง, cross-customer allowed).
+export const sameFabric = (a: Omit<StockGroupRef, 'customer'>, alias = 's') => {
+  const lit = (v: string) => `'${v.replace(/'/g, "''")}'`
+  return `${NS(`${alias}."fabricStruct"`)} = ${NS(lit(a.fabricStruct))}
+    AND ${NW(`${alias}."fabricW"`)} = ${NW(lit(a.fabricW))}
+    AND ${NP(`${alias}."fabricPattern"`)} = ${NP(lit(a.fabricPattern))}`
 }
